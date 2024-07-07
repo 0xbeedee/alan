@@ -3,7 +3,7 @@ import pygame
 from megagrid.procedural_gen import *
 
 
-class MegagridEnv(gym.Env):
+class MegaGridEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"]}
 
     def __init__(
@@ -29,6 +29,10 @@ class MegagridEnv(gym.Env):
         self.window = None
         self.clock = None
 
+        # keep track of past minigrids
+        self.envs_seen = list()
+        self.num_envs_seen = 0
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         if seed is not None:
@@ -36,6 +40,8 @@ class MegagridEnv(gym.Env):
 
         self.grid = self._generate_grid()
         observation, info = self.grid.reset()
+        self.envs_seen.append(self.grid.spec.id)
+        self.num_envs_seen = 0
 
         if self.render_mode == "human":
             self.grid.render()
@@ -43,7 +49,7 @@ class MegagridEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-        observation, reward, done, truncated, info = self.grid.step(action)
+        observation, _, done, truncated, info = self.grid.step(action)
 
         if done or truncated:
             # if we're done with the current environment, immediately start the next
@@ -51,12 +57,14 @@ class MegagridEnv(gym.Env):
             self.observation_space = self.grid.observation_space
             self.action_space = self.grid.action_space
 
+            self.envs_seen.append(self.grid.spec.id)
+            self.num_envs_seen += 1
+
         if self.render_mode == "human":
             self.grid.render()
 
-        # TODO might want to add a terminating condition for megagrid (else we run forever!)
-        # TODO an initial idea could be max_steps number
-        return observation, reward, done, truncated, info
+        # the environment provides no reward
+        return observation, 0, done, truncated, info
 
     def render(self):
         return self.grid.render()

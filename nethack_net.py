@@ -8,15 +8,16 @@ from nle import nethack
 class NetHackNet(nn.Module):
     def __init__(
         self,
-        observation_shape,
+        observation_space,
+        action_space=None,
         embedding_dim=32,
         crop_dim=9,
         num_layers=5,
     ):
         super(NetHackNet, self).__init__()
 
-        self.glyph_shape = observation_shape["glyphs"].shape
-        self.blstats_size = observation_shape["blstats"].shape[0]
+        self.glyph_shape = observation_space["glyphs"].shape
+        self.blstats_size = observation_space["blstats"].shape[0]
 
         self.H = self.glyph_shape[0]
         self.W = self.glyph_shape[1]
@@ -89,6 +90,15 @@ class NetHackNet(nn.Module):
             nn.ReLU(),
         )
 
+        if action_space:
+            # actor
+            self.fc = nn.Sequential(
+                nn.Linear(out_dim, self.h_dim),
+                nn.ReLU(),
+                nn.Linear(self.h_dim, self.h_dim),
+                nn.ReLU(),
+                nn.Linear(self.h_dim, action_space.n),
+            )
         self.fc = nn.Sequential(
             nn.Linear(out_dim, self.h_dim),
             nn.ReLU(),

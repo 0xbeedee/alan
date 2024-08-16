@@ -97,15 +97,6 @@ class NetHackObsNet(nn.Module):
             nn.ReLU(),
         )
 
-    def _interleave(self, xs, ys):
-        return [val for pair in zip(xs, ys) for val in pair]
-
-    def _select(self, embed, x):
-        # Work around slow backward pass of nn.Embedding, see
-        # https://github.com/pytorch/pytorch/issues/24912
-        out = embed.weight.index_select(0, x.reshape(-1))
-        return out.reshape(x.shape + (-1,))
-
     def forward(self, env_out_batch):
         # -- [B x H x W]
         glyphs = torch.tensor(env_out_batch["glyphs"])
@@ -156,3 +147,12 @@ class NetHackObsNet(nn.Module):
         # -- [B x K]
         logits = self.fc(st)
         return logits
+
+    def _interleave(self, xs, ys):
+        return [val for pair in zip(xs, ys) for val in pair]
+
+    def _select(self, embed, x):
+        # Work around slow backward pass of nn.Embedding, see
+        # https://github.com/pytorch/pytorch/issues/24912
+        out = embed.weight.index_select(0, x.reshape(-1))
+        return out.reshape(x.shape + (-1,))

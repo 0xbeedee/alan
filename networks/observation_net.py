@@ -29,6 +29,7 @@ class NetHackObsNet(nn.Module):
 
         self.k_dim = embedding_dim
         self.h_dim = 512
+        self.o_dim = self.h_dim // 2
 
         self.crop_dim = crop_dim
         self.crop = Crop(self.H, self.W, self.crop_dim, self.crop_dim)
@@ -93,7 +94,7 @@ class NetHackObsNet(nn.Module):
             nn.ReLU(),
             nn.Linear(self.h_dim * 2, self.h_dim),
             nn.ReLU(),
-            nn.Linear(self.h_dim, self.h_dim // 2),
+            nn.Linear(self.h_dim, self.o_dim),
             nn.ReLU(),
         )
 

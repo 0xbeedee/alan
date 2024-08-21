@@ -171,3 +171,4 @@ cython_debug/
 spielraum.ipynb
 nle_data/
 NetHack/
+.vscode/

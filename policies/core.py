@@ -1,12 +1,18 @@
+from collections.abc import Callable
 from typing import Literal
+from abc import abstractmethod
 
 import gymnasium as gym
 
+from numpy import ndarray
+from tianshou.data import ReplayBuffer
+from tianshou.data.types import BatchWithReturnsProtocol, RolloutBatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
     TrainingStatsWrapper,
 )
+from torch import Tensor
 
 from models import SelfModel, EnvModel
 
@@ -39,3 +45,43 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         self.self_model = self_model
         self.env_model = env_model
+
+    @abstractmethod
+    def _combine_reward(self, batch: RolloutBatchProtocol) -> float:
+        """Combines the intrinsic and extrinsic rewards into a single scalar value."""
+
+    @classmethod
+    def compute_episodic_return(
+        cls,
+        batch: RolloutBatchProtocol,
+        buffer: ReplayBuffer,
+        indices: ndarray,
+        v_s_: ndarray | Tensor | None = None,
+        v_s: ndarray | Tensor | None = None,
+        gamma: float = 0.99,
+        gae_lambda: float = 0.95,
+    ) -> tuple[ndarray, ndarray]:
+        # by default, batch.rew contains the reward provided by the env
+        batch.rew = cls._combine_reward(batch)
+
+        return super().compute_episodic_return(
+            batch, buffer, indices, v_s_, v_s, gamma, gae_lambda
+        )
+
+    @classmethod
+    def compute_nstep_return(
+        cls,
+        batch: RolloutBatchProtocol,
+        buffer: ReplayBuffer,
+        indices: ndarray,
+        target_q_fn: Callable[[ReplayBuffer, ndarray], Tensor],
+        gamma: float = 0.99,
+        n_step: int = 1,
+        rew_norm: bool = False,
+    ) -> BatchWithReturnsProtocol:
+        # by default, batch.rew contains the reward provided by the env
+        batch.rew = cls._combine_reward(batch)
+
+        return super().compute_nstep_return(
+            batch, buffer, indices, target_q_fn, gamma, n_step, rew_norm
+        )

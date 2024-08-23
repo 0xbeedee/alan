@@ -24,17 +24,19 @@ class ICM(tsICM):
 
         self.eta = eta
 
-    def forward(self, batch_obs_t, batch_actions, batch_obs_t1, **kwargs):
-        phi1, phi2 = self.feature_net(batch_obs_t), self.feature_net(batch_obs_t1)
+    def forward(self, batch, **kwargs):
+        with torch.no_grad():
+            phi1, phi2 = self.feature_net(batch.obs), self.feature_net(batch.obs_next)
 
-        batch_actions = to_torch(batch_actions, dtype=torch.long, device=self.device)
-        phi2_hat = self.forward_model(
-            torch.cat(
-                [phi1, F.one_hot(batch_actions, num_classes=self.action_dim)], dim=1
-            ),
-        )
+            batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
+            phi2_hat = self.forward_model(
+                torch.cat(
+                    [phi1, F.one_hot(batch_actions, num_classes=self.action_dim)], dim=1
+                ),
+            )
 
-        mse_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
-        act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
+            mse_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
+            # TODO what do we do with this?
+            act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
 
-        return mse_loss * self.eta, act_hat
+            return (mse_loss * self.eta).numpy()

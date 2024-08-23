@@ -81,9 +81,8 @@ class PPOBasedPolicy(CorePolicy):
         batch: RolloutBatchProtocol,
         buffer: ReplayBuffer,
         indices: np.ndarray,
-        beta: float = 0.314,
     ) -> RolloutBatchProtocol:
-        batch = super().process_fn(batch, buffer, indices, beta=beta)
+        batch = super().process_fn(batch, buffer, indices)
         return self.ppo_policy.process_fn(batch, buffer, indices)
 
     def _dist_fn(self, logits: torch.Tensor):

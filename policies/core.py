@@ -6,7 +6,14 @@ import gymnasium as gym
 
 import numpy as np
 from tianshou.data import ReplayBuffer
-from tianshou.data.types import BatchWithReturnsProtocol, RolloutBatchProtocol
+from tianshou.data.batch import BatchProtocol
+from tianshou.data.types import (
+    ActBatchProtocol,
+    ActStateBatchProtocol,
+    BatchWithReturnsProtocol,
+    ObsBatchProtocol,
+    RolloutBatchProtocol,
+)
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
@@ -46,40 +53,19 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.self_model = self_model
         self.env_model = env_model
 
-    @abstractmethod
-    def combine_reward(self, batch: RolloutBatchProtocol) -> np.ndarray:
+    def combine_reward(self, batch: RolloutBatchProtocol, beta: float) -> np.ndarray:
         """Combines the intrinsic and extrinsic rewards into a single scalar value."""
+        i_rew = self.self_model(batch)
+        return batch.rew + beta * i_rew
 
-    @classmethod
-    def compute_episodic_return(
-        cls,
+    def process_fn(
+        self,
         batch: RolloutBatchProtocol,
         buffer: ReplayBuffer,
         indices: np.ndarray,
-        v_s_: np.ndarray | Tensor | None = None,
-        v_s: np.ndarray | Tensor | None = None,
-        gamma: float = 0.99,
-        gae_lambda: float = 0.95,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        # by default, batch.rew contains the reward provided by the env
-        batch.rew = cls.combine_reward(batch)
-        return BasePolicy.compute_episodic_return(
-            batch, buffer, indices, v_s_, v_s, gamma, gae_lambda
-        )
+        beta: float = 0.314,
+    ) -> RolloutBatchProtocol:
+        # it is sufficient to call combine_reward here because process_fn() gets called before all the learning happens
+        self.combine_reward(batch, beta)
 
-    @classmethod
-    def compute_nstep_return(
-        cls,
-        batch: RolloutBatchProtocol,
-        buffer: ReplayBuffer,
-        indices: np.ndarray,
-        target_q_fn: Callable[[ReplayBuffer, np.ndarray], Tensor],
-        gamma: float = 0.99,
-        n_step: int = 1,
-        rew_norm: bool = False,
-    ) -> BatchWithReturnsProtocol:
-        # by default, batch.rew contains the reward provided by the env
-        batch.rew = cls.combine_reward(batch)
-        return BasePolicy.compute_nstep_return(
-            batch, buffer, indices, target_q_fn, gamma, n_step, rew_norm
-        )
+        return super().process_fn(batch, buffer, indices)

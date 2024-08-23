@@ -1,2 +1,2 @@
 from .core import CorePolicy, CoreTrainingStats
-from .dqn_based_policy import *
+from .ppo_based_policy import *

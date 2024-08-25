@@ -11,16 +11,18 @@ from tianshou.policy.modelfree.ppo import PPOPolicy, TPPOTrainingStats
 from tianshou.policy.base import TLearningRateScheduler
 from tianshou.utils.net.common import Net
 
-import gymnasium as gym
 import numpy as np
+from gymnasium import Space
+
 import torch
+from torch import nn
 
 from models import SelfModel, EnvModel
 from .core import CorePolicy
 
 
 class PPOBasedPolicy(CorePolicy):
-    """A simple example illustrating how to combine a policy (PPO, in this case) and all the additional machinery I've added (i.e, intrinsic motivation and lifelong learning)"""
+    """A simple example illustrating how to combine a Tianshou policy (PPO, in this case) and all the additional machinery I've added (i.e, intrinsic motivation and lifelong learning)"""
 
     # TODO no lifelong learning yet!
 
@@ -29,11 +31,11 @@ class PPOBasedPolicy(CorePolicy):
         *,
         self_model: SelfModel,
         env_model: EnvModel,
-        act_net: torch.nn.Module | Net,
-        critic_net: torch.nn.Module | Net,
+        act_net: nn.Module | Net,
+        critic_net: nn.Module | Net,
         optim: torch.optim.Optimizer,
-        action_space: gym.Space,
-        observation_space: gym.Space | None,
+        action_space: Space,
+        observation_space: Space | None,
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,

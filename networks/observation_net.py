@@ -1,6 +1,9 @@
-from torch import nn
-import torch
+from typing import Dict
 
+import torch
+from torch import nn
+
+from gymnasium import Space
 from nle import nethack
 
 from .utils import Crop
@@ -9,17 +12,17 @@ from .utils import Crop
 class NetHackObsNet(nn.Module):
     """A basic network for processing NetHack observations.
 
-    Fundamentally, it's the initial part of the network in the NLE paper (https://arxiv.org/abs/2006.13760).
+    Fundamentally, it's the initial part of the network in the NLE paper (https://arxiv.org/abs/2006.13760), kept mostly intact due to the interesting local/global interplay of the two CNNs.
     """
 
     def __init__(
         self,
-        observation_space,
-        embedding_dim=32,
-        crop_dim=9,
-        num_layers=5,
+        observation_space: Space,
+        embedding_dim: int = 32,
+        crop_dim: int = 9,
+        num_layers: int = 5,
     ):
-        super(NetHackObsNet, self).__init__()
+        super().__init__()
 
         self.glyph_shape = observation_space["glyphs"].shape
         self.blstats_size = observation_space["blstats"].shape[0]
@@ -98,7 +101,7 @@ class NetHackObsNet(nn.Module):
             nn.ReLU(),
         )
 
-    def forward(self, env_out_batch):
+    def forward(self, env_out_batch: Dict[str, torch.Tensor]) -> torch.Tensor:
         # -- [B x H x W]
         glyphs = torch.tensor(env_out_batch["glyphs"])
         B, *_ = glyphs.shape

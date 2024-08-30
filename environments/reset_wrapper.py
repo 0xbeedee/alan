@@ -2,7 +2,7 @@ import gymnasium as gym
 import torch
 
 
-class ResettingEnvironment(gym.Wrapper):
+class Resetting(gym.Wrapper):
     """Turns a Gymnasium environment into something that can be step()ed indefinitely."""
 
     def __init__(self, gym_env):

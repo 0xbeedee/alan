@@ -17,6 +17,7 @@ class NetHackObsGoalNet(nn.Module):
 
         self.obs_net = obs_net
         self.goal_net = goal_net
+        self.o_dim = obs_net.o_dim + goal_net.o_dim
 
     def forward(
         self,

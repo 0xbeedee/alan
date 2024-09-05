@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from tianshou.data.batch import BatchProtocol, TArr
+from tianshou.data.types import ObsBatchProtocol
 from .observation_net import NetHackObsNet
 from gymnasium import Space
 
@@ -20,7 +20,7 @@ class SimpleNetHackActor(nn.Module):
     def forward(
         self,
         # TODO some other types need changing too...
-        batch_obs: TArr | BatchProtocol,
+        batch_obs: ObsBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):
@@ -29,29 +29,30 @@ class SimpleNetHackActor(nn.Module):
         return logits, state
 
 
-class GoalBasedNetHackActor(nn.Module):
-    def __init__(self, obs_goal_dim: int, action_space: Space):
-        super().__init__()
-
-        self.n_actions = action_space.n
+class GoalNetHackActor(SimpleNetHackActor):
+    def __init__(self, obs_net: NetHackObsNet, action_space: Space):
+        super().__init__(obs_net, action_space)
 
         # we use a two-stream architecture (https://proceedings.mlr.press/v37/schaul15.html)
-        hidden_dim = obs_goal_dim // 3  # obs dim == goal dim
+        hidden_dim = obs_net.o_dim // 3  # obs dim == goal dim
         # mu == micro
-        self.obs_munet = nn.Sequential(nn.Linear(obs_goal_dim, hidden_dim), nn.ReLU())
-        self.goal_munet = nn.Sequential(nn.Linear(obs_goal_dim, hidden_dim), nn.ReLU())
+        self.obs_munet = nn.Sequential(nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU())
+        self.goal_munet = nn.Sequential(nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU())
 
         self.final_layer = nn.Linear(hidden_dim + hidden_dim, self.n_actions)
 
     def forward(
         self,
-        batch_latent_obs: torch.Tensor,
-        batch_latent_goal: torch.Tensor,
+        # TODO this type is not correct
+        batch_obs_goal: ObsBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):
-        obss = self.obs_munet(batch_latent_obs)
-        goals = self.goal_munet(batch_latent_goal)
+        batch_obs = {k: v for k, v in batch_obs_goal.items() if k != "latent_goal"}
+
+        obs_out = self.obs_net(batch_obs)
+        obss = self.obs_munet(obs_out)
+        goals = self.goal_munet(batch_obs_goal.latent_goal)
         logits = self.final_layer(torch.cat((obss, goals), dim=1))
         return logits, state
 
@@ -65,7 +66,7 @@ class SimpleNetHackCritic(nn.Module):
 
     def forward(
         self,
-        batch_obs: Dict[str, torch.Tensor],
+        batch_obs: ObsBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):
@@ -74,24 +75,25 @@ class SimpleNetHackCritic(nn.Module):
         return v_s
 
 
-class GoalBasedNetHackCritic(nn.Module):
-    def __init__(self, obs_goal_dim: int):
-        super().__init__()
+class GoalNetHackCritic(SimpleNetHackCritic):
+    def __init__(self, obs_net: NetHackObsNet):
+        super().__init__(obs_net)
 
-        hidden_dim = obs_goal_dim // 3
-        self.obs_munet = nn.Sequential(nn.Linear(obs_goal_dim, hidden_dim), nn.ReLU())
-        self.goal_munet = nn.Sequential(nn.Linear(obs_goal_dim, hidden_dim), nn.ReLU())
+        hidden_dim = obs_net.o_dim // 3
+        self.obs_munet = nn.Sequential(nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU())
+        self.goal_munet = nn.Sequential(nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU())
 
         self.final_layer = nn.Linear(hidden_dim + hidden_dim, 1)
 
     def forward(
         self,
-        batch_latent_obs: torch.Tensor,
-        batch_latent_goal: torch.Tensor,
+        batch_obs_goal: ObsBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):
-        obss = self.obs_munet(batch_latent_obs)
-        goals = self.goal_munet(batch_latent_goal)
+        batch_obs = {k: v for k, v in batch_obs_goal.items() if k != "latent_goal"}
+        obs_out = self.obs_net(batch_obs)
+        obss = self.obs_munet(obs_out)
+        goals = self.goal_munet(batch_obs_goal.latent_goal)
         v_s = self.final_layer(torch.cat((obss, goals), dim=1))
         return v_s

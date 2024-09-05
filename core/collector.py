@@ -5,7 +5,6 @@ from typing import Any, cast, TypeVar
 import gymnasium as gym
 import numpy as np
 import torch
-from overrides import override
 
 from tianshou.data import (
     Batch,
@@ -20,17 +19,17 @@ from tianshou.data.types import (
     RolloutBatchProtocol,
 )
 from tianshou.env import BaseVectorEnv
-from tianshou.utils.torch_utils import torch_train_mode
 
-from policies import CorePolicy
+from .policy import CorePolicy
+from .buffer import GoalReplayBuffer
 
 
-class GoalBasedCollector(Collector):
+class GoalCollector(Collector):
     def __init__(
         self,
         policy: CorePolicy,
         env: gym.Env | BaseVectorEnv,
-        buffer: ReplayBuffer | None = None,
+        buffer: GoalReplayBuffer | None = None,
         exploration_noise: bool = False,
     ) -> None:
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
@@ -87,10 +86,6 @@ class GoalBasedCollector(Collector):
                     hidden_state_RH  # save state into buffer through policy attr
                 )
 
-            latent_obs_R = act_batch_RA.get("latent_obs", None)
-            if latent_obs_R is None:
-                raise RuntimeError("The latent observations should not be None!")
-
             latent_goal_R = act_batch_RA.get("latent_goal", None)
             if latent_goal_R is None:
                 raise RuntimeError("The latent goals should not be None!")
@@ -100,7 +95,6 @@ class GoalBasedCollector(Collector):
             act_normalized_RA,
             policy_R,
             hidden_state_RH,
-            latent_obs_R,
             latent_goal_R,
         )
 
@@ -166,7 +160,6 @@ class GoalBasedCollector(Collector):
                 act_normalized_RA,
                 policy_R,
                 hidden_state_RH,
-                latent_obs_R,
                 latent_goal_R,
             ) = self._compute_action_policy_hidden(
                 random=random,
@@ -192,7 +185,6 @@ class GoalBasedCollector(Collector):
                     act=act_RA,
                     policy=policy_R,
                     obs_next=obs_next_RO,
-                    latent_obs=latent_obs_R,
                     latent_goal=latent_goal_R,
                     rew=rew_R,
                     terminated=terminated_R,

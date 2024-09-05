@@ -1,17 +1,25 @@
-from typing import Literal
+from typing import Literal, Any
+import time
 
 from gymnasium import Space
 import numpy as np
 
 from tianshou.data import ReplayBuffer
+from tianshou.data.batch import BatchProtocol
 from tianshou.data.types import (
     RolloutBatchProtocol,
+    ObsBatchProtocol,
+    ActStateBatchProtocol,
+    ActBatchProtocol,
 )
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
     TrainingStatsWrapper,
 )
+from tianshou.utils.torch_utils import torch_train_mode
+
+from core.buffer import GoalReplayBuffer
 from models import SelfModel, EnvModel
 
 
@@ -61,7 +69,10 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self._beta = value
 
     def get_beta(self) -> float:
-        """Override this method in subclasses to implement custom beta calculation logic."""
+        """A getter method for the beta parameter.
+
+        Override this method in subclasses to implement custom beta calculation logic.
+        """
         return self.beta
 
     def combine_reward(self, batch: RolloutBatchProtocol) -> np.ndarray:
@@ -72,6 +83,25 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         i_rew = self.self_model(batch)
         batch.rew += self.get_beta() * i_rew
 
+    def forward(
+        self,
+        batch: ObsBatchProtocol,
+        state: dict | BatchProtocol | np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> ActBatchProtocol | ActStateBatchProtocol:
+        """Compute action over the given batch data.
+
+        The default implementation simply selects the latent goal and attaches it to batch.obs. It must be overridden!
+        """
+        # we must compute the latent_goals here because
+        # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
+        # 2) it centralises goal selection
+        # 3) it makes conceptual sense
+        latent_goal = self.self_model.select_goal(batch.obs)
+        # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
+        batch.obs["latent_goal"] = latent_goal
+
+    # TODO better docs throughout! (at least one expalanatory line per method)
     def process_fn(
         self,
         batch: RolloutBatchProtocol,
@@ -80,4 +110,28 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> RolloutBatchProtocol:
         # it is sufficient to call combine_reward here because process_fn() gets called before all the learning happens
         self.combine_reward(batch)
-        return super().process_fn(batch, buffer, indices)
+        # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
+        batch.obs["latent_goal"] = batch.latent_goal
+        batch.obs_next["latent_goal"] = batch.latent_goal
+        return batch
+
+    def update(
+        self,
+        sample_size: int | None,
+        buffer: GoalReplayBuffer | None,
+        **kwargs: Any,
+    ) -> CoreTrainingStats:
+        if buffer is None:
+            return TrainingStats()  # type: ignore[return-value]
+        start_time = time.time()
+        batch, indices = buffer.sample(sample_size)
+        self.updating = True
+        batch = self.process_fn(batch, buffer, indices)
+        with torch_train_mode(self):
+            training_stat = self.learn(batch, **kwargs)
+        self.post_process_fn(batch, buffer, indices)
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
+        self.updating = False
+        training_stat.train_time = time.time() - start_time
+        return training_stat

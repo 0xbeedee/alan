@@ -1,11 +1,13 @@
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from tianshou.data import ReplayBuffer
+from tianshou.data import ReplayBuffer, Batch, to_torch_as
 from tianshou.data.batch import BatchProtocol
 from tianshou.data.types import (
     DistBatchProtocol,
     ObsBatchProtocol,
     RolloutBatchProtocol,
+    BatchWithAdvantagesProtocol,
+    LogpOldProtocol,
 )
 from tianshou.policy.modelfree.ppo import PPOPolicy, TPPOTrainingStats
 from tianshou.policy.base import TLearningRateScheduler
@@ -18,7 +20,7 @@ import torch
 from torch import nn
 
 from models import SelfModel, EnvModel
-from .core import CorePolicy
+from core import CorePolicy
 
 
 class PPOBasedPolicy(CorePolicy):
@@ -76,7 +78,20 @@ class PPOBasedPolicy(CorePolicy):
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
     ) -> DistBatchProtocol:
-        return self.ppo_policy.forward(batch, state, **kwargs)
+        """Compute action over the given batch data by applying the actor."""
+
+        # we compute the latent observations here for two reasons
+        # 1. this way we only compute them once
+        # 2. it makes sense for this computation to happen within an agent
+        latent_goal = self.self_model.select_goal(batch.obs)
+        # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
+        batch.obs["latent_goal"] = latent_goal
+
+        result = self.ppo_policy.forward(batch, state, **kwargs)
+        # result is a Batch
+        result.latent_goal = latent_goal
+        # TODO this should be a custom type with latent goal (see todo in core/buffer.py)
+        return cast(DistBatchProtocol, result)
 
     def process_fn(
         self,

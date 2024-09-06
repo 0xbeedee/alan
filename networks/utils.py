@@ -3,11 +3,6 @@ from torch import nn
 from torch.nn import functional as F
 
 
-def _step_to_range(delta, num_steps):
-    """Range of `num_steps` integers with distance `delta` centered around zero."""
-    return delta * torch.arange(-num_steps // 2, num_steps // 2)
-
-
 class Crop(nn.Module):
     """Helper class for NetHackNet below."""
 
@@ -61,3 +56,8 @@ class Crop(nn.Module):
             .squeeze(1)
             .long()
         )
+
+
+def _step_to_range(delta, num_steps):
+    """Range of `num_steps` integers with distance `delta` centered around zero."""
+    return delta * torch.arange(-num_steps // 2, num_steps // 2)

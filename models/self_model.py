@@ -1,15 +1,10 @@
-from tianshou.data.types import ObsBatchProtocol, RolloutBatchProtocol
-
-from gymnasium import Space
-
-# TODO should I make custom types, à la Tianshou?
-from networks import NetHackObsNet
+from tianshou.data.types import ObsBatchProtocol
+from core.types import GoalBatchProtocol, ObservationNet
+from core import GoalReplayBuffer
+import gymnasium as gym
 
 import torch
 from torch import nn
-import numpy as np
-
-from tianshou.data import ReplayBuffer
 
 from .her import HER
 
@@ -17,10 +12,10 @@ from .her import HER
 class SelfModel:
     def __init__(
         self,
-        obs_net: NetHackObsNet,
-        action_space: Space,
+        obs_net: ObservationNet,
+        action_space: gym.Space,
         intrinsic_module: nn.Module,
-        buffer: ReplayBuffer,
+        buffer: GoalReplayBuffer,
     ) -> None:
         self.intrinsic_module = intrinsic_module(obs_net, action_space)
         self.obs_net = obs_net
@@ -44,7 +39,7 @@ class SelfModel:
         # need to return a batch of goals, not a single one
         return goal.repeat(batch_latent_obs.shape[0], 1)
 
-    def __call__(self, batch: RolloutBatchProtocol, sleep: bool = False):
+    def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # modify the buffer by adding the goals
         # self.her(len(batch))
         # TODO do something with sleep

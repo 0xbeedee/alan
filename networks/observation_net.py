@@ -3,7 +3,7 @@ from typing import Dict
 import torch
 from torch import nn
 
-from gymnasium import Space
+import gymnasium as gym
 from nle import nethack
 
 from .utils import Crop
@@ -17,7 +17,7 @@ class NetHackObsNet(nn.Module):
 
     def __init__(
         self,
-        observation_space: Space,
+        observation_space: gym.Space,
         embedding_dim: int = 32,
         crop_dim: int = 9,
         num_layers: int = 5,

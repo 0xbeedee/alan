@@ -1,6 +1,6 @@
 import time
 from copy import copy
-from typing import Any, cast, TypeVar
+from typing import Any, cast
 
 import gymnasium as gym
 import numpy as np
@@ -8,20 +8,17 @@ import torch
 
 from tianshou.data import (
     Batch,
-    ReplayBuffer,
     to_numpy,
     Collector,
     CollectStats,
     AsyncCollector,
 )
-from tianshou.data.types import (
-    ObsBatchProtocol,
-    RolloutBatchProtocol,
-)
+from tianshou.data.types import ObsBatchProtocol
 from tianshou.env import BaseVectorEnv
 
-from .policy import CorePolicy
+from .types import GoalBatchProtocol, TArrLike
 from .buffer import GoalReplayBuffer
+from .policy import CorePolicy
 
 
 class GoalCollector(Collector):
@@ -179,7 +176,7 @@ class GoalCollector(Collector):
             done_R = np.logical_or(terminated_R, truncated_R)
 
             current_iteration_batch = cast(
-                RolloutBatchProtocol,
+                GoalBatchProtocol,
                 Batch(
                     obs=last_obs_RO,
                     act=act_RA,
@@ -346,10 +343,7 @@ def _HACKY_create_info_batch(info_array: np.ndarray) -> Batch:
     return result_batch_parent.info
 
 
-_TArrLike = TypeVar("_TArrLike", bound="np.ndarray | torch.Tensor | Batch | None")
-
-
-def _nullable_slice(obj: _TArrLike, indices: np.ndarray) -> _TArrLike:
+def _nullable_slice(obj: TArrLike, indices: np.ndarray) -> TArrLike:
     """Return None, or the values at the given indices if the object is not None."""
     if obj is not None:
         return obj[indices]  # type: ignore[index, return-value]

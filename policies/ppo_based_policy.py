@@ -1,24 +1,18 @@
 from typing import Any, Literal, cast
+from core.types import GoalBatchProtocol
 
-from tianshou.data import ReplayBuffer, Batch, to_torch_as
+from tianshou.data import ReplayBuffer
 from tianshou.data.batch import BatchProtocol
-from tianshou.data.types import (
-    DistBatchProtocol,
-    ObsBatchProtocol,
-    RolloutBatchProtocol,
-    BatchWithAdvantagesProtocol,
-    LogpOldProtocol,
-)
+from tianshou.data.types import ObsBatchProtocol
 from tianshou.policy.modelfree.ppo import PPOPolicy, TPPOTrainingStats
 from tianshou.policy.base import TLearningRateScheduler
-from tianshou.utils.net.common import Net
 
 import numpy as np
-from gymnasium import Space
+import gymnasium as gym
 
 import torch
-from torch import nn
 
+from networks import GoalNetHackActor, GoalNetHackCritic
 from models import SelfModel, EnvModel
 from core import CorePolicy
 
@@ -33,11 +27,11 @@ class PPOBasedPolicy(CorePolicy):
         *,
         self_model: SelfModel,
         env_model: EnvModel,
-        act_net: nn.Module | Net,
-        critic_net: nn.Module | Net,
+        act_net: GoalNetHackActor,
+        critic_net: GoalNetHackCritic,
         optim: torch.optim.Optimizer,
-        action_space: Space,
-        observation_space: Space | None,
+        action_space: gym.Space,
+        observation_space: gym.Space | None,
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
@@ -64,7 +58,7 @@ class PPOBasedPolicy(CorePolicy):
 
     def learn(
         self,
-        batch: RolloutBatchProtocol,
+        batch: GoalBatchProtocol,
         batch_size: int | None,
         repeat: int,
         *args: Any,
@@ -77,7 +71,7 @@ class PPOBasedPolicy(CorePolicy):
         batch: ObsBatchProtocol,
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
-    ) -> DistBatchProtocol:
+    ) -> GoalBatchProtocol:
         """Compute action over the given batch data by applying the actor."""
 
         # we compute the latent observations here for two reasons
@@ -90,15 +84,14 @@ class PPOBasedPolicy(CorePolicy):
         result = self.ppo_policy.forward(batch, state, **kwargs)
         # result is a Batch
         result.latent_goal = latent_goal
-        # TODO this should be a custom type with latent goal (see todo in core/buffer.py)
-        return cast(DistBatchProtocol, result)
+        return cast(GoalBatchProtocol, result)
 
     def process_fn(
         self,
-        batch: RolloutBatchProtocol,
+        batch: GoalBatchProtocol,
         buffer: ReplayBuffer,
         indices: np.ndarray,
-    ) -> RolloutBatchProtocol:
+    ) -> GoalBatchProtocol:
         batch = super().process_fn(batch, buffer, indices)
         return self.ppo_policy.process_fn(batch, buffer, indices)
 

@@ -5,12 +5,12 @@ from torch.nn import functional as F
 from torch import device
 
 import numpy as np
-from gymnasium import Space
+import gymnasium as gym
 
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule as tsICM
 from tianshou.data import Batch, to_torch
 
-from networks import NetHackObsNet
+from core.types import ObservationNet
 
 
 class ICM(tsICM):
@@ -18,8 +18,8 @@ class ICM(tsICM):
 
     def __init__(
         self,
-        obs_net: NetHackObsNet,
-        action_space: Space,
+        obs_net: ObservationNet,
+        action_space: gym.Space,
         hidden_sizes: Sequence[int] = [256, 128, 64],
         device: str | device = "cpu",
         eta: float = 0.07,

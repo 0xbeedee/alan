@@ -1,16 +1,15 @@
 from typing import Dict, Optional
 from tianshou.data.types import ObsBatchProtocol
-from .observation_net import NetHackObsNet
-from gymnasium import Space
+from core.types import GoalBatchProtocol, ObservationNet
 
-# TODO typing imports should be first in ALL files
+import gymnasium as gym
 
 from torch import nn
 import torch
 
 
 class SimpleNetHackActor(nn.Module):
-    def __init__(self, obs_net: NetHackObsNet, action_space: Space):
+    def __init__(self, obs_net: ObservationNet, action_space: gym.Space):
         super().__init__()
 
         self.obs_net = obs_net
@@ -19,7 +18,6 @@ class SimpleNetHackActor(nn.Module):
 
     def forward(
         self,
-        # TODO some other types need changing too...
         batch_obs: ObsBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
@@ -30,7 +28,7 @@ class SimpleNetHackActor(nn.Module):
 
 
 class GoalNetHackActor(SimpleNetHackActor):
-    def __init__(self, obs_net: NetHackObsNet, action_space: Space):
+    def __init__(self, obs_net: ObservationNet, action_space: gym.Space):
         super().__init__(obs_net, action_space)
 
         # we use a two-stream architecture (https://proceedings.mlr.press/v37/schaul15.html)
@@ -43,8 +41,7 @@ class GoalNetHackActor(SimpleNetHackActor):
 
     def forward(
         self,
-        # TODO this type is not correct
-        batch_obs_goal: ObsBatchProtocol,
+        batch_obs_goal: GoalBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):
@@ -58,7 +55,7 @@ class GoalNetHackActor(SimpleNetHackActor):
 
 
 class SimpleNetHackCritic(nn.Module):
-    def __init__(self, obs_net: NetHackObsNet):
+    def __init__(self, obs_net: ObservationNet):
         super().__init__()
 
         self.obs_net = obs_net
@@ -76,7 +73,7 @@ class SimpleNetHackCritic(nn.Module):
 
 
 class GoalNetHackCritic(SimpleNetHackCritic):
-    def __init__(self, obs_net: NetHackObsNet):
+    def __init__(self, obs_net: ObservationNet):
         super().__init__(obs_net)
 
         hidden_dim = obs_net.o_dim // 3
@@ -87,7 +84,7 @@ class GoalNetHackCritic(SimpleNetHackCritic):
 
     def forward(
         self,
-        batch_obs_goal: ObsBatchProtocol,
+        batch_obs_goal: GoalBatchProtocol,
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):

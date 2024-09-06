@@ -1,9 +1,9 @@
 from typing import Any, cast
+from .types import GoalBatchProtocol
 
 import numpy as np
 
 from tianshou.data import ReplayBuffer, ReplayBufferManager, Batch
-from tianshou.data.types import RolloutBatchProtocol
 
 
 class GoalReplayBuffer(ReplayBuffer):
@@ -34,7 +34,7 @@ class GoalReplayBuffer(ReplayBuffer):
 
     def __getitem__(
         self, index: slice | int | list[int] | np.ndarray
-    ) -> RolloutBatchProtocol:
+    ) -> GoalBatchProtocol:
         if isinstance(index, slice):  # change slice to np array
             # buffer[:] will get all available data
             indices = (
@@ -66,8 +66,7 @@ class GoalReplayBuffer(ReplayBuffer):
         for key in self._meta.__dict__:
             if key not in self._input_keys:
                 batch_dict[key] = self._meta[key][indices]
-        # TODO should make new goal-aware types! (and apply them everywhere!!)
-        return cast(RolloutBatchProtocol, Batch(batch_dict))
+        return cast(GoalBatchProtocol, Batch(batch_dict))
 
 
 class GoalReplayBufferManager(ReplayBufferManager, GoalReplayBuffer):
@@ -76,7 +75,7 @@ class GoalReplayBufferManager(ReplayBufferManager, GoalReplayBuffer):
 
     def add(
         self,
-        batch: RolloutBatchProtocol,
+        batch: GoalBatchProtocol,
         buffer_ids: np.ndarray | list[int] | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         return ReplayBufferManager.add(self, batch, buffer_ids)

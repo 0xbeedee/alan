@@ -1,13 +1,7 @@
 from typing import Literal, Any
-import time
 
-from gymnasium import Space
-import numpy as np
-
-from tianshou.data import ReplayBuffer
 from tianshou.data.batch import BatchProtocol
 from tianshou.data.types import (
-    RolloutBatchProtocol,
     ObsBatchProtocol,
     ActStateBatchProtocol,
     ActBatchProtocol,
@@ -16,17 +10,24 @@ from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
     TrainingStatsWrapper,
+    TrainingStats,
 )
 from tianshou.utils.torch_utils import torch_train_mode
 
-from core.buffer import GoalReplayBuffer
+import time
+
+import gymnasium as gym
+import numpy as np
+
+from .types import GoalBatchProtocol
+from .buffer import GoalReplayBuffer
 from models import SelfModel, EnvModel
 
 
 class CoreTrainingStats(TrainingStatsWrapper):
-    def __init__(self, wrapped_stats):
+    # TODO should I add more to this?
+    def __init__(self, wrapped_stats: TrainingStats):
         super().__init__(wrapped_stats)
-        # TODO should I add more to this?
 
 
 class CorePolicy(BasePolicy[CoreTrainingStats]):
@@ -40,8 +41,8 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         *,
         self_model: SelfModel,
         env_model: EnvModel,
-        action_space: Space,
-        observation_space: Space | None,
+        action_space: gym.Space,
+        observation_space: gym.Space | None,
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
@@ -75,7 +76,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         return self.beta
 
-    def combine_reward(self, batch: RolloutBatchProtocol) -> np.ndarray:
+    def combine_reward(self, batch: GoalBatchProtocol) -> np.ndarray:
         """Combines the intrinsic and extrinsic rewards into a single scalar value in-place.
 
         A default implementation is provided, but this method is meant to be overridden.
@@ -104,13 +105,12 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     # TODO better docs throughout! (at least one expalanatory line per method)
     def process_fn(
         self,
-        batch: RolloutBatchProtocol,
-        buffer: ReplayBuffer,
+        batch: GoalBatchProtocol,
+        buffer: GoalReplayBuffer,
         indices: np.ndarray,
-    ) -> RolloutBatchProtocol:
+    ) -> GoalReplayBuffer:
         # it is sufficient to call combine_reward here because process_fn() gets called before all the learning happens
         self.combine_reward(batch)
-        # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
         batch.obs["latent_goal"] = batch.latent_goal
         batch.obs_next["latent_goal"] = batch.latent_goal
         return batch

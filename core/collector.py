@@ -22,6 +22,10 @@ from .policy import CorePolicy
 
 
 class GoalCollector(Collector):
+    """The Collector collects data from a (possibly vectorised) Gymnasium Enviroment using a specified policy, and stores this data into a buffer.
+
+    For details, see https://tianshou.org/en/stable/03_api/data/collector.html."""
+
     def __init__(
         self,
         policy: CorePolicy,
@@ -39,7 +43,7 @@ class GoalCollector(Collector):
         last_info_R: np.ndarray,
         last_hidden_state_RH: np.ndarray | torch.Tensor | Batch | None = None,
     ) -> tuple[np.ndarray, np.ndarray, Batch, np.ndarray | torch.Tensor | Batch | None]:
-        """Returns the action, the normalized action, a "policy" entry, and the hidden state."""
+        """Returns the action, the normalized action, a "policy" entry, the hidden state and a latent goal."""
         if random:
             try:
                 act_normalized_RA = np.array(

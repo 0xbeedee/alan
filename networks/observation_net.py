@@ -10,9 +10,10 @@ from .utils import Crop
 
 
 class NetHackObsNet(nn.Module):
-    """A basic network for processing NetHack observations.
+    """The main network for processing NetHack observations.
 
-    Fundamentally, it's the initial part of the network in the NLE paper (https://arxiv.org/abs/2006.13760), kept mostly intact due to the interesting local/global interplay of the two CNNs.
+    It's the initial part of the network in the NLE paper (https://arxiv.org/abs/2006.13760), i.e., the CNNs and the MLP, without the RNN.
+    I kept it mostly intact due to the interesting local/global interplay.
     """
 
     def __init__(

@@ -18,7 +18,10 @@ from core import CorePolicy
 
 
 class PPOBasedPolicy(CorePolicy):
-    """A simple example illustrating how to combine a Tianshou policy (PPO, in this case) and all the additional machinery I've added (i.e, intrinsic motivation and lifelong learning)"""
+    """A policy combining a Tianshou PPOPolicy and the CorePolicy.
+
+    It is mostly meant as a blueprint/example for future integration of my code with Tianshou.
+    """
 
     # TODO no lifelong learning yet!
 
@@ -72,8 +75,6 @@ class PPOBasedPolicy(CorePolicy):
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
     ) -> GoalBatchProtocol:
-        """Compute action over the given batch data by applying the actor."""
-
         # we compute the latent observations here for two reasons
         # 1. this way we only compute them once
         # 2. it makes sense for this computation to happen within an agent

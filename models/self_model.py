@@ -10,6 +10,11 @@ from .her import HER
 
 
 class SelfModel:
+    """The SelfModel represents an agent's model of itself.
+
+    It is, fundamentally, a container for all things that should happen exclusively within an agent, independently of the outside world.
+    """
+
     def __init__(
         self,
         obs_net: ObservationNet,
@@ -31,6 +36,7 @@ class SelfModel:
         her.rewrite_transitions(achieved_goal, self.desired_goal)
 
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor:
+        """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
         batch_latent_obs = self.obs_net.forward(batch_obs)
 
         # TODO this is naturally a placeholder (althuogh randomness can work better than expected at times...)

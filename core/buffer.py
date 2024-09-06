@@ -7,6 +7,11 @@ from tianshou.data import ReplayBuffer, ReplayBufferManager, Batch
 
 
 class GoalReplayBuffer(ReplayBuffer):
+    """The Buffer stores the data generated from the interaction between policy and environment.
+
+    For details, see https://tianshou.org/en/stable/03_api/data/buffer/base.html. On top of Tianshou's implementation, we add the possibility of storing latent goals.
+    """
+
     _reserved_keys = (
         "obs",
         "act",
@@ -69,7 +74,12 @@ class GoalReplayBuffer(ReplayBuffer):
         return cast(GoalBatchProtocol, Batch(batch_dict))
 
 
+# TODO change the order of these imports?
 class GoalReplayBufferManager(ReplayBufferManager, GoalReplayBuffer):
+    """GoalReplayBufferManager contains a list of GoalReplayBuffers, each with the exact same configuration.
+
+    For details, see https://tianshou.org/en/stable/03_api/data/buffer/manager.html."""
+
     def __init__(self, buffer_list: list[GoalReplayBuffer]) -> None:
         super().__init__(buffer_list)
 
@@ -82,7 +92,9 @@ class GoalReplayBufferManager(ReplayBufferManager, GoalReplayBuffer):
 
 
 class GoalVectorReplayBuffer(GoalReplayBufferManager):
-    """Goal based variant of the Tianshou buffer."""
+    """The GoalVectorReplayBuffer contains `n` GoalReplayBuffers of the same size.
+
+    For details, see https://tianshou.org/en/stable/03_api/data/buffer/vecbuf.html."""
 
     def __init__(self, total_size: int, buffer_num: int, **kwargs: Any) -> None:
         assert buffer_num > 0

@@ -7,8 +7,8 @@ from tianshou.data import ReplayBuffer
 class HER:
     """An implementation of Hindsight Experience Replay (https://arxiv.org/abs/1707.01495).
 
-    This version doesn't necessitate goal-based environments, as current implementations in Tianshou (https://tianshou.org/en/v1.1.0/03_api/data/buffer/her.html#tianshou.data.buffer.her.HERReplayBuffer) and Baselines (https://stable-baselines3.readthedocs.io/en/master/modules/her.html) do.
-    This is advantageous from a conceptual point of view: HER is something that should happen within an agent's "head".
+    This version doesn't necessitate goal-based environments, as do current implementations in Tianshou (https://tianshou.org/en/v1.1.0/03_api/data/buffer/her.html#tianshou.data.buffer.her.HERReplayBuffer) and Stable Baselines (https://stable-baselines3.readthedocs.io/en/master/modules/her.html).
+    This is advantageous from a conceptual point of view: HER is something that should happen within an agent's "head", not depend on an environment.
     """
 
     def __init__(

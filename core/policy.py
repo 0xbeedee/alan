@@ -31,9 +31,9 @@ class CoreTrainingStats(TrainingStatsWrapper):
 
 
 class CorePolicy(BasePolicy[CoreTrainingStats]):
-    """This is the Core policy object we'll use throughout.
+    """CorePolicy is the base class for all the policies we wish to implement.
 
-    It is analogous to Tianshou's BasePolicy, in that each policy we create MUST inherit from it.
+    It is analogous to Tianshou's BasePolicy (see https://tianshou.org/en/stable/03_api/policy/base.html), in that each policy we create must inherit from it.
     """
 
     def __init__(
@@ -77,7 +77,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         return self.beta
 
     def combine_reward(self, batch: GoalBatchProtocol) -> np.ndarray:
-        """Combines the intrinsic and extrinsic rewards into a single scalar value in-place.
+        """Combines the intrinsic and extrinsic rewards into a single scalar value in place.
 
         A default implementation is provided, but this method is meant to be overridden.
         """
@@ -90,9 +90,9 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
     ) -> ActBatchProtocol | ActStateBatchProtocol:
-        """Compute action over the given batch data.
+        """Compute action over the given batch of data.
 
-        The default implementation simply selects the latent goal and attaches it to batch.obs. It must be overridden!
+        The default implementation simply selects the latent goal and attaches it to batch.obs. It must be overridden.
         """
         # we must compute the latent_goals here because
         # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
@@ -102,14 +102,16 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
         batch.obs["latent_goal"] = latent_goal
 
-    # TODO better docs throughout! (at least one expalanatory line per method)
     def process_fn(
         self,
         batch: GoalBatchProtocol,
         buffer: GoalReplayBuffer,
         indices: np.ndarray,
     ) -> GoalReplayBuffer:
-        # it is sufficient to call combine_reward here because process_fn() gets called before all the learning happens
+        """Pre-processes the data from the specified buffer before updating the policy.
+
+        This method gets called as soon as data collection is done and we wish to use this data to improve our policy.
+        """
         self.combine_reward(batch)
         batch.obs["latent_goal"] = batch.latent_goal
         batch.obs_next["latent_goal"] = batch.latent_goal
@@ -121,6 +123,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         buffer: GoalReplayBuffer | None,
         **kwargs: Any,
     ) -> CoreTrainingStats:
+        """Updates the policy, i.e., it uses the data in the buffer to optimise the policy (the various neural networks)."""
         if buffer is None:
             return TrainingStats()  # type: ignore[return-value]
         start_time = time.time()

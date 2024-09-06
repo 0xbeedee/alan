@@ -9,6 +9,11 @@ import torch
 
 
 class SimpleNetHackActor(nn.Module):
+    """A simple Actor for the NetHack environment.
+
+    It is simple in the sense that it is the minimally viable implementation of an actor compatible with actor-critic methods as implemented in Tianshou.
+    """
+
     def __init__(self, obs_net: ObservationNet, action_space: gym.Space):
         super().__init__()
 
@@ -28,6 +33,8 @@ class SimpleNetHackActor(nn.Module):
 
 
 class GoalNetHackActor(SimpleNetHackActor):
+    """An Actor which is goal-aware, i.e., which takes goals into account, on top of standard observations."""
+
     def __init__(self, obs_net: ObservationNet, action_space: gym.Space):
         super().__init__(obs_net, action_space)
 
@@ -55,6 +62,11 @@ class GoalNetHackActor(SimpleNetHackActor):
 
 
 class SimpleNetHackCritic(nn.Module):
+    """A simple Critic for the NetHack environment.
+
+    It is simple in the sense that it is the minimally viable implementation of a critic compatible with actor-critic methods as implemented in Tianshou.
+    """
+
     def __init__(self, obs_net: ObservationNet):
         super().__init__()
 
@@ -73,6 +85,8 @@ class SimpleNetHackCritic(nn.Module):
 
 
 class GoalNetHackCritic(SimpleNetHackCritic):
+    """A Critic which is goal-aware, i.e., which takes goals into account, on top of standard observations."""
+
     def __init__(self, obs_net: ObservationNet):
         super().__init__(obs_net)
 

@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 
 class Crop(nn.Module):
-    """Helper class for NetHackNet below."""
+    """Helper class for NetHackObsNet."""
 
     def __init__(self, height, width, height_target, width_target):
         super(Crop, self).__init__()

@@ -1,1 +1,1 @@
-from .icm import *
+from .icm import ICM

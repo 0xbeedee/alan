@@ -1,2 +1,0 @@
-from .goal_based_collector import GoalBasedCollector
-from .goal_based_buffer import GoalVectorReplayBuffer

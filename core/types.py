@@ -17,3 +17,7 @@ class GoalBatchProtocol(RolloutBatchProtocol, Protocol):
     """The outcome obtained form sampling a GoalReplayBuffer."""
 
     latent_goal: torch.Tensor
+    latent_goal_next: torch.Tensor
+
+
+# TODO a new type for stats, perhaps?

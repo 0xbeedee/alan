@@ -99,8 +99,9 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # 2) it centralises goal selection
         # 3) it makes conceptual sense
         latent_goal = self.self_model.select_goal(batch.obs)
-        # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
+        # this is somewhat hacky, but it provides a cleaner interface with Tianshou
         batch.obs["latent_goal"] = latent_goal
+        return latent_goal
 
     def process_fn(
         self,
@@ -114,27 +115,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         self.combine_reward(batch)
         batch.obs["latent_goal"] = batch.latent_goal
-        batch.obs_next["latent_goal"] = batch.latent_goal
+        # one goal per observation
+        batch.obs_next["latent_goal"] = batch.latent_goal_next
         return batch
-
-    def update(
-        self,
-        sample_size: int | None,
-        buffer: GoalReplayBuffer | None,
-        **kwargs: Any,
-    ) -> CoreTrainingStats:
-        """Updates the policy, i.e., it uses the data in the buffer to optimise the policy (the various neural networks)."""
-        if buffer is None:
-            return TrainingStats()  # type: ignore[return-value]
-        start_time = time.time()
-        batch, indices = buffer.sample(sample_size)
-        self.updating = True
-        batch = self.process_fn(batch, buffer, indices)
-        with torch_train_mode(self):
-            training_stat = self.learn(batch, **kwargs)
-        self.post_process_fn(batch, buffer, indices)
-        if self.lr_scheduler is not None:
-            self.lr_scheduler.step()
-        self.updating = False
-        training_stat.train_time = time.time() - start_time
-        return training_stat

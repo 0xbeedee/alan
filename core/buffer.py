@@ -14,25 +14,27 @@ class GoalReplayBuffer(ReplayBuffer):
 
     _reserved_keys = (
         "obs",
-        "act",
         "latent_goal",
+        "act",
+        "obs_next",
+        "latent_goal_next",
         "rew",
         "terminated",
         "truncated",
         "done",
-        "obs_next",
         "info",
         "policy",
     )
 
     _input_keys = (
         "obs",
-        "act",
         "latent_goal",
+        "act",
+        "obs_next",
+        "latent_goal_next",
         "rew",
         "terminated",
         "truncated",
-        "obs_next",
         "info",
         "policy",
     )
@@ -49,32 +51,38 @@ class GoalReplayBuffer(ReplayBuffer):
             )
         else:
             indices = index  # type: ignore
+
         # raise KeyError first instead of AttributeError,
         # to support np.array([ReplayBuffer()])
         obs = self.get(indices, "obs")
+
         if self._save_obs_next:
             obs_next = self.get(indices, "obs_next", Batch())
+            latent_goal_next = self.get(indices, "latent_goal_next", Batch())
         else:
             obs_next = self.get(self.next(indices), "obs", Batch())
+            latent_goal_next = self.get(indices, "latent_goal", Batch())
+
         batch_dict = {
             "obs": obs,
-            "act": self.act[indices],
             "latent_goal": self.latent_goal[indices],
+            "act": self.act[indices],
+            "obs_next": obs_next,
+            "latent_goal_next": latent_goal_next,
             "rew": self.rew[indices],
             "terminated": self.terminated[indices],
             "truncated": self.truncated[indices],
             "done": self.done[indices],
-            "obs_next": obs_next,
             "info": self.get(indices, "info", Batch()),
             "policy": self.get(indices, "policy", Batch()),
         }
+
         for key in self._meta.__dict__:
             if key not in self._input_keys:
                 batch_dict[key] = self._meta[key][indices]
         return cast(GoalBatchProtocol, Batch(batch_dict))
 
 
-# TODO change the order of these imports?
 class GoalReplayBufferManager(ReplayBufferManager, GoalReplayBuffer):
     """GoalReplayBufferManager contains a list of GoalReplayBuffers, each with the exact same configuration.
 

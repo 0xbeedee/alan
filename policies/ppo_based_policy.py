@@ -75,15 +75,9 @@ class PPOBasedPolicy(CorePolicy):
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
     ) -> GoalBatchProtocol:
-        # we compute the latent observations here for two reasons
-        # 1. this way we only compute them once
-        # 2. it makes sense for this computation to happen within an agent
-        latent_goal = self.self_model.select_goal(batch.obs)
-        # TODO this is somewhat hacky, but it provides a cleaner interface with Tianshou
-        batch.obs["latent_goal"] = latent_goal
+        latent_goal = super().forward(batch, state)
 
         result = self.ppo_policy.forward(batch, state, **kwargs)
-        # result is a Batch
         result.latent_goal = latent_goal
         return cast(GoalBatchProtocol, result)
 

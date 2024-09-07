@@ -37,9 +37,10 @@ class SelfModel:
 
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor:
         """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
-        batch_latent_obs = self.obs_net.forward(batch_obs)
+        with torch.no_grad():
+            batch_latent_obs = self.obs_net.forward(batch_obs)
 
-        # TODO this is naturally a placeholder (althuogh randomness can work better than expected at times...)
+        # TODO placeholder (although randomness can work better than expected at times...)
         random_idx = torch.randint(0, batch_latent_obs.shape[0], (1,)).item()
         goal = batch_latent_obs[random_idx]
         # need to return a batch of goals, not a single one

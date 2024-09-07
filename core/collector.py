@@ -35,71 +35,12 @@ class GoalCollector(Collector):
     ) -> None:
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
 
-    def _compute_action_policy_hidden(
-        self,
-        random: bool,
-        ready_env_ids_R: np.ndarray,
-        last_obs_RO: np.ndarray,
-        last_info_R: np.ndarray,
-        last_hidden_state_RH: np.ndarray | torch.Tensor | Batch | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, Batch, np.ndarray | torch.Tensor | Batch | None]:
-        """Returns the action, the normalized action, a "policy" entry, the hidden state and a latent goal."""
-        if random:
-            try:
-                act_normalized_RA = np.array(
-                    [self._action_space[i].sample() for i in ready_env_ids_R],
-                )
-            # TODO: test whether envpool env explicitly
-            except TypeError:  # envpool's action space is not for per-env
-                act_normalized_RA = np.array(
-                    [self._action_space.sample() for _ in ready_env_ids_R]
-                )
-            act_RA = self.policy.map_action_inverse(np.array(act_normalized_RA))
-            policy_R = Batch()
-            hidden_state_RH = None
-
-        else:
-            info_batch = _HACKY_create_info_batch(last_info_R)
-            obs_batch_R = cast(
-                ObsBatchProtocol, Batch(obs=last_obs_RO, info=info_batch)
+        if self.env.is_async:
+            raise ValueError(
+                f"Please use {AsyncCollector.__name__} for asynchronous environments. "
+                f"Env class: {self.env.__class__.__name__}.",
             )
 
-            act_batch_RA = self.policy(
-                obs_batch_R,
-                last_hidden_state_RH,
-            )
-
-            act_RA = to_numpy(act_batch_RA.act)
-            if self.exploration_noise:
-                act_RA = self.policy.exploration_noise(act_RA, obs_batch_R)
-            act_normalized_RA = self.policy.map_action(act_RA)
-
-            # TODO: cleanup the whole policy in batch thing
-            policy_R = act_batch_RA.get("policy", Batch())
-            if not isinstance(policy_R, Batch):
-                raise RuntimeError(
-                    f"The policy result should be a {Batch}, but got {type(policy_R)}",
-                )
-
-            hidden_state_RH = act_batch_RA.get("state", None)
-            if hidden_state_RH is not None:
-                policy_R.hidden_state = (
-                    hidden_state_RH  # save state into buffer through policy attr
-                )
-
-            latent_goal_R = act_batch_RA.get("latent_goal", None)
-            if latent_goal_R is None:
-                raise RuntimeError("The latent goals should not be None!")
-
-        return (
-            act_RA,
-            act_normalized_RA,
-            policy_R,
-            hidden_state_RH,
-            latent_goal_R,
-        )
-
-    # TODO: reduce complexity, remove the noqa
     def _collect(
         self,
         n_step: int | None = None,
@@ -108,13 +49,10 @@ class GoalCollector(Collector):
         render: float | None = None,
         gym_reset_kwargs: dict[str, Any] | None = None,
     ) -> CollectStats:
-        # TODO: can't do it init since AsyncCollector is currently a subclass of Collector
-        if self.env.is_async:
-            raise ValueError(
-                f"Please use {AsyncCollector.__name__} for asynchronous environments. "
-                f"Env class: {self.env.__class__.__name__}.",
-            )
+        """Collects a specified number of steps or episodes.
 
+        Note that the collect() method in BaseCollector calls this method to do the actual collecting.
+        """
         if n_step is not None:
             ready_env_ids_R = np.arange(self.env_num)
         elif n_episode is not None:
@@ -147,21 +85,13 @@ class GoalCollector(Collector):
         )
 
         while True:
-            # todo check if we need this when using cur_rollout_batch
-            # if len(cur_rollout_batch) != len(ready_env_ids):
-            #     raise RuntimeError(
-            #         f"The length of the collected_rollout_batch {len(cur_rollout_batch)}) is not equal to the length of ready_env_ids"
-            #         f"{len(ready_env_ids)}. This should not happen and could be a bug!",
-            #     )
-            # restore the state: if the last state is None, it won't store
-
             # get the next action
             (
                 act_RA,
                 act_normalized_RA,
+                latent_goal_R,
                 policy_R,
                 hidden_state_RH,
-                latent_goal_R,
             ) = self._compute_action_policy_hidden(
                 random=random,
                 ready_env_ids_R=ready_env_ids_R,
@@ -179,19 +109,22 @@ class GoalCollector(Collector):
                 info_R = _dict_of_arr_to_arr_of_dicts(info_R)  # type: ignore[unreachable]
             done_R = np.logical_or(terminated_R, truncated_R)
 
+            latent_goal_next_R = self.policy.self_model.select_goal(Batch(obs_next_RO))
+
             current_iteration_batch = cast(
                 GoalBatchProtocol,
                 Batch(
                     obs=last_obs_RO,
-                    act=act_RA,
-                    policy=policy_R,
-                    obs_next=obs_next_RO,
                     latent_goal=latent_goal_R,
+                    act=act_RA,
+                    obs_next=obs_next_RO,
+                    latent_goal_next=latent_goal_next_R,
                     rew=rew_R,
                     terminated=terminated_R,
                     truncated=truncated_R,
                     done=done_R,
                     info=info_R,
+                    policy=policy_R,
                 ),
             )
 
@@ -214,8 +147,7 @@ class GoalCollector(Collector):
             step_count += len(ready_env_ids_R)
 
             # preparing for the next iteration
-            # obs_next, info and hidden_state will be modified inplace in the code below,
-            # so we copy to not affect the data in the buffer
+            # obs_next, info and hidden_state will be modified inplace in the code below, so we copy to not affect the data in the buffer
             last_obs_RO = copy(obs_next_RO)
             last_info_R = copy(info_R)
             last_hidden_state_RH = copy(hidden_state_RH)
@@ -223,16 +155,16 @@ class GoalCollector(Collector):
             # Preparing last_obs_RO, last_info_R, last_hidden_state_RH for the next while-loop iteration
             # Resetting envs that reached done, or removing some of them from the collection if needed (see below)
             if num_episodes_done_this_iter > 0:
-                # TODO: adjust the whole index story, don't use np.where, just slice with boolean arrays
                 # D - number of envs that reached done in the rollout above
                 env_ind_local_D = np.where(done_R)[0]
+
                 env_ind_global_D = ready_env_ids_R[env_ind_local_D]
                 episode_lens.extend(ep_len_R[env_ind_local_D])
                 episode_returns.extend(ep_rew_R[env_ind_local_D])
                 episode_start_indices.extend(ep_idx_R[env_ind_local_D])
+
                 # now we copy obs_next to obs, but since there might be
                 # finished episodes, we have to reset finished envs first.
-
                 gym_reset_kwargs = gym_reset_kwargs or {}
                 obs_reset_DO, info_reset_D = self.env.reset(
                     env_id=env_ind_global_D,
@@ -240,8 +172,6 @@ class GoalCollector(Collector):
                 )
 
                 # Set the hidden state to zero or None for the envs that reached done
-                # TODO: does it have to be so complicated? We should have a single clear type for hidden_state instead of
-                #  this complex logic
                 self._reset_hidden_state_based_on_type(
                     env_ind_local_D, last_hidden_state_RH
                 )
@@ -262,7 +192,6 @@ class GoalCollector(Collector):
                 # However, it is not at all clear whether this is actually useful or necessary.
                 # Additional naming convention:
                 # S - number of surplus envs
-                # TODO: can the whole block be removed? If we have too many episodes, we could just strip the last ones.
                 #   Changing R to R-S highly increases the complexity of the code.
                 if n_episode:
                     remaining_episodes_to_collect = n_episode - num_collected_episodes
@@ -317,11 +246,76 @@ class GoalCollector(Collector):
             collect_speed=step_count / collect_time,
         )
 
+    def _compute_action_policy_hidden(
+        self,
+        random: bool,
+        ready_env_ids_R: np.ndarray,
+        last_obs_RO: np.ndarray,
+        last_info_R: np.ndarray,
+        last_hidden_state_RH: np.ndarray | torch.Tensor | Batch | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, Batch, np.ndarray | torch.Tensor | Batch | None]:
+        """Returns the action, the normalized action, a "policy" entry, the hidden state and a latent goal.
 
-def _HACKY_create_info_batch(info_array: np.ndarray) -> Batch:
-    """TODO: this exists because of multiple bugs in Batch and to restore backwards compatibility.
-    Batch should be fixed and this function should be removed asap!.
-    """
+        The suffixes at the end of the variable names have their own, Tianshou-specific semantics. See the comments in the source code of Tianshou's Collector for details.
+        """
+        if random:
+            try:
+                act_normalized_RA = np.array(
+                    [self._action_space[i].sample() for i in ready_env_ids_R],
+                )
+            # TODO: test whether envpool env explicitly
+            except TypeError:  # envpool's action space is not for per-env
+                act_normalized_RA = np.array(
+                    [self._action_space.sample() for _ in ready_env_ids_R]
+                )
+
+            act_RA = self.policy.map_action_inverse(np.array(act_normalized_RA))
+            policy_R = Batch()
+            hidden_state_RH = None
+
+        else:
+            info_batch = _create_info_batch(last_info_R)
+            obs_batch_R = cast(
+                ObsBatchProtocol, Batch(obs=last_obs_RO, info=info_batch)
+            )
+
+            act_batch_RA = self.policy(
+                obs_batch_R,
+                last_hidden_state_RH,
+            )
+
+            act_RA = to_numpy(act_batch_RA.act)
+            if self.exploration_noise:
+                act_RA = self.policy.exploration_noise(act_RA, obs_batch_R)
+            act_normalized_RA = self.policy.map_action(act_RA)
+
+            policy_R = act_batch_RA.get("policy", Batch())
+            if not isinstance(policy_R, Batch):
+                raise RuntimeError(
+                    f"The policy result should be a {Batch}, but got {type(policy_R)}",
+                )
+
+            hidden_state_RH = act_batch_RA.get("state", None)
+            if hidden_state_RH is not None:
+                policy_R.hidden_state = (
+                    hidden_state_RH  # save state into buffer through policy attr
+                )
+
+            latent_goal_R = act_batch_RA.get("latent_goal", None)
+            if latent_goal_R is None:
+                raise RuntimeError("The latent goals should not be None!")
+
+        return (
+            act_RA,
+            act_normalized_RA,
+            latent_goal_R,
+            policy_R,
+            hidden_state_RH,
+        )
+
+
+def _create_info_batch(info_array: np.ndarray) -> Batch:
+    # TODO: this exists because of bugs in Batch and backwards compatibility => Batch should be fixed and this function should be removed
     if info_array.dtype != np.dtype("O"):
         raise ValueError(
             f"Expected info_array to have dtype=object, but got {info_array.dtype}.",

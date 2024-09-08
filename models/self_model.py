@@ -6,6 +6,8 @@ import gymnasium as gym
 import torch
 from torch import nn
 
+import numpy as np
+
 from .her import HER
 
 
@@ -35,10 +37,10 @@ class SelfModel:
 
         her.rewrite_transitions(achieved_goal, self.desired_goal)
 
+    @torch.no_grad()
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor:
         """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
-        with torch.no_grad():
-            batch_latent_obs = self.obs_net.forward(batch_obs)
+        batch_latent_obs = self.obs_net.forward(batch_obs)
 
         # TODO placeholder (although randomness can work better than expected at times...)
         random_idx = torch.randint(0, batch_latent_obs.shape[0], (1,)).item()
@@ -46,11 +48,15 @@ class SelfModel:
         # need to return a batch of goals, not a single one
         return goal.repeat(batch_latent_obs.shape[0], 1)
 
+    @torch.no_grad()
+    def compute_intrinsic_reward(self, batch: GoalBatchProtocol) -> np.ndarray:
+        return self.intrinsic_module.forward(batch)
+
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # modify the buffer by adding the goals
         # self.her(len(batch))
         # TODO do something with sleep
-        return self.intrinsic_module.forward(batch)
+        pass
 
     # def sample_goals(
     #     self, indices: np.ndarray, goal_selection_strategy: str

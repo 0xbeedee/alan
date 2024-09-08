@@ -8,7 +8,8 @@ import numpy as np
 import gymnasium as gym
 
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule as tsICM
-from tianshou.data import Batch, to_torch
+from tianshou.data import to_torch
+from tianshou.data.types import RolloutBatchProtocol
 
 from core.types import ObservationNet
 
@@ -28,16 +29,16 @@ class ICM(tsICM):
 
         self.eta = eta
 
-    def forward(self, batch: Batch, **kwargs) -> np.ndarray:
-        with torch.no_grad():
-            batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
+    def forward(self, batch: RolloutBatchProtocol, **kwargs) -> np.ndarray:
+        # no need for the no_grad() context manager => check SelfModel
+        batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
 
-            phi1, phi2 = self.feature_net(batch.obs), self.feature_net(batch.obs_next)
-            phi2_hat = self._forward_dynamics(phi1, batch_actions)
+        phi1, phi2 = self.feature_net(batch.obs), self.feature_net(batch.obs_next)
+        phi2_hat = self._forward_dynamics(phi1, batch_actions)
 
-            loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
-            intrinsic_reward = (loss * self.eta).numpy()
-            # inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
+        loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
+        intrinsic_reward = (loss * self.eta).numpy()
+        # inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
         return intrinsic_reward
 
     def _forward_dynamics(

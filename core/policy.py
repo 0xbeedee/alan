@@ -78,8 +78,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         A default implementation is provided, but this method is meant to be overridden.
         """
-        i_rew = self.self_model(batch)
-        batch.rew += self.get_beta() * i_rew
+        batch.rew += self.get_beta() * batch.int_rew
 
     def forward(
         self,

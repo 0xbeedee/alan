@@ -1,1 +1,1 @@
-from .ppo_based_policy import PPOBasedPolicy
+from .ppo_based import PPOBasedPolicy

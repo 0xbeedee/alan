@@ -4,6 +4,8 @@ import torch
 from torch import nn
 
 import gymnasium as gym
+import numpy as np
+
 from nle import nethack
 
 from .utils import Crop
@@ -102,53 +104,43 @@ class NetHackObsNet(nn.Module):
             nn.ReLU(),
         )
 
-    def forward(self, env_out_batch: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(
+        self, env_out_batch: Dict[str, torch.Tensor | np.ndarray]
+    ) -> torch.Tensor:
         # -- [B x H x W]
-        glyphs = torch.tensor(env_out_batch["glyphs"])
+        glyphs = torch.as_tensor(env_out_batch["glyphs"]).long()
         B, *_ = glyphs.shape
-        # -- [B x H x W]
-        glyphs = glyphs.long()
 
         # -- [B x F]
-        blstats = torch.tensor(env_out_batch["blstats"])
-        # -- [B x F]
-        blstats = blstats.float()
-        # -- [B x 2] x,y coordinates
+        blstats = torch.as_tensor(env_out_batch["blstats"]).float()
+        # -- [B x 2]
         coordinates = blstats[:, :2]
-        # -- [B x F]
-        blstats = blstats.float()
         # -- [B x K]
         blstats_emb = self.embed_blstats(blstats)
         assert blstats_emb.shape[0] == B
-        reps = [blstats_emb]
 
         # -- [B x H' x W']
         crop = self.crop(glyphs, coordinates)
         # -- [B x H' x W' x K]
         crop_emb = self._select(self.embed, crop)
-        # CNN crop model.
         # -- [B x K x W' x H']
-        crop_emb = crop_emb.transpose(1, 3)  # -- TODO: slow?
+        crop_emb = crop_emb.permute(0, 3, 1, 2)
         # -- [B x W' x H' x K]
-        crop_rep = self.extract_crop_representation(crop_emb)
+        crop_rep = self.extract_crop_representation(crop_emb).flatten(1)
         # -- [B x K']
-        crop_rep = crop_rep.view(B, -1)
         assert crop_rep.shape[0] == B
-        reps.append(crop_rep)
 
         # -- [B x H x W x K]
         glyphs_emb = self._select(self.embed, glyphs)
         # -- [B x K x W x H]
-        glyphs_emb = glyphs_emb.transpose(1, 3)  # -- TODO: slow?
+        glyphs_emb = glyphs_emb.permute(0, 3, 1, 2)
         # -- [B x W x H x K]
-        glyphs_rep = self.extract_representation(glyphs_emb)
+        glyphs_rep = self.extract_representation(glyphs_emb).flatten(1)
         # -- [B x K']
-        glyphs_rep = glyphs_rep.view(B, -1)
         assert glyphs_rep.shape[0] == B
-        # -- [B x K'']
-        reps.append(glyphs_rep)
 
-        st = torch.cat(reps, dim=1)
+        st = torch.cat([blstats_emb, crop_rep, glyphs_rep], dim=1)
+
         # -- [B x K]
         logits = self.fc(st)
         return logits

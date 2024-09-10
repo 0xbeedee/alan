@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 from tianshou.data.types import ObsBatchProtocol
-from core.types import GoalBatchProtocol, ObservationNet
+from core.types import GoalBatchProtocol, ObservationNetProtocol
 
 import gymnasium as gym
 
@@ -14,7 +14,7 @@ class SimpleNetHackActor(nn.Module):
     It is simple in the sense that it is the minimally viable implementation of an actor compatible with actor-critic methods as implemented in Tianshou.
     """
 
-    def __init__(self, obs_net: ObservationNet, action_space: gym.Space):
+    def __init__(self, obs_net: ObservationNetProtocol, action_space: gym.Space):
         super().__init__()
 
         self.obs_net = obs_net
@@ -35,7 +35,7 @@ class SimpleNetHackActor(nn.Module):
 class GoalNetHackActor(SimpleNetHackActor):
     """An Actor which is goal-aware, i.e., which takes goals into account, on top of standard observations."""
 
-    def __init__(self, obs_net: ObservationNet, action_space: gym.Space):
+    def __init__(self, obs_net: ObservationNetProtocol, action_space: gym.Space):
         super().__init__(obs_net, action_space)
 
         # we use a two-stream architecture (https://proceedings.mlr.press/v37/schaul15.html)
@@ -67,7 +67,7 @@ class SimpleNetHackCritic(nn.Module):
     It is simple in the sense that it is the minimally viable implementation of a critic compatible with actor-critic methods as implemented in Tianshou.
     """
 
-    def __init__(self, obs_net: ObservationNet):
+    def __init__(self, obs_net: ObservationNetProtocol):
         super().__init__()
 
         self.obs_net = obs_net
@@ -87,7 +87,7 @@ class SimpleNetHackCritic(nn.Module):
 class GoalNetHackCritic(SimpleNetHackCritic):
     """A Critic which is goal-aware, i.e., which takes goals into account, on top of standard observations."""
 
-    def __init__(self, obs_net: ObservationNet):
+    def __init__(self, obs_net: ObservationNetProtocol):
         super().__init__(obs_net)
 
         hidden_dim = obs_net.o_dim // 3

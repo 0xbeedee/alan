@@ -1,6 +1,10 @@
 from tianshou.data.types import ObsBatchProtocol
-from core.types import GoalBatchProtocol, ObservationNet
-from core import GoalReplayBuffer
+from core.types import (
+    GoalBatchProtocol,
+    ObservationNetProtocol,
+    GoalReplayBufferProtocol,
+)
+
 import gymnasium as gym
 
 import torch
@@ -19,10 +23,10 @@ class SelfModel:
 
     def __init__(
         self,
-        obs_net: ObservationNet,
+        obs_net: ObservationNetProtocol,
         action_space: gym.Space,
         intrinsic_module: nn.Module,
-        buffer: GoalReplayBuffer,
+        buffer: GoalReplayBufferProtocol,
     ) -> None:
         self.intrinsic_module = intrinsic_module(obs_net, action_space)
         self.obs_net = obs_net
@@ -40,11 +44,13 @@ class SelfModel:
     @torch.no_grad()
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor:
         """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
+        # TODO should pull form the KB (obs)
         batch_latent_obs = self.obs_net.forward(batch_obs)
 
         # TODO placeholder (although randomness can work better than expected at times...)
         random_idx = torch.randint(0, batch_latent_obs.shape[0], (1,)).item()
         goal = batch_latent_obs[random_idx]
+        # TODO these could actually be different => multi-goal approach
         # need to return a batch of goals, not a single one
         return goal.repeat(batch_latent_obs.shape[0], 1)
 

@@ -1,11 +1,18 @@
 from typing import Literal, Any
-
-from tianshou.data.batch import BatchProtocol
+from .types import (
+    GoalBatchProtocol,
+    GoalReplayBufferProtocol,
+    SelfModelProtocol,
+    EnvModelProtocol,
+)
 from tianshou.data.types import (
     ObsBatchProtocol,
     ActStateBatchProtocol,
     ActBatchProtocol,
 )
+
+
+from tianshou.data.batch import BatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
@@ -15,10 +22,6 @@ from tianshou.policy.base import (
 
 import gymnasium as gym
 import numpy as np
-
-from .types import GoalBatchProtocol
-from .buffer import GoalReplayBuffer
-from models import SelfModel, EnvModel
 
 
 class CoreTrainingStats(TrainingStatsWrapper):
@@ -36,8 +39,8 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     def __init__(
         self,
         *,
-        self_model: SelfModel,
-        env_model: EnvModel,
+        self_model: SelfModelProtocol,
+        env_model: EnvModelProtocol,
         action_space: gym.Space,
         observation_space: gym.Space | None,
         action_scaling: bool = False,
@@ -88,9 +91,9 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> ActBatchProtocol | ActStateBatchProtocol:
         """Compute action over the given batch of data.
 
-        The default implementation simply selects the latent goal and attaches it to batch.obs. It must be overridden.
+        The default implementation simply selects the latent goal and attaches it to batch.obs. It is meant be overridden.
 
-        (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with @torch.no_grad()!)
+        (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with @torch.no_grad().)
         """
         # we must compute the latent_goals here because
         # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
@@ -104,13 +107,19 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     def process_fn(
         self,
         batch: GoalBatchProtocol,
-        buffer: GoalReplayBuffer,
+        buffer: GoalReplayBufferProtocol,
         indices: np.ndarray,
-    ) -> GoalReplayBuffer:
+    ) -> GoalReplayBufferProtocol:
         """Pre-processes the data from the specified buffer before updating the policy.
 
-        This method gets called as soon as data collection is done and we wish to use this data to improve our policy.
+        This method gets called as soon as data collection is done and we wish to use this data to improve our agent.
         """
+        # TODO edit this, of course
+        from models.her import HER
+
+        her = HER(buffer, horizon=3)
+        her.rewrite_transitions(indices)
+
         self.combine_reward(batch)
         batch.obs["latent_goal"] = batch.latent_goal
         # one goal per observation

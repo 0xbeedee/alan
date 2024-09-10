@@ -1,4 +1,6 @@
 from typing import Sequence
+from tianshou.data.types import RolloutBatchProtocol
+from core.types import ObservationNetProtocol
 
 import torch
 from torch.nn import functional as F
@@ -9,9 +11,6 @@ import gymnasium as gym
 
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule as tsICM
 from tianshou.data import to_torch
-from tianshou.data.types import RolloutBatchProtocol
-
-from core.types import ObservationNet
 
 
 class ICM(tsICM):
@@ -19,7 +18,7 @@ class ICM(tsICM):
 
     def __init__(
         self,
-        obs_net: ObservationNet,
+        obs_net: ObservationNetProtocol,
         action_space: gym.Space,
         hidden_sizes: Sequence[int] = [256, 128, 64],
         device: str | device = "cpu",

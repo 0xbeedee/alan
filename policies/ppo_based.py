@@ -1,5 +1,9 @@
 from typing import Any, Literal, cast
-from core.types import GoalBatchProtocol
+from core.types import (
+    GoalBatchProtocol,
+    SelfModelProtocol,
+    EnvModelProtocol,
+)
 
 from tianshou.data import ReplayBuffer
 from tianshou.data.batch import BatchProtocol
@@ -13,7 +17,6 @@ import gymnasium as gym
 import torch
 
 from networks import GoalNetHackActor, GoalNetHackCritic
-from models import SelfModel, EnvModel
 from core import CorePolicy
 
 
@@ -28,8 +31,8 @@ class PPOBasedPolicy(CorePolicy):
     def __init__(
         self,
         *,
-        self_model: SelfModel,
-        env_model: EnvModel,
+        self_model: SelfModelProtocol,
+        env_model: EnvModelProtocol,
         act_net: GoalNetHackActor,
         critic_net: GoalNetHackCritic,
         optim: torch.optim.Optimizer,

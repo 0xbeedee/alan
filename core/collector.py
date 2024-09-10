@@ -18,9 +18,12 @@ from tianshou.env import BaseVectorEnv
 
 from dataclasses import dataclass
 
-from .types import GoalBatchProtocol, TArrLike
-from .buffer import GoalReplayBuffer
-from .policy import CorePolicy
+from .types import (
+    GoalBatchProtocol,
+    GoalReplayBufferProtocol,
+    CorePolicyProtocol,
+    TArrLike,
+)
 
 
 @dataclass(kw_only=True)
@@ -62,9 +65,9 @@ class GoalCollector(Collector):
 
     def __init__(
         self,
-        policy: CorePolicy,
+        policy: CorePolicyProtocol,
         env: gym.Env | BaseVectorEnv,
-        buffer: GoalReplayBuffer | None = None,
+        buffer: GoalReplayBufferProtocol | None = None,
         exploration_noise: bool = False,
     ) -> None:
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
@@ -338,6 +341,7 @@ class GoalCollector(Collector):
                 ObsBatchProtocol, Batch(obs=last_obs_RO, info=info_batch)
             )
 
+            # call the policy's forward() method
             act_batch_RA = self.policy(
                 obs_batch_R,
                 last_hidden_state_RH,

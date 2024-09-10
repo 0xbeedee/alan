@@ -26,7 +26,7 @@ from tianshou.utils import (
 )
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
-from core.collector import CorePolicy, GoalCollector, GoalReplayBuffer
+from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
 
 log = logging.getLogger(__name__)
 
@@ -39,12 +39,12 @@ class GoalTrainer(BaseTrainer):
 
     def __init__(
         self,
-        policy: CorePolicy,
+        policy: CorePolicyProtocol,
         max_epoch: int,
         batch_size: int | None,
-        train_collector: GoalCollector | None = None,
-        test_collector: GoalCollector | None = None,
-        buffer: GoalReplayBuffer | None = None,
+        train_collector: GoalCollectorProtocol | None = None,
+        test_collector: GoalCollectorProtocol | None = None,
+        buffer: GoalReplayBufferProtocol | None = None,
         step_per_epoch: int | None = None,
         repeat_per_collect: int | None = None,
         episode_per_test: int | None = None,

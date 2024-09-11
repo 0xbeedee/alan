@@ -93,15 +93,13 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         The default implementation simply selects the latent goal and attaches it to batch.obs. It is meant be overridden.
 
-        (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with @torch.no_grad().)
+        (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with no_grad().)
         """
         # we must compute the latent_goals here because
         # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
         # 2) it centralises goal selection
         # 3) it makes conceptual sense
         latent_goal = self.self_model.select_goal(batch.obs)
-        # this is somewhat hacky, but it provides a cleaner interface with Tianshou
-        batch.obs["latent_goal"] = latent_goal
         return latent_goal
 
     def process_fn(
@@ -114,14 +112,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         This method gets called as soon as data collection is done and we wish to use this data to improve our agent.
         """
-        # TODO edit this, of course
-        from models.her import HER
-
-        her = HER(buffer, horizon=3)
-        her.rewrite_transitions(indices)
-
         self.combine_reward(batch)
-        batch.obs["latent_goal"] = batch.latent_goal
-        # one goal per observation
-        batch.obs_next["latent_goal"] = batch.latent_goal_next
+
         return batch

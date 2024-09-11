@@ -79,6 +79,8 @@ class PPOBasedPolicy(CorePolicy):
         **kwargs: Any,
     ) -> GoalBatchProtocol:
         latent_goal = super().forward(batch, state)
+        # this is somewhat hacky, but it provides a cleaner interface with Tianshou
+        batch.obs["latent_goal"] = latent_goal
 
         result = self.ppo_policy.forward(batch, state, **kwargs)
         result.latent_goal = latent_goal
@@ -91,6 +93,9 @@ class PPOBasedPolicy(CorePolicy):
         indices: np.ndarray,
     ) -> GoalBatchProtocol:
         batch = super().process_fn(batch, buffer, indices)
+        batch.obs["latent_goal"] = batch.latent_goal
+        # one goal per observation
+        batch.obs_next["latent_goal"] = batch.latent_goal_next
         return self.ppo_policy.process_fn(batch, buffer, indices)
 
     def _dist_fn(self, logits: torch.Tensor):

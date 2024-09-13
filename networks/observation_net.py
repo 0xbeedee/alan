@@ -1,4 +1,5 @@
 from typing import Dict
+from tianshou.data import Batch
 
 import torch
 from torch import nn
@@ -105,7 +106,7 @@ class NetHackObsNet(nn.Module):
         )
 
     def forward(
-        self, env_out_batch: Dict[str, torch.Tensor | np.ndarray]
+        self, env_out_batch: Batch | Dict[str, np.ndarray | torch.Tensor]
     ) -> torch.Tensor:
         # -- [B x H x W]
         glyphs = torch.as_tensor(env_out_batch["glyphs"]).long()

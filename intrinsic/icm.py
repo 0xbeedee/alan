@@ -1,6 +1,5 @@
 from typing import Sequence
-from tianshou.data.types import RolloutBatchProtocol
-from core.types import ObservationNetProtocol
+from core.types import ObservationNetProtocol, TArrLike
 
 import torch
 from torch.nn import functional as F
@@ -10,7 +9,7 @@ import numpy as np
 import gymnasium as gym
 
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule as tsICM
-from tianshou.data import to_torch
+from tianshou.data import to_torch, Batch
 
 
 class ICM(tsICM):
@@ -28,11 +27,13 @@ class ICM(tsICM):
 
         self.eta = eta
 
-    def forward(self, batch: RolloutBatchProtocol, **kwargs) -> np.ndarray:
+    def forward(
+        self, obs: TArrLike, act: np.ndarray, obs_next: TArrLike, **kwargs
+    ) -> np.ndarray:
         # no need for the no_grad() context manager => check SelfModel
-        batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
+        batch_actions = to_torch(act, dtype=torch.long, device=self.device)
 
-        phi1, phi2 = self.feature_net(batch.obs), self.feature_net(batch.obs_next)
+        phi1, phi2 = self.feature_net(Batch(obs)), self.feature_net(Batch(obs_next))
         phi2_hat = self._forward_dynamics(phi1, batch_actions)
 
         loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
@@ -40,6 +41,7 @@ class ICM(tsICM):
         # inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
         return intrinsic_reward
 
+    # TODO these must be trained somewhere
     def _forward_dynamics(
         self, phi1: torch.Tensor, actions: torch.Tensor
     ) -> torch.Tensor:

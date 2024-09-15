@@ -55,6 +55,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
             action_bound_method=action_bound_method,
             lr_scheduler=lr_scheduler,
         )
+        # TODO should I initialise the models here?
         self.self_model = self_model
         self.env_model = env_model
         self._beta = beta0
@@ -76,12 +77,22 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         return self.beta
 
-    def combine_reward(self, batch: GoalBatchProtocol) -> np.ndarray:
-        """Combines the intrinsic and extrinsic rewards into a single scalar value in place.
+    def combine_fast_reward(self, rew: np.ndarray, int_rew: np.ndarray) -> np.ndarray:
+        """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value.
 
-        A default implementation is provided, but this method is meant to be overridden.
+        By "fast intrinsic reward" we mean the reward as computed by SelfModel's fast_compute_reward() method.
         """
-        batch.rew += self.get_beta() * batch.int_rew
+        return rew + self.get_beta() * int_rew
+
+    def combine_slow_reward_(self, batch: GoalBatchProtocol) -> np.ndarray:
+        """Combines the slow intrinsic reward and the extrinsic reward into a single scalar value, in place.
+
+        By "slow intrinsic reward" we mean the reward as computed by SelfModel's slow_compute_reward() method.
+
+        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In our case, we modify the buffer (and, specifically, the "rew" entry).
+        """
+        # TODO is this the correct way to get batch size?
+        self.self_model.slow_intrinsic_reward_(len(batch))
 
     def forward(
         self,
@@ -91,7 +102,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> ActBatchProtocol | ActStateBatchProtocol:
         """Compute action over the given batch of data.
 
-        The default implementation simply selects the latent goal and attaches it to batch.obs. It is meant be overridden.
+        The default implementation simply selects the latent goal and attaches it to batch.obs. It must be overridden.
 
         (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with no_grad().)
         """
@@ -112,6 +123,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         This method gets called as soon as data collection is done and we wish to use this data to improve our agent.
         """
-        self.combine_reward(batch)
+        self.combine_slow_reward_(batch)
 
         return batch

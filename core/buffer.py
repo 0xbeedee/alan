@@ -57,7 +57,6 @@ class GoalReplayBuffer(ReplayBuffer):
             **kwargs
         )
         self._ep_int_rew: float | np.ndarray
-        print("INDEX: ", self._index)
 
     def __getitem__(
         self, index: slice | int | list[int] | np.ndarray

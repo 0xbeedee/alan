@@ -56,7 +56,9 @@ class GoalNetHackActor(SimpleNetHackActor):
 
         obs_out = self.obs_net(batch_obs)
         obss = self.obs_munet(obs_out)
-        goals = self.goal_munet(batch_obs_goal.latent_goal)
+        goals = self.goal_munet(
+            torch.as_tensor(batch_obs_goal.latent_goal, dtype=torch.float32)
+        )
         logits = self.final_layer(torch.cat((obss, goals), dim=1))
         return logits, state
 
@@ -105,6 +107,8 @@ class GoalNetHackCritic(SimpleNetHackCritic):
         batch_obs = {k: v for k, v in batch_obs_goal.items() if k != "latent_goal"}
         obs_out = self.obs_net(batch_obs)
         obss = self.obs_munet(obs_out)
-        goals = self.goal_munet(batch_obs_goal.latent_goal)
+        goals = self.goal_munet(
+            torch.as_tensor(batch_obs_goal.latent_goal, dtype=torch.float32)
+        )
         v_s = self.final_layer(torch.cat((obss, goals), dim=1))
         return v_s

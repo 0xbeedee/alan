@@ -1,7 +1,7 @@
 from core.types import GoalReplayBufferProtocol
+
 from tianshou.data import Batch
 import numpy as np
-import torch
 
 
 class HER:
@@ -63,34 +63,37 @@ class HER:
         future_obs = self.buf[future_t[unique_close_indices]].obs_next
         return future_obs
 
-    # TODO the mixing of numpy arrays and torch tensors might hurt performance! => possibly change latent_goal and latent_goal_next to be numpy arrays (it would also be more consistent, as everything else is an array)
-    def compute_reward(self, future_achieved_goal: torch.Tensor) -> np.ndarray:
-        """Computes the hindsight experience replay reward.
-
-        It is implemented exactly as specified in the paper, i.e., using the L1 norm and a reward of 0 if an agent reaches the goal and -1 otherwise.
-        """
+    def rewrite_transitions(self, future_achieved_goal: np.ndarray) -> np.ndarray:
         next_desired_goal = self.buf[self.unique_indices].latent_goal_next
-
-        # this tensor will contain the modified goals (some desired ones will be subsituted with achieved ones)
-        reassigned_desired_goal = next_desired_goal.clone()
+        reassigned_desired_goal = next_desired_goal.copy()
         reassigned_desired_goal[:, self.her_indices] = future_achieved_goal[
             None, self.her_indices
         ]
 
-        rew = self._reward(next_desired_goal, reassigned_desired_goal)
-        return rew
+        rew = self.buf[self.unique_indices].rew
+        # we add instead of assigning because we want to keep the fast intrinsic bonus
+        rew[:, self.her_indices] += self._reward(
+            next_desired_goal, reassigned_desired_goal
+        )[:, self.her_indices]
+        # unlike in the Tianshou case, we don't really need to restore anything
+        self.buf._meta.rew[self.unique_indices] = rew
 
     def _reward(
         self,
-        desired_goal: torch.Tensor,
-        achieved_goal: torch.Tensor,
+        desired_goal: np.ndarray,
+        achieved_goal: np.ndarray,
         lead_dims: int = 2,
     ) -> np.ndarray:
+        """Computes the hindsight experience replay reward.
+
+        It is implemented using the L1 norm (as in the original paper) and a reward of 1 if an agent reaches the goal and 0 otherwise.
+
+        (For a discussion of why using a reward of -1 [as is done in the original paper] doesn't speed up training, see section 3.5 of Zhao's "Mathematical Foundations of Reinforcement Learning".)
+        """
         lead_shape = desired_goal.shape[:lead_dims]
         desired_goal = desired_goal.reshape(-1, *desired_goal.shape[lead_dims:])
         achieved_goal = achieved_goal.reshape(-1, *achieved_goal.shape[lead_dims:])
 
-        distances = torch.sum(torch.abs(desired_goal - achieved_goal), dim=1)
-        rewards = (distances <= self.epsilon).float() - 1.0
-        # TODO more reshaping is needed
+        distances = np.sum(np.abs(desired_goal - achieved_goal), axis=1)
+        rewards = (distances <= self.epsilon).astype(float)
         return rewards.reshape(*lead_shape)

@@ -28,7 +28,6 @@ from .types import (
 
 @dataclass(kw_only=True)
 class GoalCollectStats(CollectStats):
-    # TODO more here?
     """A data structure for storing the statistics of rollouts."""
 
     """The intrinsic reward collected."""

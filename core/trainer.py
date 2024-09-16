@@ -117,7 +117,7 @@ class GoalTrainer(BaseTrainer):
                     pbar_data_dict = {
                         "env_step": str(self.env_step),
                         # extrinsic reward
-                        "ext_rew": f"{self.last_rew:.4f}",
+                        "rew": f"{self.last_rew:.4f}",
                         # intrinsic reward
                         "int_rew": f"{self.int_rew:.4f}",
                         "len": str(int(self.last_len)),
@@ -178,7 +178,6 @@ class GoalTrainer(BaseTrainer):
             info_stat=info_stat,
         )
 
-    # TODO change type?
     def _collect_training_data(self) -> CollectStats:
         """Performs training data collection.
 

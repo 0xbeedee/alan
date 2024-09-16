@@ -36,6 +36,8 @@ from torch import nn
 import numpy as np
 import gymnasium as gym
 
+TArrLike = TypeVar("TArrLike", np.ndarray, torch.Tensor, Batch, None)
+
 
 # this type should come in handy if I want to experiment with different observation net architectures
 class ObservationNetProtocol(Protocol):
@@ -52,22 +54,16 @@ class ObservationNetProtocol(Protocol):
     ) -> torch.Tensor: ...
 
 
-class IntrinsicBatchProtocol(RolloutBatchProtocol, Protocol):
-    """A RolloutBatchProtocol with an added intrinsic reward.
+class GoalBatchProtocol(RolloutBatchProtocol, Protocol):
+    """A RolloutBatchProtocol with latent goals for the current and the next observation.
+
+    Usually obtained form sampling a GoalReplayBuffer.
 
     For details, see https://tianshou.org/en/stable/_modules/tianshou/data/types.html.
     """
 
-    int_rew: torch.Tensor
-
-
-class GoalBatchProtocol(IntrinsicBatchProtocol, Protocol):
-    """An IntrinsicBatchProtocol with latent goals.
-
-    Usually obtained form sampling a GoalReplayBuffer."""
-
-    latent_goal: torch.Tensor
-    latent_goal_next: torch.Tensor
+    latent_goal: np.ndarray
+    latent_goal_next: np.ndarray
 
 
 RB = TypeVar("RB", bound=ReplayBuffer)
@@ -76,42 +72,36 @@ RB = TypeVar("RB", bound=ReplayBuffer)
 class GoalReplayBufferProtocol(Protocol[RB]):
     _reserved_keys: tuple
     _input_keys: tuple
-    _ep_int_rew: Union[float, np.ndarray]
-
-    def reset(self, keep_statistics: bool = False) -> None: ...
 
     def __getitem__(
         self, index: Union[slice, int, List[int], np.ndarray]
     ) -> GoalBatchProtocol: ...
 
-    def _add_index(
-        self,
-        rew: Union[float, np.ndarray],
-        int_rew: Union[float, np.ndarray],
-        done: bool,
-    ) -> tuple[int, Union[float, np.ndarray], Union[float, np.ndarray], int, int]: ...
-
 
 class SelfModelProtocol(Protocol):
-    intrinsic_module: nn.Module
     obs_net: ObservationNetProtocol
     buffer: GoalReplayBufferProtocol
+    intrinsic_module: nn.Module
 
     def __init__(
         self,
         obs_net: ObservationNetProtocol,
         action_space: gym.Space,
-        intrinsic_module: type[nn.Module],
         buffer: GoalReplayBufferProtocol,
+        intrinsic_module: nn.Module,
+        her_horizon: int,
     ) -> None: ...
-
-    def her(self, batch_size: int, goal_selection_strategy: str = "future") -> None: ...
 
     @torch.no_grad()
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor: ...
 
     @torch.no_grad()
-    def compute_intrinsic_reward(self, batch: GoalBatchProtocol) -> np.ndarray: ...
+    def fast_intrinsic_reward(
+        self, obs: TArrLike, act: np.ndarray, obs_next: TArrLike
+    ) -> np.ndarray: ...
+
+    @torch.no_grad()
+    def slow_intrinsic_reward_(self, batch_size: int) -> np.ndarray: ...
 
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False) -> None: ...
 
@@ -157,7 +147,11 @@ class CorePolicyProtocol(Protocol[BP]):
 
     def get_beta(self) -> float: ...
 
-    def combine_reward(self, batch: GoalBatchProtocol) -> None: ...
+    def combine_fast_reward(
+        self, rew: np.ndarray, int_rew: np.ndarray
+    ) -> np.ndarray: ...
+
+    def combine_slow_reward_(self, batch: GoalBatchProtocol) -> np.ndarray: ...
 
     def forward(
         self,
@@ -257,8 +251,3 @@ class GoalTrainerProtocol(Protocol[BT]):
     def __next__(self) -> EpochStats: ...
 
     def _collect_training_data(self) -> CollectStats: ...
-
-
-TArrLike = TypeVar("TArrLike", np.ndarray, torch.Tensor, Batch, None)
-
-# TODO a new type for stats, perhaps?

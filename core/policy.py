@@ -123,6 +123,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         This method gets called as soon as data collection is done and we wish to use this data to improve our agent.
         """
+        # TODO I could pass the indices to HER directly?
         self.combine_slow_reward_(batch)
 
         return batch

@@ -146,6 +146,8 @@ class GoalCollector(Collector):
                 act_normalized_RA,
                 ready_env_ids_R,
             )
+            # for MPS compatibility
+            rew_R = rew_R.astype(np.float32)
             # extend the nstep returns each time we make a step
             nstep_returns.extend(rew_R)
 

@@ -1,3 +1,4 @@
+from typing import Self
 from tianshou.data.types import ObsBatchProtocol
 from core.types import (
     GoalBatchProtocol,
@@ -29,12 +30,13 @@ class SelfModel:
         buffer: GoalReplayBufferProtocol,
         intrinsic_module: nn.Module,
         her_horizon: int,
+        device: torch.device = torch.device("cpu"),
     ) -> None:
-        self.obs_net = obs_net
+        self.obs_net = obs_net.to(device)
         self.buffer = buffer
 
         # fast intrinsic
-        self.intrinsic_module = intrinsic_module(obs_net, action_space)
+        self.intrinsic_module = intrinsic_module(obs_net, action_space, device=device)
         # slow intrinsic
         self.her = HER(self.buffer, horizon=her_horizon)
 
@@ -50,7 +52,9 @@ class SelfModel:
         goal = batch_latent_obs[random_idx]
         # TODO these could actually be different => multi-goal approach?
         # need to return a batch of goals (in numpy format for consistency with the other Batch entries)
-        return goal.repeat(batch_latent_obs.shape[0], 1).numpy()
+        return (
+            goal.repeat(batch_latent_obs.shape[0], 1).cpu().numpy().astype(np.float32)
+        )
 
     @torch.no_grad
     def fast_intrinsic_reward(
@@ -73,8 +77,15 @@ class SelfModel:
         # the latent goal achieved in the future
         latent_future_goal = self.obs_net.forward(future_obs)
         # unlike in the fast case, we cannot return the reward here, because modifying the buffer requires access to its internals, and we only get that within the HER class
-        self.her.rewrite_transitions(latent_future_goal.numpy())
+        self.her.rewrite_transitions(latent_future_goal.cpu().numpy())
 
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # TODO
         pass
+
+    def to(self, device: torch.device) -> Self:
+        self.device = device
+        self.obs_net = self.obs_net.to(self.device)
+        self.intrinsic_module = self.intrinsic_module.to(self.device)
+        # note: We don't move self.buffer or self.her as they typically don't contain torch tensors
+        return self

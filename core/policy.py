@@ -1,4 +1,4 @@
-from typing import Literal, Any
+from typing import Literal, Any, Self
 from .types import (
     GoalBatchProtocol,
     GoalReplayBufferProtocol,
@@ -20,6 +20,7 @@ from tianshou.policy.base import (
     TrainingStats,
 )
 
+import torch
 import gymnasium as gym
 import numpy as np
 
@@ -47,6 +48,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
         beta0: float = 0.314,
+        device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(
             action_space=action_space,
@@ -56,9 +58,10 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
             lr_scheduler=lr_scheduler,
         )
         # TODO should I initialise the models here?
-        self.self_model = self_model
+        self.self_model = self_model.to(device)
         self.env_model = env_model
         self._beta = beta0
+        self.device = device
 
     @property
     def beta(self) -> float:
@@ -125,5 +128,9 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         # TODO I could pass the indices to HER directly?
         self.combine_slow_reward_(batch)
-
         return batch
+
+    def to(self, device: torch.device) -> Self:
+        self.device = device
+        self.self_model = self.self_model.to(device)
+        return self

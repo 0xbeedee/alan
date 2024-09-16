@@ -1,4 +1,6 @@
 from typing import Any, cast
+
+from tianshou.data.types import RolloutBatchProtocol
 from .types import GoalBatchProtocol
 
 import numpy as np
@@ -109,7 +111,15 @@ class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
     def __init__(self, buffer_list: list[GoalReplayBuffer]) -> None:
         ReplayBufferManager.__init__(self, buffer_list)  # type: ignore
 
-    # we don't need an add method => intrinsic rewards should only be tracked for analysis, the agent gets a reward which is a combination of rewards, in batch.rew, so everything should work out of the box
+    def add(
+        self,
+        batch: RolloutBatchProtocol,
+        buffer_ids: np.ndarray | list[int] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        ptr, ep_rew, ep_len, ep_idx = super().add(batch, buffer_ids)
+        # TODO this is hacky, need a more elegant solution
+        self._meta.rew = self._meta.rew.astype(np.float32)
+        return ptr, ep_rew.astype(np.float32), ep_len, ep_idx
 
 
 class GoalVectorReplayBuffer(GoalReplayBufferManager):

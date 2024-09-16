@@ -1,5 +1,5 @@
+from typing import Callable, Self
 import logging
-from collections.abc import Callable
 from dataclasses import asdict
 
 import numpy as np
@@ -25,6 +25,8 @@ from tianshou.utils import (
     tqdm_config,
 )
 from tianshou.utils.logging import set_numerical_fields_to_precision
+
+import torch
 
 from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
 
@@ -62,6 +64,7 @@ class GoalTrainer(BaseTrainer):
         verbose: bool = True,
         show_progress: bool = True,
         test_in_train: bool = True,
+        device: torch.device = torch.device("cpu"),
     ):
         super().__init__(
             policy,
@@ -88,6 +91,8 @@ class GoalTrainer(BaseTrainer):
             show_progress,
             test_in_train,
         )
+        self.policy = policy.to(device)
+        self.device = device
 
     def __next__(self) -> EpochStats:
         """Carries out one epoch."""
@@ -188,6 +193,11 @@ class GoalTrainer(BaseTrainer):
         self.int_rew = collect_stats.int_returns.mean()
         return collect_stats
 
+    def to(self, device: torch.device) -> Self:
+        self.device = device
+        self.policy = self.policy.to(device)
+        return self
+
 
 class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
     """Offline trainer that works with goals. It samples mini-batches from buffer and passes them to policy.update().
@@ -195,7 +205,10 @@ class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
     This implementation is the same as Tianshou's OfflineTrainer. This class exists for conceptual consistency.
     """
 
-    pass
+    def __init__(self, *args, **kwargs):
+        device = kwargs.pop("device", torch.device("cpu"))
+        super().__init__(*args, **kwargs)
+        self.to(device)
 
 
 class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):
@@ -204,7 +217,10 @@ class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):
     This implementation is the same as Tianshou's OffpolicyTrainer. This class exists for conceptual consistency.
     """
 
-    pass
+    def __init__(self, *args, **kwargs):
+        device = kwargs.pop("device", torch.device("cpu"))
+        super().__init__(*args, **kwargs)
+        self.to(device)
 
 
 class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
@@ -213,4 +229,47 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
     This implementation is the same as Tianshou's OnpolicyTrainer. This class exists for conceptual consistency.
     """
 
-    pass
+    def __init__(self, *args, **kwargs):
+        device = kwargs.pop("device", torch.device("cpu"))
+        super().__init__(*args, **kwargs)
+        self.to(device)
+
+
+# class GoalTrainer(BaseTrainer):
+#     def __init__(): ...
+
+# TODO the below, perhaps?
+#     def training_step(self) -> Tuple[CollectStats, Dict[str, Any], bool]:
+#         """Perform a training step."""
+#         collect_stats, update_stats, stop_flag = super().training_step()
+
+#         # Move relevant data to the specified device
+#         if isinstance(collect_stats, CollectStats):
+#             collect_stats.returns = torch.as_tensor(
+#                 collect_stats.returns, device=self.device
+#             )
+#             collect_stats.int_returns = torch.as_tensor(
+#                 collect_stats.int_returns, device=self.device
+#             )
+
+#         return collect_stats, update_stats, stop_flag
+
+#     def test_step(self) -> Tuple[CollectStats | None, bool]:
+#         """Perform a test step."""
+#         test_stats, stop_flag = super().test_step()
+
+#         # Move relevant data to the specified device
+#         if isinstance(test_stats, CollectStats):
+#             test_stats.returns = torch.as_tensor(test_stats.returns, device=self.device)
+#             test_stats.int_returns = torch.as_tensor(
+#                 test_stats.int_returns, device=self.device
+#             )
+
+#         return test_stats, stop_flag
+
+#     def _collect_training_data(self) -> CollectStats:
+#         """Performs training data collection."""
+#         collect_stats = super()._collect_training_data()
+#         assert collect_stats.int_returns is not None  # for mypy
+#         self.int_rew = collect_stats.int_returns.mean().item()
+#         return collect_stats

@@ -1,11 +1,10 @@
 from typing import Any, cast
-
-from tianshou.data.types import RolloutBatchProtocol
 from .types import GoalBatchProtocol
 
 import numpy as np
 
 from tianshou.data import ReplayBuffer, ReplayBufferManager, Batch
+from tianshou.data.batch import alloc_by_keys_diff, create_value
 
 
 class GoalReplayBuffer(ReplayBuffer):
@@ -113,13 +112,63 @@ class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
 
     def add(
         self,
-        batch: RolloutBatchProtocol,
+        batch: GoalBatchProtocol,
         buffer_ids: np.ndarray | list[int] | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        ptr, ep_rew, ep_len, ep_idx = super().add(batch, buffer_ids)
-        # TODO this is hacky, need a more elegant solution
-        self._meta.rew = self._meta.rew.astype(np.float32)
-        return ptr, ep_rew.astype(np.float32), ep_len, ep_idx
+        """Add a batch of data into the GoalReplayBufferManager.
+
+        If the episode isn't finished, the return value of episode_length and
+        episode_reward is 0.
+        """
+        # preprocess batch
+        new_batch = Batch()
+        for key in set(self._reserved_keys).intersection(batch.get_keys()):
+            new_batch.__dict__[key] = batch[key]
+        batch = new_batch
+        batch.__dict__["done"] = np.logical_or(batch.terminated, batch.truncated)
+        assert {
+            "obs",
+            "latent_goal",
+            "act",
+            "obs_next",
+            "latent_goal_next",
+            "rew",
+            "terminated",
+            "truncated",
+            "done",
+        }.issubset(batch.get_keys())
+
+        # get index
+        if buffer_ids is None:
+            buffer_ids = np.arange(self.buffer_num)
+
+        ptrs, ep_lens, ep_rews, ep_idxs = [], [], [], []
+        for batch_idx, buffer_id in enumerate(buffer_ids):
+            ptr, ep_rew, ep_len, ep_idx = self.buffers[buffer_id]._add_index(
+                batch.rew[batch_idx],
+                batch.done[batch_idx],
+            )
+            ptrs.append(ptr + self._offset[buffer_id])
+            ep_lens.append(ep_len)
+            ep_rews.append(ep_rew.astype(np.float32))
+            ep_idxs.append(ep_idx + self._offset[buffer_id])
+            self.last_index[buffer_id] = ptr + self._offset[buffer_id]
+            self._lengths[buffer_id] = len(self.buffers[buffer_id])
+        ptrs = np.array(ptrs)
+        try:
+            self._meta[ptrs] = batch
+        except ValueError:
+            batch.rew = batch.rew.astype(np.float32)
+            batch.done = batch.done.astype(bool)
+            batch.terminated = batch.terminated.astype(bool)
+            batch.truncated = batch.truncated.astype(bool)
+            if len(self._meta.get_keys()) == 0:
+                self._meta = create_value(batch, self.maxsize, stack=False)  # type: ignore
+            else:  # dynamic key pops up in batch
+                alloc_by_keys_diff(self._meta, batch, self.maxsize, False)
+            self._set_batch_for_children()
+            self._meta[ptrs] = batch
+        return ptrs, np.array(ep_rews), np.array(ep_lens), np.array(ep_idxs)
 
 
 class GoalVectorReplayBuffer(GoalReplayBufferManager):

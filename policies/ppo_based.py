@@ -1,4 +1,5 @@
 from typing import Any, Literal, cast, Self
+from core.buffer import GoalReplayBuffer
 from core.types import (
     GoalBatchProtocol,
     SelfModelProtocol,
@@ -63,6 +64,8 @@ class PPOBasedPolicy(CorePolicy):
             dist_fn=self._dist_fn,
             action_scaling=False,
         )
+        # monkey patching is necessary for MPS compatibility
+        self.ppo_policy._compute_returns = self._compute_returns
         self.device = device
 
     def learn(
@@ -99,14 +102,12 @@ class PPOBasedPolicy(CorePolicy):
         batch.obs["latent_goal"] = batch.latent_goal
         # one goal per observation
         batch.obs_next["latent_goal"] = batch.latent_goal_next
-        # TODO hacky, find a more elegant solution (for MPS)
-        self.ppo_policy._compute_returns = self._compute_returns
         return self.ppo_policy.process_fn(batch, buffer, indices)
 
     def _compute_returns(
         self,
         batch: GoalBatchProtocol,
-        buffer: ReplayBuffer,
+        buffer: GoalReplayBuffer,
         indices: np.ndarray,
     ) -> BatchWithAdvantagesProtocol:
         v_s, v_s_ = [], []
@@ -131,18 +132,16 @@ class PPOBasedPolicy(CorePolicy):
             gamma=self.ppo_policy.gamma,
             gae_lambda=self.ppo_policy.gae_lambda,
         )
-        # these two lines are the only different ones!
-        unnormalized_returns = unnormalized_returns.astype(np.float32)
-        advantages = advantages.astype(np.float32)
         if self.ppo_policy.rew_norm:
             batch.returns = unnormalized_returns / np.sqrt(
                 self.ppo_policy.ret_rms.var + self.ppo_policy._eps
             )
-            self.ret_rms.update(unnormalized_returns)
+            self.ppo_policy.ret_rms.update(unnormalized_returns)
         else:
             batch.returns = unnormalized_returns
-        batch.returns = to_torch_as(batch.returns, batch.v_s)
-        batch.adv = to_torch_as(advantages, batch.v_s)
+        # the only difference from the original method is in the astype() calls
+        batch.returns = to_torch_as(batch.returns.astype(np.float32), batch.v_s)
+        batch.adv = to_torch_as(advantages.astype(np.float32), batch.v_s)
         return cast(BatchWithAdvantagesProtocol, batch)
 
     def _dist_fn(self, logits: torch.Tensor):

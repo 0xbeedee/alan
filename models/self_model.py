@@ -67,17 +67,16 @@ class SelfModel:
         return self.intrinsic_module.forward(obs, act, obs_next)
 
     @torch.no_grad()
-    def slow_intrinsic_reward_(self, batch_size: int) -> np.ndarray:
+    def slow_intrinsic_reward_(self, indices: np.ndarray) -> np.ndarray:
         """A slow system for computing intrinsic motivation, inspired by the dual process theory (https://en.wikipedia.org/wiki/Dual_process_theory).
 
         This intrinsic computation happens at update time, and is somewhat conceptually analogous to Kahneman's System 2.
         """
-        indices = self.buffer.sample_indices(batch_size)
-        future_obs = self.her.get_future_observation(indices)
-        # the latent goal achieved in the future
+        # get_future_observation_ alters the indices
+        future_obs = self.her.get_future_observation_(indices)
         latent_future_goal = self.obs_net.forward(future_obs)
-        # unlike in the fast case, we cannot return the reward here, because modifying the buffer requires access to its internals, and we only get that within the HER class
-        self.her.rewrite_transitions(latent_future_goal.cpu().numpy())
+        # we cannot return the reward here because modifying the buffer requires access to its internals
+        self.her.rewrite_transitions_(latent_future_goal.cpu().numpy())
 
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # TODO

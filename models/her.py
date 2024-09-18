@@ -26,7 +26,7 @@ class HER:
         self.future_p = 1 - 1 / future_k
         self.epsilon = epsilon
 
-    def get_future_observation(self, indices: np.ndarray) -> Batch:
+    def get_future_observation_(self, indices: np.ndarray) -> Batch:
         # we need to keep the chronological order
         indices[indices < (self.buf.last_index[0] + 1)] += self.buf.maxsize
         indices = np.sort(indices)
@@ -63,7 +63,7 @@ class HER:
         future_obs = self.buf[future_t[unique_close_indices]].obs_next
         return future_obs
 
-    def rewrite_transitions(self, future_achieved_goal: np.ndarray) -> np.ndarray:
+    def rewrite_transitions_(self, future_achieved_goal: np.ndarray) -> np.ndarray:
         next_desired_goal = self.buf[self.unique_indices].latent_goal_next
         reassigned_desired_goal = next_desired_goal.copy()
         reassigned_desired_goal[:, self.her_indices] = future_achieved_goal[

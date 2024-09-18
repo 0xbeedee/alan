@@ -1,6 +1,5 @@
 from typing import Literal, Any, Self
 from .types import (
-    GoalBatchProtocol,
     GoalReplayBufferProtocol,
     SelfModelProtocol,
     EnvModelProtocol,
@@ -19,10 +18,12 @@ from tianshou.policy.base import (
     TrainingStatsWrapper,
     TrainingStats,
 )
+from tianshou.utils.torch_utils import torch_train_mode
 
 import torch
 import gymnasium as gym
 import numpy as np
+import time
 
 
 class CoreTrainingStats(TrainingStatsWrapper):
@@ -70,7 +71,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     @beta.setter
     def beta(self, value: float) -> None:
         if value <= 0:
-            raise ValueError("The beta parameter must be greater than zero!")
+            raise ValueError("The beta parameter must be greater than zero.")
         self._beta = value
 
     def get_beta(self) -> float:
@@ -87,15 +88,14 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         return rew + self.get_beta() * int_rew
 
-    def combine_slow_reward_(self, batch: GoalBatchProtocol) -> np.ndarray:
+    def combine_slow_reward_(self, indices: np.ndarray) -> np.ndarray:
         """Combines the slow intrinsic reward and the extrinsic reward into a single scalar value, in place.
 
         By "slow intrinsic reward" we mean the reward as computed by SelfModel's slow_compute_reward() method.
 
         The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In our case, we modify the buffer (and, specifically, the "rew" entry).
         """
-        # TODO is this the correct way to get batch size?
-        self.self_model.slow_intrinsic_reward_(len(batch))
+        self.self_model.slow_intrinsic_reward_(indices)
 
     def forward(
         self,
@@ -116,19 +116,37 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         latent_goal = self.self_model.select_goal(batch.obs)
         return latent_goal
 
-    def process_fn(
+    def update(
         self,
-        batch: GoalBatchProtocol,
-        buffer: GoalReplayBufferProtocol,
-        indices: np.ndarray,
-    ) -> GoalReplayBufferProtocol:
-        """Pre-processes the data from the specified buffer before updating the policy.
+        sample_size: int | None,
+        buffer: GoalReplayBufferProtocol | None,
+        **kwargs: Any,
+    ) -> CoreTrainingStats:
+        """Updates the policy network and replay buffer."""
+        if buffer is None:
+            return TrainingStats()  # type: ignore[return-value]
 
-        This method gets called as soon as data collection is done and we wish to use this data to improve our agent.
-        """
-        # TODO I could pass the indices to HER directly?
-        self.combine_slow_reward_(batch)
-        return batch
+        start_time = time.time()
+
+        indices = buffer.sample_indices(sample_size)
+        # we copy the indices because they get modified within combine_slow_reward_
+        self.combine_slow_reward_(indices.copy())
+        batch = buffer[indices]
+
+        # perform the update
+        self.updating = True
+        batch = self.process_fn(batch, buffer, indices)
+        with torch_train_mode(self):
+            training_stat = self.learn(batch, **kwargs)
+        self.post_process_fn(batch, buffer, indices)
+
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
+        self.updating = False
+
+        training_stat.train_time = time.time() - start_time
+
+        return training_stat
 
     def to(self, device: torch.device) -> Self:
         self.device = device

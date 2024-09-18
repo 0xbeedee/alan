@@ -1,4 +1,5 @@
-from typing import Callable, Self
+from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
+from typing import Callable, Self, cast
 import logging
 from dataclasses import asdict
 
@@ -11,10 +12,7 @@ from tianshou.trainer.base import (
 )
 import tqdm
 
-from tianshou.data import (
-    CollectStats,
-    EpochStats,
-)
+from tianshou.data import CollectStats, EpochStats, SequenceSummaryStats
 from tianshou.data.collector import CollectStatsBase
 from tianshou.policy import BasePolicy
 from tianshou.trainer.utils import gather_info
@@ -27,8 +25,7 @@ from tianshou.utils import (
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
 import torch
-
-from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
+from .collector import IntrinsicCollectStats
 
 log = logging.getLogger(__name__)
 
@@ -117,16 +114,19 @@ class GoalTrainer(BaseTrainer):
             train_stat: CollectStatsBase
             while t.n < t.total and not self.stop_fn_flag:
                 train_stat, update_stat, self.stop_fn_flag = self.training_step()
-
-                if isinstance(train_stat, CollectStats):
+                if isinstance(train_stat, IntrinsicCollectStats):
                     pbar_data_dict = {
+                        # total number of steps in the environment
                         "env_step": str(self.env_step),
-                        # extrinsic reward
+                        # (fast) intrinsic and extrinsic reward
                         "rew": f"{self.last_rew:.4f}",
-                        # intrinsic reward
+                        # (fast) intrinsic reward
                         "int_rew": f"{self.int_rew:.4f}",
+                        # episode length, if we completed one episode, else it equals n/st
                         "len": str(int(self.last_len)),
+                        # number of episodes seen in one epoch
                         "n/ep": str(train_stat.n_collected_episodes),
+                        # number of steps collected in one epoch
                         "n/st": str(train_stat.n_collected_steps),
                     }
                     t.update(train_stat.n_collected_steps)
@@ -186,11 +186,34 @@ class GoalTrainer(BaseTrainer):
     def _collect_training_data(self) -> CollectStats:
         """Performs training data collection.
 
-        (Note that the training_step() method in __next__ calls this method to do the actual collecting.)
+        (Note that the training_step() method in __next__() calls this method to do the actual collecting.)
         """
-        collect_stats = super()._collect_training_data()
-        assert collect_stats.int_returns is not None  # for mypy
-        self.int_rew = collect_stats.int_returns.mean()
+        assert self.episode_per_test is not None
+        assert self.train_collector is not None
+        if self.train_fn:
+            self.train_fn(self.epoch, self.env_step)
+
+        collect_stats = self.train_collector.collect(
+            n_step=self.step_per_collect,
+            n_episode=self.episode_per_collect,
+        )
+
+        self.env_step += collect_stats.n_collected_steps
+
+        # showcase statistics as we step in env, not waiting for full episodes
+        if collect_stats.n_collected_steps > 0:
+            assert collect_stats.returns_stat is not None  # for mypy
+            assert collect_stats.int_returns_stat is not None  # for mypy
+            assert collect_stats.lens_stat is not None  # for mypy
+            self.last_rew = collect_stats.returns_stat.mean
+            self.int_rew = collect_stats.int_returns_stat.mean
+            self.last_len = collect_stats.lens_stat.mean
+            if self.reward_metric:
+                rew = self.reward_metric(collect_stats.returns)
+                collect_stats.returns = rew
+                collect_stats.returns_stat = SequenceSummaryStats.from_sequence(rew)
+
+            self.logger.log_train_data(asdict(collect_stats), self.env_step)
         return collect_stats
 
     def to(self, device: torch.device) -> Self:
@@ -233,43 +256,3 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
         device = kwargs.pop("device", torch.device("cpu"))
         super().__init__(*args, **kwargs)
         self.to(device)
-
-
-# class GoalTrainer(BaseTrainer):
-#     def __init__(): ...
-
-# TODO the below, perhaps?
-#     def training_step(self) -> Tuple[CollectStats, Dict[str, Any], bool]:
-#         """Perform a training step."""
-#         collect_stats, update_stats, stop_flag = super().training_step()
-
-#         # Move relevant data to the specified device
-#         if isinstance(collect_stats, CollectStats):
-#             collect_stats.returns = torch.as_tensor(
-#                 collect_stats.returns, device=self.device
-#             )
-#             collect_stats.int_returns = torch.as_tensor(
-#                 collect_stats.int_returns, device=self.device
-#             )
-
-#         return collect_stats, update_stats, stop_flag
-
-#     def test_step(self) -> Tuple[CollectStats | None, bool]:
-#         """Perform a test step."""
-#         test_stats, stop_flag = super().test_step()
-
-#         # Move relevant data to the specified device
-#         if isinstance(test_stats, CollectStats):
-#             test_stats.returns = torch.as_tensor(test_stats.returns, device=self.device)
-#             test_stats.int_returns = torch.as_tensor(
-#                 test_stats.int_returns, device=self.device
-#             )
-
-#         return test_stats, stop_flag
-
-#     def _collect_training_data(self) -> CollectStats:
-#         """Performs training data collection."""
-#         collect_stats = super()._collect_training_data()
-#         assert collect_stats.int_returns is not None  # for mypy
-#         self.int_rew = collect_stats.int_returns.mean().item()
-#         return collect_stats

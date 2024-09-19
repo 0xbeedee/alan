@@ -72,13 +72,14 @@ class HER:
 
         rew = self.buf[self.unique_indices].rew
         # we add instead of assigning because we want to keep the fast intrinsic bonus
-        rew[:, self.her_indices] += self._reward(
+        # (as for the sparsity argument in the HER paper: we decrease the fast intrinsic contribution over time, so we will eventually reach a situation in which we'll only operate with env rewards and the sparse binary ones provided by HER)
+        rew[:, self.her_indices] += self._compute_reward(
             next_desired_goal, reassigned_desired_goal
         )[:, self.her_indices]
-        # unlike in the Tianshou case, we don't really need to restore anything
+        # unlike in the Tianshou case, we don't need to restore anything
         self.buf._meta.rew[self.unique_indices] = rew
 
-    def _reward(
+    def _compute_reward(
         self,
         desired_goal: np.ndarray,
         achieved_goal: np.ndarray,
@@ -95,5 +96,5 @@ class HER:
         achieved_goal = achieved_goal.reshape(-1, *achieved_goal.shape[lead_dims:])
 
         distances = np.sum(np.abs(desired_goal - achieved_goal), axis=1)
-        rewards = (distances <= self.epsilon).astype(float)
+        rewards = (distances <= self.epsilon).astype(np.float32)
         return rewards.reshape(*lead_shape)

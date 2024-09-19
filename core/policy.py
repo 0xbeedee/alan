@@ -10,7 +10,6 @@ from tianshou.data.types import (
     ActBatchProtocol,
 )
 
-
 from tianshou.data.batch import BatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
@@ -58,7 +57,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
             action_bound_method=action_bound_method,
             lr_scheduler=lr_scheduler,
         )
-        # TODO should I initialise the models here?
         self.self_model = self_model.to(device)
         self.env_model = env_model
         self._beta = beta0
@@ -71,7 +69,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     @beta.setter
     def beta(self, value: float) -> None:
         if value <= 0:
-            raise ValueError("The beta parameter must be greater than zero.")
+            raise ValueError("the beta parameter must be greater than zero.")
         self._beta = value
 
     def get_beta(self) -> float:

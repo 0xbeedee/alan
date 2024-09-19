@@ -21,7 +21,7 @@ from tianshou.data import (
     CollectStats,
     EpochStats,
 )
-from tianshou.data.batch import BatchProtocol
+from tianshou.data.batch import BatchProtocol, TArr
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
@@ -39,6 +39,29 @@ import gymnasium as gym
 TArrLike = TypeVar("TArrLike", np.ndarray, torch.Tensor, Batch, None)
 
 
+class ObsActNextBatchProtocol(BatchProtocol, Protocol):
+    """A BatchProtocol containing an observation, an action, and the observation after it.
+
+    Usually used by the intrinsic module and obtained from the Collector.
+    """
+
+    obs: TArr | BatchProtocol
+    act: TArr
+    obs_next: TArr | BatchProtocol
+
+
+class GoalBatchProtocol(RolloutBatchProtocol, Protocol):
+    """A RolloutBatchProtocol with latent goals for the current and the next observation.
+
+    Usually obtained form sampling a GoalReplayBuffer.
+
+    For details, see https://tianshou.org/en/stable/_modules/tianshou/data/types.html.
+    """
+
+    latent_goal: np.ndarray
+    latent_goal_next: np.ndarray
+
+
 # this type should come in handy if I want to experiment with different observation net architectures
 class ObservationNetProtocol(Protocol):
     def __init__(
@@ -52,18 +75,6 @@ class ObservationNetProtocol(Protocol):
     def forward(
         self, env_out_batch: Dict[str, torch.Tensor | np.ndarray]
     ) -> torch.Tensor: ...
-
-
-class GoalBatchProtocol(RolloutBatchProtocol, Protocol):
-    """A RolloutBatchProtocol with latent goals for the current and the next observation.
-
-    Usually obtained form sampling a GoalReplayBuffer.
-
-    For details, see https://tianshou.org/en/stable/_modules/tianshou/data/types.html.
-    """
-
-    latent_goal: np.ndarray
-    latent_goal_next: np.ndarray
 
 
 RB = TypeVar("RB", bound=ReplayBuffer)

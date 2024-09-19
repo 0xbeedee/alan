@@ -170,7 +170,7 @@ class GoalCollector(Collector):
             nstep_returns.extend(rew_R)
 
             int_rew_R = self.policy.self_model.fast_intrinsic_reward(
-                last_obs_RO, act_RA, obs_next_RO
+                Batch(obs=last_obs_RO, act=act_RA, obs_next=obs_next_RO)
             )
             nstep_intrinsic_returns.extend(int_rew_R)
 

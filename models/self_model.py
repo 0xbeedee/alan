@@ -1,11 +1,13 @@
-from typing import Self
+from typing import Self, Any
 from tianshou.data.types import ObsBatchProtocol
 from core.types import (
     GoalBatchProtocol,
     ObservationNetProtocol,
     GoalReplayBufferProtocol,
-    TArrLike,
+    ObsActNextBatchProtocol,
 )
+
+from tianshou.policy.base import TrainingStats
 
 import gymnasium as gym
 
@@ -57,14 +59,12 @@ class SelfModel:
         )
 
     @torch.no_grad
-    def fast_intrinsic_reward(
-        self, obs: TArrLike, act: np.ndarray, obs_next: TArrLike
-    ) -> np.ndarray:
+    def fast_intrinsic_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
         """A fast system for computing intrinsic motivation, inspired by the dual process theory (https://en.wikipedia.org/wiki/Dual_process_theory).
 
         This intrinsic computation happens at collect time, and is somewhat conceptually analogous to Kahneman's System 1.
         """
-        return self.intrinsic_module.forward(obs, act, obs_next)
+        return self.intrinsic_module.get_reward(batch)
 
     @torch.no_grad()
     def slow_intrinsic_reward_(self, indices: np.ndarray) -> np.ndarray:
@@ -77,6 +77,11 @@ class SelfModel:
         latent_future_goal = self.obs_net.forward(future_obs)
         # we cannot return the reward here because modifying the buffer requires access to its internals
         self.her.rewrite_transitions_(latent_future_goal.cpu().numpy())
+
+    def learn(
+        self, batch: GoalBatchProtocol, training_stat: TrainingStats, **kwargs: Any
+    ) -> TrainingStats:
+        return self.intrinsic_module.learn(batch, training_stat)
 
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # TODO

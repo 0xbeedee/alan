@@ -136,6 +136,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         batch = self.process_fn(batch, buffer, indices)
         with torch_train_mode(self):
             training_stat = self.learn(batch, **kwargs)
+            training_stat = self.self_model.learn(batch, training_stat, **kwargs)
         self.post_process_fn(batch, buffer, indices)
 
         if self.lr_scheduler is not None:

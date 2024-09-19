@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Sequence, Self, Any
 from core.types import ObsActNextBatchProtocol, ObservationNetProtocol
 
@@ -8,9 +9,16 @@ import numpy as np
 import gymnasium as gym
 
 from tianshou.utils.net.discrete import IntrinsicCuriosityModule
-from tianshou.policy.modelbased.icm import ICMTrainingStats
 from tianshou.policy.base import TrainingStats
 from tianshou.data import to_torch
+
+
+@dataclass(kw_only=True)
+class ICMTrainingStats(TrainingStats):
+    # unlike most TrainingStats subclasses in Tianshou, ICMTrainingStats inherits from TrainingStatsWrapper, so we needed to duplicate it here to fit the "standard" API
+    icm_loss: float
+    icm_forward_loss: float
+    icm_inverse_loss: float
 
 
 class ICM(IntrinsicCuriosityModule):
@@ -64,12 +72,7 @@ class ICM(IntrinsicCuriosityModule):
         inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
         return forward_loss, inverse_loss
 
-    def learn(
-        self,
-        batch: ObsActNextBatchProtocol,
-        training_stat: TrainingStats,
-        **kwargs: Any
-    ) -> ICMTrainingStats:
+    def learn(self, batch: ObsActNextBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
         """Train the forward and backward models."""
         forward_loss, inverse_loss = self.forward(batch)
         forward_loss, inverse_loss = forward_loss.mean(), inverse_loss.mean()
@@ -80,7 +83,6 @@ class ICM(IntrinsicCuriosityModule):
         self.optim.step()
 
         return ICMTrainingStats(
-            training_stat,
             icm_loss=loss.item(),
             icm_forward_loss=forward_loss.item(),
             icm_inverse_loss=inverse_loss.item(),

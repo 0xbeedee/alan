@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Literal, Any, Self
 from .types import (
     GoalReplayBufferProtocol,
@@ -14,7 +15,6 @@ from tianshou.data.batch import BatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
-    TrainingStatsWrapper,
     TrainingStats,
 )
 from tianshou.utils.torch_utils import torch_train_mode
@@ -25,10 +25,11 @@ import numpy as np
 import time
 
 
-class CoreTrainingStats(TrainingStatsWrapper):
-    # TODO should I add more to this?
-    def __init__(self, wrapped_stats: TrainingStats):
-        super().__init__(wrapped_stats)
+@dataclass(kw_only=True)
+class CoreTrainingStats(TrainingStats):
+    policy_stats: TrainingStats
+    self_model_stats: TrainingStats
+    env_model_stats: TrainingStats
 
 
 class CorePolicy(BasePolicy[CoreTrainingStats]):
@@ -122,7 +123,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> CoreTrainingStats:
         """Updates the policy network and replay buffer."""
         if buffer is None:
-            return TrainingStats()  # type: ignore[return-value]
+            return CoreTrainingStats()  # type: ignore[return-value]
 
         start_time = time.time()
 
@@ -135,17 +136,21 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.updating = True
         batch = self.process_fn(batch, buffer, indices)
         with torch_train_mode(self):
-            training_stat = self.learn(batch, **kwargs)
-            training_stat = self.self_model.learn(batch, training_stat, **kwargs)
+            policy_stats = self.learn(batch, **kwargs)
+            self_model_stats = self.self_model.learn(batch, **kwargs)
         self.post_process_fn(batch, buffer, indices)
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
         self.updating = False
 
-        training_stat.train_time = time.time() - start_time
-
-        return training_stat
+        train_time = time.time() - start_time
+        return CoreTrainingStats(
+            policy_stats=policy_stats,
+            self_model_stats=self_model_stats,
+            env_model_stats=None,  # TODO
+            train_time=train_time,
+        )
 
     def to(self, device: torch.device) -> Self:
         self.device = device

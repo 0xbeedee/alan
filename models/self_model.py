@@ -8,12 +8,9 @@ from core.types import (
 )
 
 from tianshou.policy.base import TrainingStats
-
 import gymnasium as gym
-
 import torch
 from torch import nn
-
 import numpy as np
 
 from .her import HER
@@ -78,10 +75,8 @@ class SelfModel:
         # we cannot return the reward here because modifying the buffer requires access to its internals
         self.her.rewrite_transitions_(latent_future_goal.cpu().numpy())
 
-    def learn(
-        self, batch: GoalBatchProtocol, training_stat: TrainingStats, **kwargs: Any
-    ) -> TrainingStats:
-        return self.intrinsic_module.learn(batch, training_stat)
+    def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> TrainingStats:
+        return self.intrinsic_module.learn(batch, **kwargs)
 
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # TODO

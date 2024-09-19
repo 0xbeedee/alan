@@ -26,6 +26,7 @@ from tianshou.utils.logging import set_numerical_fields_to_precision
 
 import torch
 from .collector import IntrinsicCollectStats
+from .policy import CoreTrainingStats
 
 log = logging.getLogger(__name__)
 
@@ -111,10 +112,10 @@ class GoalTrainer(BaseTrainer):
         with progress(
             total=self.step_per_epoch, desc=f"Epoch #{self.epoch}", **tqdm_config
         ) as t:
-            train_stat: CollectStatsBase
+            collect_stat: CollectStatsBase
             while t.n < t.total and not self.stop_fn_flag:
-                train_stat, update_stat, self.stop_fn_flag = self.training_step()
-                if isinstance(train_stat, IntrinsicCollectStats):
+                collect_stat, train_stat, self.stop_fn_flag = self.training_step()
+                if isinstance(collect_stat, IntrinsicCollectStats):
                     pbar_data_dict = {
                         # total number of steps in the environment
                         "env_step": str(self.env_step),
@@ -125,11 +126,11 @@ class GoalTrainer(BaseTrainer):
                         # episode length, if we completed one episode, else it equals n/st
                         "len": str(int(self.last_len)),
                         # number of episodes seen in one epoch
-                        "n/ep": str(train_stat.n_collected_episodes),
+                        "n/ep": str(collect_stat.n_collected_episodes),
                         # number of steps collected in one epoch
-                        "n/st": str(train_stat.n_collected_steps),
+                        "n/st": str(collect_stat.n_collected_steps),
                     }
-                    t.update(train_stat.n_collected_steps)
+                    t.update(collect_stat.n_collected_steps)
                 else:
                     pbar_data_dict = {}
                     t.update()
@@ -177,9 +178,9 @@ class GoalTrainer(BaseTrainer):
         # in case trainer is used with run(), epoch_stat will not be returned
         return EpochStats(
             epoch=self.epoch,
-            train_collect_stat=train_stat,
+            train_collect_stat=collect_stat,
             test_collect_stat=test_stat,
-            training_stat=update_stat,
+            training_stat=train_stat,
             info_stat=info_stat,
         )
 
@@ -256,3 +257,26 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
         device = kwargs.pop("device", torch.device("cpu"))
         super().__init__(*args, **kwargs)
         self.to(device)
+
+    def policy_update_fn(
+        self,
+        result: CollectStatsBase | None = None,
+    ) -> CoreTrainingStats:
+        """Performs one on-policy update by passing the entire buffer to the policy's update method."""
+        assert self.train_collector is not None
+        training_stat = self.policy.update(
+            sample_size=0,
+            buffer=self.train_collector.buffer,
+            batch_size=self.batch_size,
+            repeat=self.repeat_per_collect,
+        )
+
+        # just for logging, no functional role
+        self.policy_update_time += training_stat.train_time
+
+        # this is the main difference to the off-policy trainer
+        self.train_collector.reset_buffer(keep_statistics=True)
+
+        self._update_moving_avg_stats_and_log_update_data(training_stat.policy_stats)
+
+        return training_stat

@@ -50,12 +50,19 @@ class ObsActNextBatchProtocol(BatchProtocol, Protocol):
     obs_next: TArr | BatchProtocol
 
 
-class GoalBatchProtocol(RolloutBatchProtocol, Protocol):
-    """A RolloutBatchProtocol with latent goals for the current and the next observation.
+class IntrinsicBatchProtocol(RolloutBatchProtocol, Protocol):
+    """A RolloutBatchProtocol with added intrinsic rewards.
+
+    For details on RolloutBatchProtocol, see https://tianshou.org/en/stable/_modules/tianshou/data/types.html.
+    """
+
+    int_rew: np.ndarray
+
+
+class GoalBatchProtocol(IntrinsicBatchProtocol, Protocol):
+    """An IntrinsicBatchProtocol with latent goals for the current and the next observation.
 
     Usually obtained form sampling a GoalReplayBuffer.
-
-    For details, see https://tianshou.org/en/stable/_modules/tianshou/data/types.html.
     """
 
     latent_goal: np.ndarray

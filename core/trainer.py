@@ -119,7 +119,7 @@ class GoalTrainer(BaseTrainer):
                     pbar_data_dict = {
                         # total number of steps in the environment
                         "env_step": str(self.env_step),
-                        # (fast) intrinsic and extrinsic reward
+                        # extrinsic reward
                         "rew": f"{self.last_rew:.4f}",
                         # (fast) intrinsic reward
                         "int_rew": f"{self.int_rew:.4f}",

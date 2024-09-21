@@ -1,13 +1,17 @@
-from typing import Literal, Any, Self
+from typing import Literal, Any, Self, Tuple
+
+from tianshou.data import ReplayBuffer
 from .types import (
     GoalReplayBufferProtocol,
     SelfModelProtocol,
     EnvModelProtocol,
+    GoalBatchProtocol,
 )
 from tianshou.data.types import (
     ObsBatchProtocol,
     ActStateBatchProtocol,
     ActBatchProtocol,
+    RolloutBatchProtocol,
 )
 
 from tianshou.data.batch import BatchProtocol
@@ -71,12 +75,15 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         return self.beta
 
-    def combine_fast_reward(self, rew: np.ndarray, int_rew: np.ndarray) -> np.ndarray:
+    def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
         """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value.
 
         By "fast intrinsic reward" we mean the reward as computed by SelfModel's fast_compute_reward() method.
+
+        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In our case, we modify the batch (and, specifically, the "rew" entry), and we add an additional entry to keep track of the original reward.
         """
-        return rew + self.get_beta() * int_rew
+        batch.original_rew = batch.rew.copy()
+        batch.rew += self.get_beta() * batch.int_rew
 
     def combine_slow_reward_(self, indices: np.ndarray) -> np.ndarray:
         """Combines the slow intrinsic reward and the extrinsic reward into a single scalar value, in place.
@@ -105,6 +112,19 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # 3) it makes conceptual sense
         latent_goal = self.self_model.select_goal(batch.obs)
         return latent_goal
+
+    def process_fn(
+        self,
+        batch: GoalBatchProtocol,
+        buffer: GoalReplayBufferProtocol,
+        indices: np.ndarray,
+    ) -> GoalBatchProtocol:
+        """Pre-processes the data from the provided replay buffer.
+
+        It is meant to be overwritten by the policy. The current implementation simply adds the fast intrinsic reward.
+        """
+        self.combine_fast_reward_(batch)
+        return super().process_fn(batch, buffer, indices)
 
     def update(
         self,
@@ -143,6 +163,18 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
             env_model_stats=None,  # TODO
             train_time=train_time,
         )
+
+    def post_process_fn(
+        self,
+        batch: GoalBatchProtocol,
+        buffer: GoalReplayBufferProtocol,
+        indices: np.ndarray,
+    ) -> None:
+        """Post-process the data from the provided replay buffer."""
+        # we do not check for existence of original_rew because we're guaranteed to have it
+        super().post_process_fn(batch, buffer, indices)
+        batch.rew = batch.original_rew
+        del batch.original_rew
 
     def to(self, device: torch.device) -> Self:
         self.device = device

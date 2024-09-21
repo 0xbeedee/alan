@@ -117,6 +117,7 @@ class GoalCollector(Collector):
             )
             # for MPS compatibility
             rew_R = rew_R.astype(np.float32)
+            nstep_returns.extend(rew_R)
 
             int_rew_R = self.policy.self_model.fast_intrinsic_reward(
                 Batch(obs=last_obs_RO, act=act_RA, obs_next=obs_next_RO)
@@ -139,7 +140,8 @@ class GoalCollector(Collector):
                     act=act_RA,
                     obs_next=obs_next_RO,
                     latent_goal_next=latent_goal_next_R,
-                    rew=self.policy.combine_fast_reward(rew_R, int_rew_R),
+                    # extrinsic reward
+                    rew=rew_R,
                     int_rew=int_rew_R,
                     terminated=terminated_R,
                     truncated=truncated_R,
@@ -148,8 +150,6 @@ class GoalCollector(Collector):
                     policy=policy_R,
                 ),
             )
-            # the nstep_returns contain the rewards being fed into the agent, i.e., the combination of (fast) intrinsic and extrinsic ones
-            nstep_returns.extend(current_iteration_batch.rew)
 
             # TODO: only makes sense if render_mode is human.
             #  Also, doubtful whether it makes sense at all for true vectorized envs
@@ -159,7 +159,7 @@ class GoalCollector(Collector):
                     time.sleep(render)
 
             # add data into the buffer
-            # TODO is this ep_rew_R correct? => does it consider HER as well? does it combine the fast intrinsic one??
+            # TODO is this ep_rew_R correct? => does it consider HER as well?
             _, ep_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
                 current_iteration_batch,
                 buffer_ids=ready_env_ids_R,

@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Literal, Any, Self
 from .types import (
     GoalReplayBufferProtocol,
@@ -13,10 +12,7 @@ from tianshou.data.types import (
 
 from tianshou.data.batch import BatchProtocol
 from tianshou.policy import BasePolicy
-from tianshou.policy.base import (
-    TLearningRateScheduler,
-    TrainingStats,
-)
+from tianshou.policy.base import TLearningRateScheduler
 from tianshou.utils.torch_utils import torch_train_mode
 
 import torch
@@ -24,12 +20,7 @@ import gymnasium as gym
 import numpy as np
 import time
 
-
-@dataclass(kw_only=True)
-class CoreTrainingStats(TrainingStats):
-    policy_stats: TrainingStats
-    self_model_stats: TrainingStats
-    env_model_stats: TrainingStats
+from .stats import CoreTrainingStats
 
 
 class CorePolicy(BasePolicy[CoreTrainingStats]):
@@ -130,6 +121,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         indices = buffer.sample_indices(sample_size)
         # we copy the indices because they get modified within combine_slow_reward_
         self.combine_slow_reward_(indices.copy())
+        # TODO the buffer needs to be set back to its previous state before learn() finishes!
         batch = buffer[indices]
 
         # perform the update

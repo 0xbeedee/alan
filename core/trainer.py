@@ -1,5 +1,5 @@
 from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
-from typing import Callable, Self, cast
+from typing import Callable, Self
 import logging
 from dataclasses import asdict
 
@@ -12,10 +12,10 @@ from tianshou.trainer.base import (
 )
 import tqdm
 
-from tianshou.data import CollectStats, EpochStats, SequenceSummaryStats
+from tianshou.data import EpochStats, SequenceSummaryStats
 from tianshou.data.collector import CollectStatsBase
 from tianshou.policy import BasePolicy
-from tianshou.trainer.utils import gather_info
+from tianshou.trainer.utils import gather_info, test_episode
 from tianshou.utils import (
     BaseLogger,
     DummyTqdm,
@@ -25,7 +25,7 @@ from tianshou.utils import (
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
 import torch
-from .collector import IntrinsicCollectStats
+from .stats import EpNStepCollectStats
 from .policy import CoreTrainingStats
 
 log = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class GoalTrainer(BaseTrainer):
             collect_stat: CollectStatsBase
             while t.n < t.total and not self.stop_fn_flag:
                 collect_stat, train_stat, self.stop_fn_flag = self.training_step()
-                if isinstance(collect_stat, IntrinsicCollectStats):
+                if isinstance(collect_stat, EpNStepCollectStats):
                     pbar_data_dict = {
                         # total number of steps in the environment
                         "env_step": str(self.env_step),
@@ -175,7 +175,7 @@ class GoalTrainer(BaseTrainer):
 
         self.logger.log_info_data(asdict(info_stat), self.epoch)
 
-        # in case trainer is used with run(), epoch_stat will not be returned
+        # in case trainer is used with run(), EpochStats will not be returned
         return EpochStats(
             epoch=self.epoch,
             train_collect_stat=collect_stat,
@@ -184,10 +184,10 @@ class GoalTrainer(BaseTrainer):
             info_stat=info_stat,
         )
 
-    def _collect_training_data(self) -> CollectStats:
+    def _collect_training_data(self) -> EpNStepCollectStats:
         """Performs training data collection.
 
-        (Note that the training_step() method in __next__() calls this method to do the actual collecting.)
+        Note that the training_step() method in __next__() calls this method to do the actual collecting.
         """
         assert self.episode_per_test is not None
         assert self.train_collector is not None
@@ -201,21 +201,80 @@ class GoalTrainer(BaseTrainer):
 
         self.env_step += collect_stats.n_collected_steps
 
-        # showcase statistics as we step in env, not waiting for full episodes
         if collect_stats.n_collected_steps > 0:
-            assert collect_stats.returns_stat is not None  # for mypy
-            assert collect_stats.int_returns_stat is not None  # for mypy
-            assert collect_stats.lens_stat is not None  # for mypy
-            self.last_rew = collect_stats.returns_stat.mean
-            self.int_rew = collect_stats.int_returns_stat.mean
-            self.last_len = collect_stats.lens_stat.mean
+            assert collect_stats.returns_stat is not None
+            assert collect_stats.int_returns_stat is not None
+            # use the episodic statistics if available, else use the nstep ones
+            self.last_rew = (
+                collect_stats.ep_returns_stat.mean
+                if collect_stats.ep_returns_stat is not None
+                else collect_stats.returns_stat.mean
+            )
+            self.int_rew = (
+                collect_stats.ep_int_returns_stat.mean
+                if collect_stats.ep_int_returns_stat is not None
+                else collect_stats.int_returns_stat.mean
+            )
+            self.last_len = (
+                collect_stats.lens_stat.mean
+                if collect_stats.lens_stat is not None
+                else 0.0
+            )
+
             if self.reward_metric:
+                # for MARL
                 rew = self.reward_metric(collect_stats.returns)
                 collect_stats.returns = rew
                 collect_stats.returns_stat = SequenceSummaryStats.from_sequence(rew)
 
             self.logger.log_train_data(asdict(collect_stats), self.env_step)
+
         return collect_stats
+
+    def test_step(self) -> tuple[EpNStepCollectStats, bool]:
+        """Perform one testing step."""
+        assert self.episode_per_test is not None
+        assert self.test_collector is not None
+        stop_fn_flag = False
+        test_stat = test_episode(
+            self.test_collector,
+            self.test_fn,
+            self.epoch,
+            self.episode_per_test,
+            self.logger,
+            self.env_step,
+            self.reward_metric,
+        )
+
+        assert test_stat.returns_stat is not None
+        rew_stats = (
+            test_stat.ep_returns_stat
+            if test_stat.ep_returns_stat is not None
+            else test_stat.returns_stat
+        )
+        rew, rew_std = rew_stats.mean, rew_stats.std
+
+        if self.best_epoch < 0 or self.best_reward < rew:
+            self.best_epoch = self.epoch
+            self.best_reward = float(rew)
+            self.best_reward_std = rew_std
+            if self.save_best_fn:
+                self.save_best_fn(self.policy)
+
+        log_msg = (
+            f"Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},"
+            f" best_reward: {self.best_reward:.6f} ± "
+            f"{self.best_reward_std:.6f} in #{self.best_epoch}"
+        )
+        log.info(log_msg)
+
+        if self.verbose:
+            print(log_msg, flush=True)
+
+        if self.stop_fn and self.stop_fn(self.best_reward):
+            stop_fn_flag = True
+
+        return test_stat, stop_fn_flag
 
     def to(self, device: torch.device) -> Self:
         self.device = device

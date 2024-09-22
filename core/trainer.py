@@ -334,6 +334,7 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
         self.policy_update_time += training_stat.train_time
 
         # this is the main difference to the off-policy trainer
+        # this is also why we do not bother restoring the modified HER reward: reset_buffer() takes care of that for us!
         self.train_collector.reset_buffer(keep_statistics=True)
 
         self._update_moving_avg_stats_and_log_update_data(training_stat.policy_stats)

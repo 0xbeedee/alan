@@ -1,6 +1,5 @@
-from typing import Literal, Any, Self, Tuple
+from typing import Literal, Any, Self
 
-from tianshou.data import ReplayBuffer
 from .types import (
     GoalReplayBufferProtocol,
     SelfModelProtocol,
@@ -11,7 +10,6 @@ from tianshou.data.types import (
     ObsBatchProtocol,
     ActStateBatchProtocol,
     ActBatchProtocol,
-    RolloutBatchProtocol,
 )
 
 from tianshou.data.batch import BatchProtocol
@@ -76,7 +74,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         return self.beta
 
     def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
-        """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value.
+        """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value, in place.
 
         By "fast intrinsic reward" we mean the reward as computed by SelfModel's fast_compute_reward() method.
 
@@ -102,7 +100,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> ActBatchProtocol | ActStateBatchProtocol:
         """Compute action over the given batch of data.
 
-        The default implementation simply selects the latent goal and attaches it to batch.obs. It must be overridden.
+        The default implementation simply selects the latent goal. It must be overridden.
 
         (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with no_grad().)
         """
@@ -141,7 +139,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         indices = buffer.sample_indices(sample_size)
         # we copy the indices because they get modified within combine_slow_reward_
         self.combine_slow_reward_(indices.copy())
-        # TODO the buffer needs to be set back to its previous state before learn() finishes!
         batch = buffer[indices]
 
         # perform the update

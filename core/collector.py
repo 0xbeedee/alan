@@ -159,7 +159,6 @@ class GoalCollector(Collector):
                     time.sleep(render)
 
             # add data into the buffer
-            # TODO is this ep_rew_R correct? => does it consider HER as well?
             _, ep_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
                 current_iteration_batch,
                 buffer_ids=ready_env_ids_R,

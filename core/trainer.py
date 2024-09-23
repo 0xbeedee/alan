@@ -204,15 +204,15 @@ class GoalTrainer(BaseTrainer):
         if collect_stats.n_collected_steps > 0:
             assert collect_stats.returns_stat is not None
             assert collect_stats.int_returns_stat is not None
-            # use the episodic statistics if available, else use the nstep ones
+            # use the episodic statistics if we completed at least one episode, else use the nstep ones
             self.last_rew = (
                 collect_stats.ep_returns_stat.mean
-                if collect_stats.ep_returns_stat is not None
+                if collect_stats.n_collected_episodes > 0
                 else collect_stats.returns_stat.mean
             )
             self.int_rew = (
                 collect_stats.ep_int_returns_stat.mean
-                if collect_stats.ep_int_returns_stat is not None
+                if collect_stats.n_collected_episodes > 0
                 else collect_stats.int_returns_stat.mean
             )
             self.last_len = (
@@ -332,6 +332,13 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
 
         # just for logging, no functional role
         self.policy_update_time += training_stat.train_time
+        self._gradient_step += 1
+        if self.batch_size is None:
+            self._gradient_step += 1
+        elif self.batch_size > 0:
+            self._gradient_step += int(
+                (len(self.train_collector.buffer) - 0.1) // self.batch_size
+            )
 
         # this is the main difference to the off-policy trainer
         # this is also why we do not bother restoring the modified HER reward: reset_buffer() takes care of that for us!

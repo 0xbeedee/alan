@@ -63,13 +63,13 @@ class EpochStatsPlotter:
                 self.epochs,
                 returns,
                 returns_std,
-                f"{collect_type} returns",
+                f"{collect_type}",
                 colours[idx],
             )
 
         ax.set_title("Returns" if returns_type == "returns" else "Intrinsic Returns")
-        ax.set_ylabel("Test")
-        ax2.set_ylabel("Train")
+        ax.set_ylabel("Test Returns")
+        ax2.set_ylabel("Train Returns")
 
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
@@ -84,7 +84,7 @@ class EpochStatsPlotter:
             stds = np.zeros_like(loss_values)  # for backwards compatibility
             self._plot_with_ci(ax, self.epochs, loss_values, stds, loss_name, color)
 
-        ax.set_title(f"{loss_type.replace('_', ' ').title()} Losses")
+        ax.set_title(f"{loss_type.replace('_', ' ').title()[:-6]} Losses")
         ax.set_ylabel("Loss")
         ax.legend()
         self._set_consistent_x_axis(ax)
@@ -98,7 +98,7 @@ class EpochStatsPlotter:
 
         box_positions = np.arange(1, len(self.epochs) + 1)
         ax.boxplot(intra_returns, positions=box_positions)
-        ax.set_title(f"{data_type.capitalize()} Intra-episodic Returns")
+        ax.set_title(f"Intra-episodic {data_type.capitalize()} Returns")
         ax.set_ylabel("Returns")
         self._set_consistent_x_axis(ax)
 

@@ -6,26 +6,22 @@ from torch.utils.tensorboard import SummaryWriter
 import torch
 import tianshou as ts
 
-import os
-from datetime import datetime
 import gymnasium as gym
 
-from environments import DictObservation
-from networks import DiscreteObsNet, GoalNetHackActor, GoalNetHackCritic
-from policies import PPOBasedPolicy
+from networks import DiscreteObsNet
 from models import SelfModel, EnvModel
 from intrinsic import ICM
-from core import GoalCollector, GoalVectorReplayBuffer, GoalOnpolicyTrainer
 from utils import EpochStatsPlotter
+from utils.experiment import *
 from config import Config
 
 
 def main(config_file, device):
     config = Config(config_file)
+    is_goal_aware = config.get("is_goal_aware")
 
     env = gym.make(config.get("environment.name"))
-    # TODO more flexibility?
-    env = DictObservation(env)
+    env = wrap_env(env, is_goal_aware=is_goal_aware)
 
     num_train_envs = config.get("environment.num_train_envs")
     num_test_envs = config.get("environment.num_test_envs")
@@ -34,13 +30,16 @@ def main(config_file, device):
 
     train_buf_size = config.get("buffers.train_buf_size")
     test_buf_size = config.get("buffers.test_buf_size")
-    train_buf = GoalVectorReplayBuffer(train_buf_size, num_train_envs)
-    test_buf = GoalVectorReplayBuffer(test_buf_size, num_train_envs)
+    train_buf = choose_buffer(
+        train_buf_size, num_train_envs, is_goal_aware=is_goal_aware
+    )
+    test_buf = choose_buffer(test_buf_size, num_test_envs, is_goal_aware=is_goal_aware)
 
-    # TODO more flexibility?
+    # obs_net should probably be treated somewhat like actor and critic (I also don't always need an actor and a critic, btw)
     obs_net = DiscreteObsNet([16], 10)
-    actor_net = GoalNetHackActor(obs_net, env.action_space, device=device)
-    critic_net = GoalNetHackCritic(obs_net, device=device)
+    actor_net, critic_net = choose_actor_critic(
+        obs_net, env.action_space, device, is_goal_aware=is_goal_aware
+    )
 
     # TODO add options in config for intrinsic modules (selfmodel and envmodel are always the same, so no need)
     env_model = EnvModel()
@@ -54,54 +53,56 @@ def main(config_file, device):
     )
 
     algorithm_name = config.get("algorithm.name")
-    if algorithm_name == "PPOBased":
-        policy = PPOBasedPolicy(
-            self_model=self_model,
-            env_model=env_model,
-            act_net=actor_net,
-            critic_net=critic_net,
-            optim=optimizer,
-            action_space=env.action_space,
-            observation_space=env.observation_space,
-            device=device,
-        )
-    else:
-        raise ValueError(f"Unsupported algorithm: {algorithm_name}")
+    policy = choose_policy(
+        algorithm_name,
+        self_model,
+        env_model,
+        actor_net,
+        critic_net,
+        optimizer,
+        env.action_space,
+        env.observation_space,
+        False,
+        device,
+    )
 
-    train_collector = GoalCollector(policy, train_envs, train_buf)
-    test_collector = GoalCollector(policy, test_envs, test_buf)
+    train_collector = choose_collector(
+        policy, train_envs, train_buf, is_goal_aware=is_goal_aware
+    )
+    test_collector = choose_collector(
+        policy, test_envs, test_buf, is_goal_aware=is_goal_aware
+    )
 
-    # TODO more flexibility here? possibly specify log in yaml?
-    timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
-    log_path = os.path.join("../logs", "simplenv", timestamp)
-    writer = SummaryWriter(log_path)
+    writer = SummaryWriter(config.get("logging.log_path"))
     logger = TensorboardLogger(writer)
 
-    # TODO more flexibility
-    trainer = GoalOnpolicyTrainer(
-        **config.get("training"),
-        policy=policy,
-        train_collector=train_collector,
-        test_collector=test_collector,
-        repeat_per_collect=1,
-        logger=logger,
-        device=device,
+    trainer = choose_trainer(
+        policy,
+        train_collector,
+        test_collector,
+        logger,
+        device,
+        config,
+        is_goal_aware=is_goal_aware,
     )
 
     epoch_stats = []
     for epoch_stat in trainer:
         epoch_stats.append(epoch_stat)
 
+    # TODO this plotter doesn't work with vanilla tianshou policies
     plotter = EpochStatsPlotter(epoch_stats)
     plotter.plot(figsize=(8, 8))
 
 
 if __name__ == "__main__":
     # TODO configure parser
-    parser = argparse.ArgumentParser(description="RL Testing Harness")
-    parser.add_argument("config", type=str, help="Path to the configuration file")
+    parser = argparse.ArgumentParser(
+        description="The entrypoint for thourough experimentation."
+    )
+    parser.add_argument("config_file", type=str, help="Path to the configuration file")
     args = parser.parse_args()
 
     # TODO more flexibility in managing devices => more flexibility in CLI handling in general
     # (should probably pass all the args to the main() function directly)
-    main(args.config, device=torch.device("cpu"))
+    main(args.config_file, device=torch.device("cpu"))

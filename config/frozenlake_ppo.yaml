@@ -1,3 +1,5 @@
+is_goal_aware: false
+
 environment:
   name: "FrozenLake-v1"
   num_train_envs: 5
@@ -8,7 +10,7 @@ buffers:
   test_buf_size: 1
 
 algorithm:
-  name: "PPOBased"
+  name: "ppo"
   learning_rate: 3e-4
 
 training:
@@ -17,6 +19,7 @@ training:
   step_per_collect: 100
   episode_per_test: 5
   batch_size: 32
+  repeat_per_collect: 1
 
 logging:
-  log_dir: "./logs"
+  log_path: "logs/frozenlake_ppo"

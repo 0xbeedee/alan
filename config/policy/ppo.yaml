@@ -1,0 +1,2 @@
+name: "ppo"
+learning_rate: 3e-4

@@ -1,0 +1,3 @@
+name: "FrozenLake-v1"
+num_train_envs: 5
+num_test_envs: 5

@@ -1,0 +1,3 @@
+name: "discrete"
+hidden_sizes: [16]
+o_dim: 10

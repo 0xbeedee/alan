@@ -2,7 +2,7 @@ import gymnasium as gym
 import torch
 from torch import nn
 from typing import Tuple, Union
-from tianshou.data import VectorReplayBuffer, Collector
+from tianshou.data import VectorReplayBuffer, Collector, EpochStats
 from tianshou.policy import BasePolicy, PPOPolicy
 from tianshou.trainer import OnpolicyTrainer, OffpolicyTrainer, OfflineTrainer
 from tianshou.env.venvs import BaseVectorEnv
@@ -28,6 +28,7 @@ from core import (
     CorePolicy,
 )
 from core.types import SelfModelProtocol, EnvModelProtocol
+from utils.plotters import GoalStatsPlotter, VanillaStatsPlotter
 
 
 class ExperimentFactory:
@@ -185,6 +186,12 @@ class ExperimentFactory:
             )
 
         return trainer_class(**common_kwargs)
+
+    def create_plotter(
+        self, epoch_stats: EpochStats
+    ) -> GoalStatsPlotter | VanillaStatsPlotter:
+        plt_class = GoalStatsPlotter if self.is_goal_aware else VanillaStatsPlotter
+        return plt_class(epoch_stats)
 
 
 def _ppo_discrete_dist_fn(logits: torch.Tensor):

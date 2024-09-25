@@ -10,7 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 
 from models import SelfModel, EnvModel
 from intrinsic import ICM
-from utils import EpochStatsPlotter
 from config import ConfigManager
 from utils.experiment import ExperimentFactory
 
@@ -147,14 +146,6 @@ def run_experiment(trainer: Any) -> list[Dict[str, Any]]:
     return epoch_stats
 
 
-def plot_results(factory: ExperimentFactory, epoch_stats: list[Dict[str, Any]]) -> None:
-    """Plots the results if applicable."""
-    # TODO should probably adjust the plotter to make it work with vanilla Tianshou policies as well
-    if factory.is_goal_aware:
-        plotter = EpochStatsPlotter(epoch_stats)
-        plotter.plot(figsize=(8, 8))
-
-
 def main(
     base_config_path: str,
     env_config: str,
@@ -195,7 +186,9 @@ def main(
     )
 
     epoch_stats = run_experiment(trainer)
-    plot_results(factory, epoch_stats)
+
+    plotter = factory.create_plotter(epoch_stats)
+    plotter.plot(figsize=(12, 8))
 
 
 if __name__ == "__main__":

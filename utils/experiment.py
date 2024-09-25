@@ -12,8 +12,7 @@ from torch import nn
 from environments import DictObservation, Resetting
 from networks import *
 from policies import PPOBasedPolicy
-from intrinsic import ICM
-from config import Config
+from config import ConfigManager
 from core import (
     GoalCollector,
     GoalVectorReplayBuffer,
@@ -56,6 +55,13 @@ def choose_buffer(
 ) -> Union[GoalVectorReplayBuffer, VectorReplayBuffer]:
     buf_class = GoalVectorReplayBuffer if is_goal_aware else VectorReplayBuffer
     return buf_class(buf_size, env_num)
+
+
+def choose_obsnet(env: gym.Env, config: ConfigManager) -> nn.Module:
+    obs_net_map = {"nethack": NetHackObsNet, "discrete": DiscreteObsNet}
+    obs_class = obs_net_map[config.get("obsnet.name")]
+
+    return obs_class(**config.get_except("obsnet", exclude="name"))
 
 
 def choose_actor_critic(
@@ -139,7 +145,7 @@ def choose_trainer(
     test_collector: Union[Collector, GoalCollector],
     logger: TensorboardLogger,
     device: torch.device,
-    config: Config,
+    config: ConfigManager,
     is_goal_aware: bool,
     trainer_type: str = "onpolicy",
 ) -> Union[

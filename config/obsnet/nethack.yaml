@@ -1,0 +1,4 @@
+name: "nethack"
+embedding_dim: 32
+crop_dim: 9
+num_layers: 5

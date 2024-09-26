@@ -70,10 +70,16 @@ class ExperimentFactory:
         buf_class = GoalVectorReplayBuffer if self.is_goal_aware else VectorReplayBuffer
         return buf_class(buf_size, env_num)
 
-    def create_obsnet(self) -> nn.Module:
+    def create_obsnet(self, observation_space: gym.Space) -> nn.Module:
         obs_net_map = {"nethack": NetHackObsNet, "discrete": DiscreteObsNet}
         obs_class = obs_net_map[self.config.get("obsnet.name")]
-        return obs_class(**self.config.get_except("obsnet", exclude="name"))
+        return (
+            obs_class(
+                observation_space, **self.config.get_except("obsnet", exclude="name")
+            )
+            if self.is_goal_aware
+            else obs_class(**self.config.get_except("obsnet", exclude="name"))
+        )
 
     def create_actor_critic(
         self, obs_net: nn.Module, action_space: gym.Space, device: torch.device

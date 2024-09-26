@@ -29,7 +29,6 @@ def setup_config(
             "obsnet": obsnet_config,
         }
     )
-    # TODO a config check? notify the user if he made some strange choices along the way (like using a DiscreteObsNet with Dict spaces, e.g.,)
     return config
 
 
@@ -37,7 +36,8 @@ def setup_environment(config: ConfigManager) -> gym.Env:
     """Sets up the gym environment."""
     env_name = config.get("environment.name")
     try:
-        env = gym.make(env_name)
+        # return an empty dictionary in case the env_config is empty/doesn't exist
+        env = gym.make(env_name, **config.get("environment.env_config", {}))
         return env
     except gym.error.Error as e:
         raise RuntimeError(f"Failed to create environment {env_name}: {e}")
@@ -72,7 +72,7 @@ def setup_networks(
     factory: ExperimentFactory, env: gym.Env, device: torch.device
 ) -> tuple[Any, Any, Any]:
     """Sets up observation, actor, and critic networks."""
-    obs_net = factory.create_obsnet()
+    obs_net = factory.create_obsnet(env.observation_space)
     actor_net, critic_net = factory.create_actor_critic(
         obs_net, env.action_space, device
     )

@@ -1,0 +1,3 @@
+name: "NetHackGold-v0"
+num_train_envs: 1
+num_test_envs: 1

@@ -1,0 +1,13 @@
+is_goal_aware: true
+
+buffers:
+  train_buf_size: 20
+  test_buf_size: 1
+
+training:
+  max_epoch: 3
+  step_per_epoch: 10
+  step_per_collect: 5
+  episode_per_test: 1
+  batch_size: 5
+  repeat_per_collect: 1

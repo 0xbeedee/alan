@@ -1,14 +1,17 @@
+from typing import Tuple, Union
+import os
+
 import gymnasium as gym
+from gymnasium.wrappers.record_video import RecordVideo
 import torch
 from torch import nn
-from typing import Tuple, Union
 from tianshou.data import VectorReplayBuffer, Collector, EpochStats
 from tianshou.policy import BasePolicy, PPOPolicy
 from tianshou.trainer import OnpolicyTrainer, OffpolicyTrainer, OfflineTrainer
 from tianshou.env.venvs import BaseVectorEnv
 from tianshou.utils import TensorboardLogger
 
-from environments import DictObservation, Resetting
+from environments import DictObservation, Resetting, RecordTTY
 from networks import (
     NetHackObsNet,
     DiscreteObsNet,
@@ -38,7 +41,7 @@ class ExperimentFactory:
         self.config = config
         self.is_goal_aware = config.get("is_goal_aware")
 
-    def wrap_env(self, env: gym.Env) -> gym.Env:
+    def wrap_env(self, env: gym.Env, rec_path: str) -> gym.Env:
         observation_keys = (
             "glyphs",
             "chars",
@@ -57,10 +60,14 @@ class ExperimentFactory:
         )
 
         if isinstance(env.observation_space, gym.spaces.Discrete):
-            return DictObservation(env)
+            # the RecordVideo makes a custom file, so it only needs the dir structure
+            return RecordVideo(
+                DictObservation(env), video_folder=os.path.split(rec_path)[0]
+            )
 
+        # TODO there's probably a better way to check this condition to avoid lugging around the observation_keys
         if all(obs_key in env.observation_space.keys() for obs_key in observation_keys):
-            return Resetting(env)
+            return RecordTTY(Resetting(env), output_path=rec_path)
 
         return env
 
@@ -127,6 +134,7 @@ class ExperimentFactory:
                 optim=optim,
                 action_space=action_space,
                 action_scaling=action_scaling,
+                # continuous action spaces are out of scope for our work
                 dist_fn=_ppo_discrete_dist_fn,
             ),
         }
@@ -194,7 +202,8 @@ class ExperimentFactory:
         return trainer_class(**common_kwargs)
 
     def create_plotter(
-        self, epoch_stats: EpochStats
+        self,
+        epoch_stats: EpochStats,
     ) -> GoalStatsPlotter | VanillaStatsPlotter:
         plt_class = GoalStatsPlotter if self.is_goal_aware else VanillaStatsPlotter
         return plt_class(epoch_stats)

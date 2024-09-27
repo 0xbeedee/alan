@@ -36,6 +36,9 @@ from torch import nn
 import numpy as np
 import gymnasium as gym
 
+# TODO a few types in this file need to be updated
+# TODO there might be a few places where I'm supposed to use types in this file, but I don't!
+
 TArrLike = TypeVar("TArrLike", np.ndarray, torch.Tensor, Batch, None)
 
 

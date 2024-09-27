@@ -34,7 +34,8 @@ class BasePlotter:
             func(axs[i, j], *args)
 
         self._finalize_plot(fig, axs, save_pdf, pdf_path)
-        plt.show()
+        if not save_pdf:
+            plt.show()
 
     @abstractmethod
     def _get_plot_functions(self) -> Sequence[PlotFunctionTuple]:

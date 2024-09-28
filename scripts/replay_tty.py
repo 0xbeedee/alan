@@ -46,7 +46,7 @@ def replay_tty_frames(input_file, speed=0.2):
 
 
 def handle_playback_control(diff, speed, drift=0.0):
-    # TODO more options here? (pausing, re-widing, etc)
+    # TODO more options here? (pausing, re-winding, etc)
     start = time.time()
     # calculate wait time, adjusting for playback speed and previous drift
     diff = max((diff / speed) - drift, 0.0)

@@ -15,7 +15,7 @@ from config import ConfigManager
 from utils.experiment import ExperimentFactory
 
 DEFAULT_DEVICE = "cpu"
-ART_DIR = "../artefacts"
+ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
 PLOT_DIR = f"{ART_DIR}/plots"
 REC_DIR = f"{ART_DIR}/recs"
@@ -75,6 +75,7 @@ def setup_networks(factory, env, device):
 def setup_models(obs_net, env, train_buf, device):
     """Sets up environment and self models."""
     # TODO can't I use YAML for more flexibility here? re-think this when I introduce other intrinsic modules
+    # intrinsic module and horizon can easily fit in a yaml config
     env_model = EnvModel()
     self_model = SelfModel(
         obs_net, env.action_space, train_buf, ICM, her_horizon=3, device=device
@@ -109,7 +110,7 @@ def setup_collectors(factory, policy, train_envs, test_envs, train_buf, test_buf
 def setup_logger(env_name, policy_name, obsnet_name, is_goal_aware):
     """Sets up the TensorboardLogger."""
     log_path = _make_save_path(
-        PLOT_DIR, env_name, policy_name, obsnet_name, is_goal_aware
+        LOG_DIR, env_name, policy_name, obsnet_name, is_goal_aware
     )
     writer = SummaryWriter(log_path)
     return TensorboardLogger(writer)

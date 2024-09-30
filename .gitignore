@@ -170,5 +170,5 @@ cython_debug/
 # Others
 spielraum.ipynb
 nle_data/
-NetHack/
 .vscode/
+artefacts/

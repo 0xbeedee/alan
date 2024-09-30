@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import time
 import os
 import sys
@@ -11,70 +9,117 @@ import glob
 
 
 def replay_tty_frames(input_file, speed=0.2):
-    # save the original terminal settings
+    """Replay TTY frames from a given input file at a given playback speed (default is 0.2)."""
+    # save original terminal settings
     old = termios.tcgetattr(sys.stdin.fileno())
     new = termios.tcgetattr(sys.stdin.fileno())
-    # we want only raw input (no buffering, no echo)
+    # configure terminal for raw input
     new[3] &= ~(termios.ICANON | termios.ECHO | termios.ECHONL)
     termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, new)
+
     try:
         with open(input_file, "rb") as f:
-            prev_timestamp = None
-            drift = 0.0
-            clear_screen()
+            f.seek(0, 0)
+            frames = []
+            # read all frames from the input file
             while True:
-                # header of each frame is 13 bytes long
                 header = f.read(13)
                 if not header:
-                    break  # EOF
-                # seconds, microseconds, data length, and channel
+                    break
                 sec, usec, length, _ = struct.unpack("<iiiB", header)
-                timestamp = sec + usec * 1e-6  # seconds
+                timestamp = sec + usec * 1e-6
                 data = f.read(length)
+                frames.append((timestamp, data))
+
+            total_frames = len(frames)
+            state = {"playing": True, "step": 0}
+            frame_number = 0
+            prev_timestamp = None
+            drift = 0.0
+
+            # initial status
+            update_status_display(speed, frame_number, total_frames)
+
+            # playback loop
+            while 0 <= frame_number < total_frames:
+                timestamp, data = frames[frame_number]
+
                 if prev_timestamp is not None:
-                    speed, drift = handle_playback_control(
-                        timestamp - prev_timestamp, speed, drift
+                    # Handle playback control and timing
+                    speed, state, drift = handle_playback_control(
+                        timestamp - prev_timestamp,
+                        speed,
+                        state,
+                        drift,
                     )
-                # move cursor to top-left before writing each frame
-                sys.stdout.write("\033[H")
+
+                # display current frame
+                sys.stdout.write("\033[H")  # move cursor to top-left
                 sys.stdout.buffer.write(data)
                 sys.stdout.flush()
+
                 prev_timestamp = timestamp
+
+                # update frame number
+                if state["playing"] or state["step"] != 0:
+                    frame_number += 1 if state["playing"] else state["step"]
+                    state["step"] = 0
+
+                update_status_display(speed, frame_number, total_frames)
     finally:
         # restore original terminal settings
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, old)
 
 
-def handle_playback_control(diff, speed, drift=0.0):
-    # TODO more options here? (pausing, re-winding, etc)
-    start = time.time()
-    # calculate wait time, adjusting for playback speed and previous drift
-    diff = max((diff / speed) - drift, 0.0)
-    # wait for input or timeout
-    rlist, _, _ = select.select([sys.stdin], [], [], diff)
-    if rlist:
-        # adjust playback speed
-        c = os.read(0, 1)
-        if c in (b"+", b"f"):
-            speed *= 2  # double speed
-        elif c in (b"-", b"s"):
-            speed /= 2  # halve speed
-        elif c == b"1":
-            speed = 1  # normal speed
-        elif c == b" ":
-            select.select([sys.stdin], [], [])
-        drift = 0.0
-    else:
-        # calculate drift (difference between intended and actual wait time)
-        stop = time.time()
-        drift = (stop - start) - diff
-    return speed, drift
-
-
-def clear_screen():
-    # clear screen and move cursor to top-left
-    sys.stdout.write("\033[2J\033[H")
+def update_status_display(speed, frame_number, total_frames):
+    """Update the status display with current playback information."""
+    sys.stdout.write("\033[H")  # move cursor to top-left
+    sys.stdout.write("\033[K")  # clear line
+    status = f"SPEED: {speed:.2f}x | FRAME: {frame_number}/{total_frames}"
+    sys.stdout.write(status)
     sys.stdout.flush()
+
+
+def handle_playback_control(diff, speed, state, drift=0.0):
+    """Handle playback control, including speed changes and frame navigation."""
+    start = time.time()
+
+    commands = {
+        b"+": lambda s: min(s * 2, 16),  # double speed, max 16x
+        b"-": lambda s: max(s / 2, 0.25),  # halve speed, min 0.25x
+        b"1": lambda s: 1,  # reset to normal speed (1x)
+        b" ": lambda s: s,  # toggle play/pause
+    }
+
+    rlist, _, _ = select.select([sys.stdin], [], [], 0)
+    if rlist:
+        c = os.read(sys.stdin.fileno(), 3)  # read up to 3 bytes for arrow keys
+        if c in commands:
+            new_speed = commands[c](speed)
+            if c == b" ":
+                state["playing"] = not state["playing"]
+            elif new_speed != speed:
+                speed = new_speed
+        elif c == b"\x1b[C" and not state["playing"]:  # right arrow
+            # step forward
+            state["step"] = 1
+        elif c == b"\x1b[D" and not state["playing"]:  # left arrow
+            # step backward
+            state["step"] = -1
+        drift = 0.0
+
+    if state["playing"]:
+        # calculate wait time for consistent playback speed
+        wait_time = max((diff / speed) - drift, 0.0)
+        time.sleep(wait_time)
+        stop = time.time()
+        drift = (stop - start) - wait_time
+    elif state["step"] == 0:
+        # wait for next input
+        select.select([sys.stdin], [], [])
+        drift = 0.0
+
+    return speed, state, drift
 
 
 def get_latest_file(directory):

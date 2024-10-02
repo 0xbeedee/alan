@@ -42,7 +42,7 @@ class ICM(IntrinsicCuriosityModule):
         )
         self.feature_net = self.feature_net.to(device)
 
-        # (feature_net parameters not included because it's trained separately)
+        # feature_net parameters not included because it's trained separately
         params = set(
             list(self.forward_model.parameters())
             + list(self.inverse_model.parameters())
@@ -55,26 +55,14 @@ class ICM(IntrinsicCuriosityModule):
 
     def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
         # no need torch.no_grad() as SelfModel takes care of it
-        forward_loss, _ = self.forward(batch)
+        forward_loss, _ = self._forward(batch)
 
         intrinsic_reward = forward_loss * self.eta
         return intrinsic_reward.cpu().numpy().astype(np.float32)
 
-    def forward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
-        batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
-        batch_obs = to_torch(batch.obs, device=self.device)
-        batch_obs_next = to_torch(batch.obs_next, device=self.device)
-
-        phi1, phi2 = self.feature_net(batch_obs), self.feature_net(batch_obs_next)
-        phi2_hat = self._forward_dynamics(phi1, batch_actions)
-
-        forward_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
-        inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
-        return forward_loss, inverse_loss
-
     def learn(self, batch: ObsActNextBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
         """Train the forward and backward models."""
-        forward_loss, inverse_loss = self.forward(batch)
+        forward_loss, inverse_loss = self._forward(batch)
         forward_loss, inverse_loss = forward_loss.mean(), inverse_loss.mean()
 
         self.optim.zero_grad()
@@ -87,6 +75,18 @@ class ICM(IntrinsicCuriosityModule):
             icm_forward_loss=forward_loss.item(),
             icm_inverse_loss=inverse_loss.item(),
         )
+
+    def _forward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
+        batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
+        batch_obs = to_torch(batch.obs, device=self.device)
+        batch_obs_next = to_torch(batch.obs_next, device=self.device)
+
+        phi1, phi2 = self.feature_net(batch_obs), self.feature_net(batch_obs_next)
+        phi2_hat = self._forward_dynamics(phi1, batch_actions)
+
+        forward_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
+        inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
+        return forward_loss, inverse_loss
 
     def _forward_dynamics(
         self, phi1: torch.Tensor, actions: torch.Tensor

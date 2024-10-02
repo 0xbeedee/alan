@@ -10,7 +10,6 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
 from models import SelfModel, EnvModel
-from intrinsic import ICM
 from config import ConfigManager
 from utils.experiment import ExperimentFactory
 
@@ -21,7 +20,9 @@ PLOT_DIR = f"{ART_DIR}/plots"
 REC_DIR = f"{ART_DIR}/recs"
 
 
-def setup_config(base_config_path, env_config, policy_config, obsnet_config):
+def setup_config(
+    base_config_path, env_config, policy_config, obsnet_config, intrinsic_config
+):
     """Sets up and validate the configuration."""
     config = ConfigManager(base_config_path)
     config.create_config(
@@ -29,6 +30,7 @@ def setup_config(base_config_path, env_config, policy_config, obsnet_config):
             "environment": env_config,
             "policy": policy_config,
             "obsnet": obsnet_config,
+            "intrinsic": intrinsic_config,
         }
     )
     return config
@@ -36,10 +38,9 @@ def setup_config(base_config_path, env_config, policy_config, obsnet_config):
 
 def setup_environment(config):
     """Sets up the gym environment."""
-    env_name = config.get("environment.name")
+    env_name = config.get("environment.base.name")
     try:
-        # return an empty dictionary in case the env_config is empty/doesn't exist
-        env = gym.make(env_name, **config.get("environment.env_config", {}))
+        env = gym.make(env_name, **config.get_except("environment.base", "name"))
         return env, env_name
     except gym.error.Error as e:
         raise RuntimeError(f"Failed to create environment {env_name}: {e}")
@@ -47,8 +48,8 @@ def setup_environment(config):
 
 def setup_vector_envs(env, config):
     """Sets up vector environments for training and testing."""
-    num_train_envs = config.get("environment.num_train_envs")
-    num_test_envs = config.get("environment.num_test_envs")
+    num_train_envs = config.get("environment.vec.num_train_envs")
+    num_test_envs = config.get("environment.vec.num_test_envs")
     train_envs = ts.env.DummyVectorEnv([lambda: env for _ in range(num_train_envs)])
     test_envs = ts.env.DummyVectorEnv([lambda: env for _ in range(num_test_envs)])
     return train_envs, test_envs
@@ -65,20 +66,26 @@ def setup_buffers(config, num_train_envs, num_test_envs, factory):
 
 def setup_networks(factory, env, device):
     """Sets up observation, actor, and critic networks."""
-    obs_net = factory.create_obsnet(env.observation_space)
+    obs_net = factory.create_obsnet(env.observation_space, device)
     actor_net, critic_net = factory.create_actor_critic(
         obs_net, env.action_space, device
     )
     return obs_net, actor_net, critic_net
 
 
-def setup_models(obs_net, env, train_buf, device):
+def setup_models(factory, obs_net, env, train_buf, device):
     """Sets up environment and self models."""
-    # TODO can't I use YAML for more flexibility here? re-think this when I introduce other intrinsic modules
-    # intrinsic module and horizon can easily fit in a yaml config
+    fast_intrinsic_module, slow_intrinsic_module = factory.create_intrinsic_modules(
+        obs_net, env.action_space, train_buf, device
+    )
+
     env_model = EnvModel()
     self_model = SelfModel(
-        obs_net, env.action_space, train_buf, ICM, her_horizon=3, device=device
+        obs_net,
+        train_buf,
+        fast_intrinsic_module,
+        slow_intrinsic_module,
+        device=device,
     )
     return env_model, self_model
 
@@ -112,7 +119,7 @@ def setup_logger(env_name, policy_name, obsnet_name, is_goal_aware):
     log_path = _make_save_path(
         LOG_DIR, env_name, policy_name, obsnet_name, is_goal_aware
     )
-    writer = SummaryWriter(log_path)
+    writer = SummaryWriter(os.path.split(log_path)[0])
     return TensorboardLogger(writer)
 
 
@@ -143,7 +150,9 @@ def record_rollout(env, policy):
     done = False
 
     while not done:
-        action = policy(ts.data.Batch(obs=np.array([obs]), info=np.array([info]))).act
+        action = policy(
+            ts.data.Batch(obs=np.array([obs]), info=np.array([info]))
+        ).act.item()
         obs, info, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
 
@@ -183,9 +192,12 @@ def main(
     env_config: str,
     policy_config: str,
     obsnet_config: str,
+    intrinsic_config: str,
     device: torch.device,
 ) -> None:
-    config = setup_config(base_config_path, env_config, policy_config, obsnet_config)
+    config = setup_config(
+        base_config_path, env_config, policy_config, obsnet_config, intrinsic_config
+    )
     factory = ExperimentFactory(config)
 
     print("[+] Setting up the environment...")
@@ -196,7 +208,7 @@ def main(
         policy_config,
         obsnet_config,
         factory.is_goal_aware,
-        ext="ttyrec",
+        ext="mp4" if env.render_mode == "rgb_array" else "ttyrec",
     )
     env = factory.wrap_env(env, rec_path)
 
@@ -208,10 +220,11 @@ def main(
 
     print("[+] Setting up the networks...")
     obs_net, actor_net, critic_net = setup_networks(factory, env, device)
-    env_model, self_model = setup_models(obs_net, env, train_buf, device)
+
+    print("[+] Setting up the models...")
+    env_model, self_model = setup_models(factory, obs_net, env, train_buf, device)
 
     print("[+] Setting up the policy...")
-    # TODO this read might not be a good idea, performance-wise (should probably do something like what I did for env_name)
     lr = config.get("policy.learning_rate")
     combined_params = set(list(actor_net.parameters()) + list(critic_net.parameters()))
     optimizer = torch.optim.Adam(combined_params, lr=lr)
@@ -298,6 +311,14 @@ if __name__ == "__main__":
         metavar="OBSNET_CONFIG",
     )
     parser.add_argument(
+        "-i",
+        "--intrinsic",
+        type=str,
+        required=True,
+        help="Name of the intrinsic module config file (without .yaml extension)",
+        metavar="INTRINSIC_CONFIG",
+    )
+    parser.add_argument(
         "-d",
         "--device",
         type=str,
@@ -309,4 +330,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     device = torch.device(args.device)
-    main(args.config, args.env, args.policy, args.obsnet, device=device)
+    main(args.config, args.env, args.policy, args.obsnet, args.intrinsic, device=device)

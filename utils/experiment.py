@@ -1,8 +1,6 @@
 from typing import Tuple, Union
-import os
 
 import gymnasium as gym
-from gymnasium.wrappers.record_video import RecordVideo
 import torch
 from torch import nn
 from tianshou.data import VectorReplayBuffer, Collector, EpochStats
@@ -11,7 +9,7 @@ from tianshou.trainer import OnpolicyTrainer, OffpolicyTrainer, OfflineTrainer
 from tianshou.env.venvs import BaseVectorEnv
 from tianshou.utils import TensorboardLogger
 
-from environments import DictObservation, Resetting, RecordTTY
+from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
     NetHackObsNet,
     DiscreteObsNet,
@@ -20,6 +18,7 @@ from networks import (
     GoalNetHackCritic,
     SimpleNetHackCritic,
 )
+from intrinsic import ICM, ZeroICM, HER
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (
@@ -42,34 +41,17 @@ class ExperimentFactory:
         self.is_goal_aware = config.get("is_goal_aware")
 
     def wrap_env(self, env: gym.Env, rec_path: str) -> gym.Env:
-        observation_keys = (
-            "glyphs",
-            "chars",
-            "colors",
-            "specials",
-            "blstats",
-            "message",
-            "inv_glyphs",
-            "inv_strs",
-            "inv_letters",
-            "inv_oclasses",
-            "screen_descriptions",
-            "tty_chars",
-            "tty_colors",
-            "tty_cursor",
-        )
-
+        wrapped_env = None
         if isinstance(env.observation_space, gym.spaces.Discrete):
-            # the RecordVideo makes a custom file, so it only needs the dir structure
-            return RecordVideo(
-                DictObservation(env), video_folder=os.path.split(rec_path)[0]
-            )
+            wrapped_env = DictObservation(env)
+        elif "NetHack" in env.unwrapped.spec.id:
+            wrapped_env = Resetting(env)
 
-        # TODO there's probably a better way to check this condition to avoid lugging around the observation_keys
-        if all(obs_key in env.observation_space.keys() for obs_key in observation_keys):
-            return RecordTTY(Resetting(env), output_path=rec_path)
-
-        return env
+        return (
+            RecordRGB(wrapped_env, output_path=rec_path)
+            if env.render_mode == "rgb_array"
+            else RecordTTY(wrapped_env, output_path=rec_path)
+        )
 
     def create_buffer(
         self, buf_size: int, env_num: int
@@ -77,16 +59,47 @@ class ExperimentFactory:
         buf_class = GoalVectorReplayBuffer if self.is_goal_aware else VectorReplayBuffer
         return buf_class(buf_size, env_num)
 
-    def create_obsnet(self, observation_space: gym.Space) -> nn.Module:
+    def create_obsnet(
+        self, observation_space: gym.Space, device: torch.device
+    ) -> nn.Module:
         obs_net_map = {"nethack": NetHackObsNet, "discrete": DiscreteObsNet}
         obs_class = obs_net_map[self.config.get("obsnet.name")]
-        return (
-            obs_class(
-                observation_space, **self.config.get_except("obsnet", exclude="name")
-            )
-            if self.is_goal_aware
-            else obs_class(**self.config.get_except("obsnet", exclude="name"))
+        return obs_class(
+            observation_space,
+            **self.config.get_except("obsnet", exclude="name"),
+            device=device,
         )
+
+    # TODO the obs_net type is too generic? => it contrasts with the ICM type, which, as it is written, would only accept NetHackObsNets and similar
+    def create_intrinsic_modules(
+        self,
+        obs_net: nn.Module,
+        action_space: gym.Space,
+        buf: GoalVectorReplayBuffer,
+        device: torch.device,
+    ):
+        fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM}
+        slow_intrinsic_map = {"her": HER}
+
+        fast_intrinsic_class = fast_intrinsic_map[
+            self.config.get("intrinsic.fast.name")
+        ]
+        slow_intrinsic_class = slow_intrinsic_map[
+            self.config.get("intrinsic.slow.name")
+        ]
+
+        fast_intrinsic_module = fast_intrinsic_class(
+            obs_net,
+            action_space,
+            **self.config.get_except("intrinsic.fast", exclude="name"),
+            device=device,
+        )
+        slow_intrinsic_module = slow_intrinsic_class(
+            buf,
+            **self.config.get_except("intrinsic.slow", exclude="name"),
+        )
+
+        return fast_intrinsic_module, slow_intrinsic_module
 
     def create_actor_critic(
         self, obs_net: nn.Module, action_space: gym.Space, device: torch.device

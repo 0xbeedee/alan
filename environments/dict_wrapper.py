@@ -9,8 +9,8 @@ class DictObservation(gym.Wrapper):
         assert isinstance(env.observation_space, gym.spaces.Discrete)
         self.observation_space = gym.spaces.Dict({"obs": env.observation_space})
 
-    def reset(self):
-        observation, info = self.env.reset()
+    def reset(self, **kwargs):
+        observation, info = self.env.reset(**kwargs)
         return {"obs": observation}, info
 
     def step(self, action):

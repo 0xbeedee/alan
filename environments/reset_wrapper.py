@@ -17,7 +17,7 @@ class Resetting(gym.Wrapper):
         return observation, info
 
     def step(self, action):
-        observation, reward, terminated, truncated, info = self.env.step(action.item())
+        observation, reward, terminated, truncated, info = self.env.step(action)
         self.episode_step += 1
         self.episode_return += reward
 

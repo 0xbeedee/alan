@@ -1,3 +1,8 @@
-name: "FrozenLake-v1"
-num_train_envs: 5
-num_test_envs: 5
+base:
+  name: "FrozenLake-v1"
+  render_mode: "rgb_array"
+
+
+vec:
+  num_train_envs: 5
+  num_test_envs: 5

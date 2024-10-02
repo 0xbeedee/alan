@@ -44,7 +44,7 @@ class ConfigManager:
         except (ValueError, SyntaxError):
             pass
 
-        # Handle boolean strings
+        # handle boolean strings
         lower_value = value.lower()
         if lower_value in {"true", "yes", "on"}:
             return True
@@ -65,7 +65,7 @@ class ConfigManager:
         elif exclude is None:
             exclude = []
 
-        nested_dict = self.get(key)
+        nested_dict = self.get(key, {})
         if not isinstance(nested_dict, dict):
             return {}
         return {k: v for k, v in nested_dict.items() if k not in exclude}

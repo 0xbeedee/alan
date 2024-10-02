@@ -6,4 +6,4 @@ fast:
 
 slow:
   name: 'her'
-  _horizon: 3
+  horizon: 3

@@ -61,7 +61,7 @@ class ICM(IntrinsicCuriosityModule):
         return intrinsic_reward.cpu().numpy().astype(np.float32)
 
     def learn(self, batch: ObsActNextBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
-        """Train the forward and backward models."""
+        """Trains the forward and inverse models."""
         forward_loss, inverse_loss = self._forward(batch)
         forward_loss, inverse_loss = forward_loss.mean(), inverse_loss.mean()
 

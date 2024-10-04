@@ -23,8 +23,6 @@ class DeltaICM(ICM):
         beta: float = 0.2,
         eta: float = 0.07,
         device: torch.device = torch.device("cpu"),
-        delta_scale: float = 0.1,
-        smoothing: float = 0.95,
     ) -> None:
         super().__init__(
             obs_net=obs_net,
@@ -35,20 +33,29 @@ class DeltaICM(ICM):
             device=device,
         )
 
-        self.delta_scale = delta_scale
-        self.smoothing = smoothing
-        self.previous_intrinsic_reward = 0.0
-        # exponential moving average for intrinsic reward
-        self.ema_intrinsic = 0.0
+        self.running_avg_intrinsic = 0.0
+        self.n_intrinsic = 0
 
     def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
-        intrinsic_reward = super().get_reward(batch)
+        # to each action corresponds a reward
+        self.n_intrinsic += batch.act.size
+        # use this scaling factor so that the runninng average increases in weight as we get more an more samples
+        alpha = self._normalised_log(self.n_intrinsic)
 
-        self.ema_intrinsic = (
-            self.smoothing * self.ema_intrinsic
-            + (1 - self.smoothing) * intrinsic_reward
-        )
+        vanilla_intrew = ICM.get_reward(self, batch)
 
-        delta = intrinsic_reward - self.ema_intrinsic
-        delta_intrinsic_reward = self.delta_scale * delta
-        return delta_intrinsic_reward.astype(np.float32)
+        self.running_avg_intrinsic = self.running_avg_intrinsic + (
+            vanilla_intrew - self.running_avg_intrinsic
+        ) / (self.n_intrinsic + 1)
+
+        delta = vanilla_intrew - alpha * self.running_avg_intrinsic
+        return delta.astype(np.float32)
+
+    def _normalised_log(self, n: int, max_n: int = 1_000_000) -> np.float32:
+        """Computes a normalised log (with base e), i.e., a log that returns values between 0 and 1."""
+        # TODO max_n is set rather arbitrarily, can I do better?
+        min_log = 0
+        max_log = np.log(max_n, dtype=np.float32)
+
+        # TODO is the logarithm the correct option, here?
+        return (np.log(n, dtype=np.float32) - min_log) / (max_log - min_log)

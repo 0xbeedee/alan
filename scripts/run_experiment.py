@@ -47,7 +47,7 @@ def setup_environment(config):
 
 
 def setup_vector_envs(env, config):
-    """Sets up vector environments for training and testing."""
+    """Sets up the vector environments for training and testing."""
     num_train_envs = config.get("environment.vec.num_train_envs")
     num_test_envs = config.get("environment.vec.num_test_envs")
     train_envs = ts.env.DummyVectorEnv([lambda: env for _ in range(num_train_envs)])
@@ -56,7 +56,7 @@ def setup_vector_envs(env, config):
 
 
 def setup_buffers(config, num_train_envs, num_test_envs, factory):
-    """Sets up replay buffers for training and testing."""
+    """Sets up the replay buffers for training and testing."""
     train_buf_size = config.get("buffers.train_buf_size")
     test_buf_size = config.get("buffers.test_buf_size")
     train_buf = factory.create_buffer(train_buf_size, num_train_envs)
@@ -65,7 +65,7 @@ def setup_buffers(config, num_train_envs, num_test_envs, factory):
 
 
 def setup_networks(factory, env, device):
-    """Sets up observation, actor, and critic networks."""
+    """Sets up the observation, actor, and critic networks."""
     obs_net = factory.create_obsnet(env.observation_space, device)
     actor_net, critic_net = factory.create_actor_critic(
         obs_net, env.action_space, device
@@ -74,7 +74,7 @@ def setup_networks(factory, env, device):
 
 
 def setup_models(factory, obs_net, env, train_buf, device):
-    """Sets up environment and self models."""
+    """Sets up the environment and self models."""
     fast_intrinsic_module, slow_intrinsic_module = factory.create_intrinsic_modules(
         obs_net, env.action_space, train_buf, device
     )
@@ -82,7 +82,6 @@ def setup_models(factory, obs_net, env, train_buf, device):
     env_model = EnvModel()
     self_model = SelfModel(
         obs_net,
-        train_buf,
         fast_intrinsic_module,
         slow_intrinsic_module,
         device=device,
@@ -108,16 +107,23 @@ def setup_policy(
 
 
 def setup_collectors(factory, policy, train_envs, test_envs, train_buf, test_buf):
-    """Sets up collectors for training and testing."""
+    """Sets up the collectors for training and testing."""
     train_collector = factory.create_collector(policy, train_envs, train_buf)
     test_collector = factory.create_collector(policy, test_envs, test_buf)
     return train_collector, test_collector
 
 
-def setup_logger(env_name, policy_name, obsnet_name, is_goal_aware):
+def setup_logger(
+    env_config, policy_config, obsnet_config, intrinsic_config, is_goal_aware
+):
     """Sets up the TensorboardLogger."""
     log_path = _make_save_path(
-        LOG_DIR, env_name, policy_name, obsnet_name, is_goal_aware
+        LOG_DIR,
+        env_config,
+        policy_config,
+        obsnet_config,
+        intrinsic_config,
+        is_goal_aware,
     )
     writer = SummaryWriter(os.path.split(log_path)[0])
     return TensorboardLogger(writer)
@@ -126,9 +132,10 @@ def setup_logger(env_name, policy_name, obsnet_name, is_goal_aware):
 def plot(
     factory,
     epoch_stats,
-    env_name,
-    policy_name,
-    obsnet_name,
+    env_config,
+    policy_config,
+    obsnet_config,
+    intrinsic_config,
     is_goal_aware,
     save_pdf=True,
 ):
@@ -136,7 +143,12 @@ def plot(
 
     Its default behaviour is to save the plot to a PDF file to not block execution."""
     plot_path = _make_save_path(
-        PLOT_DIR, env_name, policy_name, obsnet_name, is_goal_aware
+        PLOT_DIR,
+        env_config,
+        policy_config,
+        obsnet_config,
+        intrinsic_config,
+        is_goal_aware,
     )
 
     plotter = factory.create_plotter(epoch_stats)
@@ -168,7 +180,13 @@ def run_experiment(trainer):
 
 
 def _make_save_path(
-    base_path, env_name, policy_name, obsnet_name, is_goal_aware, ext=None
+    base_path,
+    env_config,
+    policy_config,
+    obsnet_config,
+    intrinsic_config,
+    is_goal_aware,
+    ext=None,
 ):
     """Creates a path to save the artefacts (plots, recordings and logs) to.
 
@@ -176,9 +194,10 @@ def _make_save_path(
     timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
     save_path = os.path.join(
         base_path,
-        env_name.lower(),
-        policy_name,
-        obsnet_name,
+        env_config,
+        policy_config,
+        obsnet_config,
+        intrinsic_config,
         "goal" if is_goal_aware else "vanilla",
         timestamp if not ext else f"{timestamp}.{ext}",
     )
@@ -207,6 +226,7 @@ def main(
         env_name.lower(),
         policy_config,
         obsnet_config,
+        intrinsic_config,
         factory.is_goal_aware,
         ext="mp4" if env.render_mode == "rgb_array" else "ttyrec",
     )
@@ -239,23 +259,26 @@ def main(
     )
 
     print("[+] Setting up the trainer...")
-    logger = setup_logger(env_name, policy_config, obsnet_config, factory.is_goal_aware)
+    logger = setup_logger(
+        env_name, policy_config, obsnet_config, intrinsic_config, factory.is_goal_aware
+    )
 
     trainer = factory.create_trainer(
         policy, train_collector, test_collector, logger, device
     )
 
-    print("[+] Running the experiment...")
+    print("\n[+] Running the experiment...")
     epoch_stats = run_experiment(trainer)
 
     save_pdf = True
-    print("[+] Plotting..." if not save_pdf else "[+] Saving the plot...")
+    print("\n[+] Plotting..." if not save_pdf else "\n[+] Saving the plot...")
     plot(
         factory,
         epoch_stats,
         env_name,
         policy_config,
         obsnet_config,
+        intrinsic_config,
         factory.is_goal_aware,
         save_pdf=save_pdf,
     )

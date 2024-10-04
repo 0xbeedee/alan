@@ -1,3 +1,4 @@
+from ast import Del
 from typing import Tuple, Union
 
 import gymnasium as gym
@@ -18,7 +19,7 @@ from networks import (
     GoalNetHackCritic,
     SimpleNetHackCritic,
 )
-from intrinsic import ICM, ZeroICM, HER
+from intrinsic import ICM, ZeroICM, DeltaICM, HER
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (
@@ -78,7 +79,7 @@ class ExperimentFactory:
         buf: GoalVectorReplayBuffer,
         device: torch.device,
     ):
-        fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM}
+        fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM, "delta_icm": DeltaICM}
         slow_intrinsic_map = {"her": HER}
 
         fast_intrinsic_class = fast_intrinsic_map[

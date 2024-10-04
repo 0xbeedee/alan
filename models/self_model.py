@@ -3,7 +3,6 @@ from tianshou.data.types import ObsBatchProtocol
 from core.types import (
     GoalBatchProtocol,
     ObservationNetProtocol,
-    GoalReplayBufferProtocol,
     ObsActNextBatchProtocol,
 )
 
@@ -22,13 +21,11 @@ class SelfModel:
     def __init__(
         self,
         obs_net: ObservationNetProtocol,
-        buffer: GoalReplayBufferProtocol,
         fast_intrinsic_module: nn.Module,
         slow_intrinsic_module: nn.Module,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         self.obs_net = obs_net.to(device)
-        self.buffer = buffer
         self.fast_intrinsic_module = fast_intrinsic_module
         self.slow_intrinsic_module = slow_intrinsic_module
 
@@ -76,5 +73,5 @@ class SelfModel:
         self.device = device
         self.obs_net = self.obs_net.to(self.device)
         self.fast_intrinsic_module = self.fast_intrinsic_module.to(self.device)
-        # note: We don't move self.buffer or self.slow_intrinsic_module as they typically don't contain torch tensors
+        # we don't move self.slow_intrinsic_module as it typically doesn't contain tensors
         return self

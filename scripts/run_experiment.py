@@ -172,7 +172,7 @@ def record_rollout(env, policy):
 
 
 def run_experiment(trainer):
-    """Runs the experiment and collect epoch statistics."""
+    """Runs the experiment and collects epoch statistics."""
     epoch_stats = []
     for epoch_stat in trainer:
         epoch_stats.append(epoch_stat)
@@ -188,16 +188,14 @@ def _make_save_path(
     is_goal_aware,
     ext=None,
 ):
-    """Creates a path to save the artefacts (plots, recordings and logs) to.
-
-    It returns the path (after creating it on the filesystem)."""
+    """Creates a path to save the artefacts to (plots, recordings and logs)."""
     timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
     save_path = os.path.join(
         base_path,
-        env_config,
-        policy_config,
-        obsnet_config,
-        intrinsic_config,
+        env_config.lower(),
+        policy_config.lower(),
+        obsnet_config.lower(),
+        intrinsic_config.lower(),
         "goal" if is_goal_aware else "vanilla",
         timestamp if not ext else f"{timestamp}.{ext}",
     )
@@ -223,7 +221,7 @@ def main(
     env, env_name = setup_environment(config)
     rec_path = _make_save_path(
         REC_DIR,
-        env_name.lower(),
+        env_name,
         policy_config,
         obsnet_config,
         intrinsic_config,

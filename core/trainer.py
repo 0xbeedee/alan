@@ -249,7 +249,7 @@ class GoalTrainer(BaseTrainer):
         assert test_stat.returns_stat is not None
         rew_stats = (
             test_stat.ep_returns_stat
-            if test_stat.ep_returns_stat is not None
+            if test_stat.n_collected_episodes > 0
             else test_stat.returns_stat
         )
         rew, rew_std = rew_stats.mean, rew_stats.std

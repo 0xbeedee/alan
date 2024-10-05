@@ -159,7 +159,7 @@ class GoalCollector(Collector):
                     time.sleep(render)
 
             # add data into the buffer
-            _, ep_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
+            _, ep_rew_R, ep_int_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
                 current_iteration_batch,
                 buffer_ids=ready_env_ids_R,
             )
@@ -184,7 +184,7 @@ class GoalCollector(Collector):
                 env_ind_global_D = ready_env_ids_R[env_ind_local_D]
                 episode_lens.extend(ep_len_R[env_ind_local_D])
                 episode_returns.extend(ep_rew_R[env_ind_local_D])
-                episode_intrinsic_returns.extend(ep_rew_R[env_ind_local_D])
+                episode_intrinsic_returns.extend(ep_int_rew_R[env_ind_local_D])
                 episode_start_indices.extend(ep_idx_R[env_ind_local_D])
 
                 # now we copy obs_next to obs, but since there might be

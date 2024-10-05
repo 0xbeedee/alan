@@ -59,6 +59,7 @@ class GoalReplayBuffer(ReplayBuffer):
             sample_avail=sample_avail,
             **kwargs
         )
+        self._ep_int_rew = 0.0
 
     def __getitem__(
         self, index: slice | int | list[int] | np.ndarray
@@ -104,6 +105,32 @@ class GoalReplayBuffer(ReplayBuffer):
                 batch_dict[key] = self._meta[key][indices]
         return cast(GoalBatchProtocol, Batch(batch_dict))
 
+    def _add_index(
+        self,
+        rew: float | np.ndarray,
+        int_rew: float | np.ndarray,
+        done: bool,
+    ) -> tuple[int, float | np.ndarray, float | np.ndarray, int, int]:
+        """Maintains the buffer's state after adding one data batch."""
+        self.last_index[0] = ptr = self._index
+        self._size = min(self._size + 1, self.maxsize)
+        self._index = (self._index + 1) % self.maxsize
+
+        self._ep_rew += rew
+        self._ep_int_rew += int_rew
+        self._ep_len += 1
+
+        if done:
+            result = ptr, self._ep_rew, self._ep_int_rew, self._ep_len, self._ep_idx
+            self._ep_rew, self._ep_int_rew, self._ep_len, self._ep_idx = (
+                0.0,
+                0.0,
+                0,
+                self._index,
+            )
+            return result
+        return ptr, self._ep_rew * 0.0, self._ep_int_rew * 0.0, 0, self._ep_idx
+
 
 class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
     """GoalReplayBufferManager contains a list of GoalReplayBuffers, each with the exact same configuration.
@@ -146,15 +173,19 @@ class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
         if buffer_ids is None:
             buffer_ids = np.arange(self.buffer_num)
 
-        ptrs, ep_lens, ep_rews, ep_idxs = [], [], [], []
+        ptrs, ep_lens, ep_rews, ep_int_rews, ep_idxs = [], [], [], [], []
         for batch_idx, buffer_id in enumerate(buffer_ids):
-            ptr, ep_rew, ep_len, ep_idx = self.buffers[buffer_id]._add_index(
+            ptr, ep_rew, ep_int_rew, ep_len, ep_idx = self.buffers[
+                buffer_id
+            ]._add_index(
                 batch.rew[batch_idx],
+                batch.int_rew[batch_idx],
                 batch.done[batch_idx],
             )
             ptrs.append(ptr + self._offset[buffer_id])
             ep_lens.append(ep_len)
             ep_rews.append(ep_rew.astype(np.float32))
+            ep_int_rews.append(ep_int_rew.astype(np.float32))
             ep_idxs.append(ep_idx + self._offset[buffer_id])
             self.last_index[buffer_id] = ptr + self._offset[buffer_id]
             self._lengths[buffer_id] = len(self.buffers[buffer_id])
@@ -163,6 +194,7 @@ class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
             self._meta[ptrs] = batch
         except ValueError:
             batch.rew = batch.rew.astype(np.float32)
+            batch.int_rew = batch.int_rew.astype(np.float32)
             batch.done = batch.done.astype(bool)
             batch.terminated = batch.terminated.astype(bool)
             batch.truncated = batch.truncated.astype(bool)
@@ -172,7 +204,13 @@ class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
                 alloc_by_keys_diff(self._meta, batch, self.maxsize, False)
             self._set_batch_for_children()
             self._meta[ptrs] = batch
-        return ptrs, np.array(ep_rews), np.array(ep_lens), np.array(ep_idxs)
+        return (
+            ptrs,
+            np.array(ep_rews),
+            np.array(ep_int_rews),
+            np.array(ep_lens),
+            np.array(ep_idxs),
+        )
 
 
 class GoalVectorReplayBuffer(GoalReplayBufferManager):

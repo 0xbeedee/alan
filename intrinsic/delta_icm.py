@@ -12,7 +12,7 @@ class DeltaICM(ICM):
     """An implementation of ICM that applies a form of delta encoding (https://en.wikipedia.org/wiki/Delta_encoding) to the intrinsic reward.
 
     We employ delta encoding because in difficult environments with a great deal of novelty (e.g., NetHack), the agent gets flooded with fast intrinsic rewards, ignoring the extrinsic ones.
-    This implementation aims to ameliorate this issue by only rewarding the agent for differences in intrinsic rewards, attempting to mimic biological neural adaptation (https://en.wikipedia.org/wiki/Neural_adaptation).
+    This implementation aims to ameliorate this issue by only rewarding the agent for differences in intrinsic rewards, attempting to mimic neural adaptation (https://en.wikipedia.org/wiki/Neural_adaptation).
     """
 
     def __init__(
@@ -37,25 +37,27 @@ class DeltaICM(ICM):
         self.n_intrinsic = 0
 
     def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
-        # to each action corresponds a reward
-        self.n_intrinsic += batch.act.size
-        # use this scaling factor so that the runninng average increases in weight as we get more an more samples
-        alpha = self._normalised_log(self.n_intrinsic)
+        vanilla_intrew = super().get_reward(batch)
+        self.n_intrinsic += vanilla_intrew.size
 
-        vanilla_intrew = ICM.get_reward(self, batch)
-
-        self.running_avg_intrinsic = self.running_avg_intrinsic + (
+        # vanilla_intrew is a vector of shape (num_envs,)
+        self.running_avg_intrinsic += np.mean(
             vanilla_intrew - self.running_avg_intrinsic
         ) / (self.n_intrinsic + 1)
 
-        delta = vanilla_intrew - alpha * self.running_avg_intrinsic
+        # let the runninng average increase in importance as we get more samples
+        alpha = self._normalised_log(self.n_intrinsic)
+        # using abs() here provides an interesting side effect: when the intrinsic reward diminishes, the delta will be kept higher than usual due to the large running average
+        delta = np.abs(vanilla_intrew - alpha * self.running_avg_intrinsic)
         return delta.astype(np.float32)
 
-    def _normalised_log(self, n: int, max_n: int = 1_000_000) -> np.float32:
-        """Computes a normalised log (with base e), i.e., a log that returns values between 0 and 1."""
-        # TODO max_n is set rather arbitrarily, can I do better?
-        min_log = 0
-        max_log = np.log(max_n, dtype=np.float32)
+    def _normalised_log(self, n: int, max_n: int = 10_000) -> np.float32:
+        """Computes a normalised log (with base e), i.e., a log that returns values in the range [0, 1]."""
+        # TODO max_n is rather arbitrary...
+        if n >= max_n:
+            # return 1 if we collected at least max_n intrinsic rewards
+            return 1
 
-        # TODO is the logarithm the correct option, here?
-        return (np.log(n, dtype=np.float32) - min_log) / (max_log - min_log)
+        max_log = np.log(max_n, dtype=np.float32)
+        # min-max normalisation (with the min_log == 0)
+        return np.log(n, dtype=np.float32) / max_log

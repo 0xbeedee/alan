@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Sequence, Self, Any
+from typing import Sequence, Self, Any, Tuple
 from core.types import ObsActNextBatchProtocol, ObservationNetProtocol
 
 import torch
@@ -57,7 +57,10 @@ class ICM(IntrinsicCuriosityModule):
         # no need torch.no_grad() as SelfModel takes care of it
         forward_loss, _ = self._forward(batch)
 
-        intrinsic_reward = forward_loss * self.eta
+        # clip the reward to be in the [0, 1] range
+        # we do so to mainly to have the fast intrinsic reward play well with the slow intrinsic one
+        intrinsic_reward = torch.clamp(forward_loss * self.eta, min=0.0, max=1.0)
+
         return intrinsic_reward.cpu().numpy().astype(np.float32)
 
     def learn(self, batch: ObsActNextBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
@@ -76,7 +79,9 @@ class ICM(IntrinsicCuriosityModule):
             icm_inverse_loss=inverse_loss.item(),
         )
 
-    def _forward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
+    def _forward(
+        self, batch: ObsActNextBatchProtocol
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
         batch_obs = to_torch(batch.obs, device=self.device)
         batch_obs_next = to_torch(batch.obs_next, device=self.device)

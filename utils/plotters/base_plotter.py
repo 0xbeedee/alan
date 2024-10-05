@@ -71,7 +71,11 @@ class BasePlotter:
                 colours[idx],
             )
 
-        ax.set_title("Returns" if returns_type == "returns" else "Intrinsic Returns")
+        ax.set_title(
+            "Mean "
+            + ("Extrinsic" if returns_type == "returns" else "Intrinsic")
+            + " Returns"
+        )
         ax.set_ylabel("Test Returns")
         ax2.set_ylabel("Train Returns")
 
@@ -89,7 +93,7 @@ class BasePlotter:
 
         box_positions = np.arange(1, len(self.epochs) + 1)
         ax.boxplot(intra_returns, positions=box_positions)
-        ax.set_title(f"Intra-episodic {data_type.capitalize()} Returns")
+        ax.set_title(f"Intra-epoch {data_type.capitalize()} Returns")
         ax.set_ylabel("Returns")
         self._set_consistent_x_axis(ax)
 

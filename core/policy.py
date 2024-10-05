@@ -41,7 +41,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
-        beta0: float = 0.314,
+        beta: float = 0.314,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(
@@ -53,25 +53,8 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         )
         self.self_model = self_model.to(device)
         self.env_model = env_model
-        self._beta = beta0
+        self.beta = beta
         self.device = device
-
-    @property
-    def beta(self) -> float:
-        return self._beta
-
-    @beta.setter
-    def beta(self, value: float) -> None:
-        if value <= 0:
-            raise ValueError("the beta parameter must be greater than zero.")
-        self._beta = value
-
-    def get_beta(self) -> float:
-        """A getter method for the beta parameter.
-
-        Override this method in subclasses to implement custom beta calculation logic.
-        """
-        return self.beta
 
     def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
         """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value, in place.
@@ -81,7 +64,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In our case, we modify the batch (and, specifically, the "rew" entry), and we add an additional entry to keep track of the original reward.
         """
         batch.original_rew = batch.rew.copy()
-        batch.rew += self.get_beta() * batch.int_rew
+        batch.rew += self.beta * batch.int_rew
 
     def combine_slow_reward_(self, indices: np.ndarray) -> np.ndarray:
         """Combines the slow intrinsic reward and the extrinsic reward into a single scalar value, in place.
@@ -98,7 +81,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
     ) -> ActBatchProtocol | ActStateBatchProtocol:
-        """Compute action over the given batch of data.
+        """Computes the action given a batch of data.
 
         The default implementation simply selects the latent goal. It must be overridden.
 
@@ -167,9 +150,9 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         buffer: GoalReplayBufferProtocol,
         indices: np.ndarray,
     ) -> None:
-        """Post-process the data from the provided replay buffer."""
-        # we do not check for existence of original_rew because we're guaranteed to have it
+        """Post-processes the data from the provided replay buffer."""
         super().post_process_fn(batch, buffer, indices)
+        # we do not check for existence of original_rew because we're guaranteed to have it
         batch.rew = batch.original_rew
         del batch.original_rew
 

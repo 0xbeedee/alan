@@ -106,10 +106,3 @@ class ICM(IntrinsicCuriosityModule):
         """Predicts the action taken, given the feature representations of the currnt state and the next one."""
         act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
         return F.cross_entropy(act_hat, actions)
-
-    def to(self, device: torch.device) -> Self:
-        self.device = device
-        self.feature_net = self.feature_net.to(device)
-        self.forward_model = self.forward_model.to(device)
-        self.inverse_model = self.inverse_model.to(device)
-        return super().to(device)

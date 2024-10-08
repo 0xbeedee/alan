@@ -96,12 +96,14 @@ class ICM(IntrinsicCuriosityModule):
     def _forward_dynamics(
         self, phi1: torch.Tensor, actions: torch.Tensor
     ) -> torch.Tensor:
+        """Predicts the feature representation (i.e., latent vector) of the next state, given the latent representation of the current state and the action."""
         one_hot_actions = F.one_hot(actions, num_classes=self.action_dim)
         return self.forward_model(torch.cat([phi1, one_hot_actions], dim=1))
 
     def _inverse_dynamics(
         self, phi1: torch.Tensor, phi2: torch.Tensor, actions: torch.Tensor
     ) -> torch.Tensor:
+        """Predicts the action taken, given the feature representations of the currnt state and the next one."""
         act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
         return F.cross_entropy(act_hat, actions)
 

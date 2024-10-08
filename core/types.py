@@ -99,6 +99,14 @@ class GoalReplayBufferProtocol(Protocol[RB]):
     ) -> GoalBatchProtocol: ...
 
 
+# TODO
+class FastIntrinsicModuleProtocol(Protocol): ...
+
+
+# TODO
+class SlowIntrinsicModuleProtocol(Protocol): ...
+
+
 class SelfModelProtocol(Protocol):
     obs_net: ObservationNetProtocol
     buffer: GoalReplayBufferProtocol

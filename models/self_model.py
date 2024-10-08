@@ -4,12 +4,13 @@ from core.types import (
     GoalBatchProtocol,
     ObservationNetProtocol,
     ObsActNextBatchProtocol,
+    FastIntrinsicModuleProtocol,
+    SlowIntrinsicModuleProtocol,
 )
 
 from tianshou.policy.base import TrainingStats
-import torch
-from torch import nn
 import numpy as np
+import torch
 
 
 class SelfModel:
@@ -21,8 +22,8 @@ class SelfModel:
     def __init__(
         self,
         obs_net: ObservationNetProtocol,
-        fast_intrinsic_module: nn.Module,
-        slow_intrinsic_module: nn.Module,
+        fast_intrinsic_module: FastIntrinsicModuleProtocol,
+        slow_intrinsic_module: SlowIntrinsicModuleProtocol,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         self.obs_net = obs_net.to(device)
@@ -69,6 +70,7 @@ class SelfModel:
         # TODO
         pass
 
+    # TODO because SelfModel is not a neural network, I might want to reconsider this to, simply ensuring that the device handling happens transparently (like in the ICM case)
     def to(self, device: torch.device) -> Self:
         self.device = device
         self.obs_net = self.obs_net.to(self.device)

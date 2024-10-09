@@ -1,4 +1,4 @@
-from typing import Self, Any
+from typing import Any
 from tianshou.data.types import ObsBatchProtocol
 from core.types import (
     GoalBatchProtocol,
@@ -69,11 +69,3 @@ class SelfModel:
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
         # TODO
         pass
-
-    # TODO because SelfModel is not a neural network, I might want to reconsider this to, simply ensuring that the device handling happens transparently (like in the ICM case)
-    def to(self, device: torch.device) -> Self:
-        self.device = device
-        self.obs_net = self.obs_net.to(self.device)
-        self.fast_intrinsic_module = self.fast_intrinsic_module.to(self.device)
-        # we don't move self.slow_intrinsic_module as it typically doesn't contain tensors
-        return self

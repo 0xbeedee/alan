@@ -1,6 +1,8 @@
 from typing import Dict, Tuple
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
+from tianshou.data import SequenceSummaryStats
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -13,14 +15,16 @@ from .utils import gmm_loss
 
 
 class MDNRNNTrainer:
-    """Trainer class for the MDNRNN model."""
+    """Trainer class for the MDNRNN model.
+
+    Adapted from https://github.com/ctallec/world-models/blob/master/trainmdrnn.py."""
 
     def __init__(
         self,
         obs_net: ObservationNetProtocol,
         mdnrnn: nn.Module,
         vae: nn.Module,
-        include_reward: bool = False,
+        # TODO this should be passed as input to the envmodel, probably
         batch_size: int = 5,
         learning_rate: float = 1e-3,
         alpha: float = 0.9,
@@ -38,43 +42,35 @@ class MDNRNNTrainer:
             self.optimizer, "min", factor=0.5, patience=5
         )
 
-        self.include_reward = include_reward
         self.batch_size = batch_size
         self.device = device
 
     def train(self, data: GoalBatchProtocol | GoalReplayBufferProtocol):
-        """Trains the MDNRNN model."""
+        """Trains the MDNRNN model for one epoch."""
         # train for one epoch only because we expect to accumulate plenty of data over the agent's lifetime
-        self._data_pass(data, train=True)
-        val_loss = self._data_pass(data, train=False)
-        # TODO only update the scheduler on test data
-        self.scheduler.step(val_loss)
+        losses_summary, gmm_losses_summary, bce_losses_summary, mse_losses_summary = (
+            self._data_pass(data)
+        )
+        self.scheduler.step(losses_summary.mean)
+        return (
+            losses_summary,
+            gmm_losses_summary,
+            bce_losses_summary,
+            mse_losses_summary,
+        )
 
     def _data_pass(
         self,
         data: GoalBatchProtocol | GoalReplayBufferProtocol,
-        train: bool = True,
     ) -> float:
         """Performs one pass through the data."""
-        if train:
-            self.mdnrnn.train()
-        else:
-            self.mdnrnn.eval()
-
-        cum_loss = 0.0
-        cum_gmm = 0.0
-        cum_bce = 0.0
-        cum_mse = 0.0
-        total_samples = 0
-
         total_samples = len(data)
         num_batches = (total_samples + self.batch_size - 1) // self.batch_size
 
-        # TODO this works for testing case, not for the learn() case, in which we only get ONE batch
+        losses, gmm_losses, bce_losses, mse_losses = [], [], [], []
         for i in range(num_batches):
             start_idx = i * self.batch_size
             end_idx = min(start_idx + self.batch_size, total_samples)
-
             batch_indices = np.arange(start_idx, end_idx)
             batch = data[batch_indices]
 
@@ -84,36 +80,28 @@ class MDNRNNTrainer:
             rew_batch = torch.as_tensor(batch.rew, device=self.device)
             done_batch = torch.as_tensor(batch.done, device=self.device)
 
-            # Process observations to latent space
             latent_obs, latent_obs_next = self._to_latent(obs_batch, obs_next_batch)
 
-            # Proceed with the rest of the code
-            if train:
-                self.optimizer.zero_grad()
-                losses = self._get_loss(
-                    latent_obs, act_batch, rew_batch, done_batch, latent_obs_next
-                )
-                losses["loss"].backward()
-                self.optimizer.step()
-            else:
-                with torch.no_grad():
-                    losses = self._get_loss(
-                        latent_obs, act_batch, rew_batch, done_batch, latent_obs_next
-                    )
-
-            batch_size_actual = act_batch.size(0)
-            cum_loss += losses["loss"].item() * batch_size_actual
-            cum_gmm += losses["gmm"].item() * batch_size_actual
-            cum_bce += losses["bce"].item() * batch_size_actual
-            cum_mse += (
-                losses["mse"].item() * batch_size_actual
-                if isinstance(losses["mse"], torch.Tensor)
-                else losses["mse"] * batch_size_actual
+            self.optimizer.zero_grad()
+            loss_dict = self._get_loss(
+                latent_obs, act_batch, rew_batch, done_batch, latent_obs_next
             )
-            total_samples += batch_size_actual
+            loss_dict["loss"].backward()
+            losses.append(loss_dict["loss"].item())
+            gmm_losses.append(loss_dict["gmm"].item())
+            bce_losses.append(loss_dict["bce"].item())
+            mse_losses.append(loss_dict["mse"].item())
 
-        avg_loss = cum_loss / total_samples
-        return avg_loss
+        losses_summary = SequenceSummaryStats.from_sequence(losses)
+        gmm_losses_summary = SequenceSummaryStats.from_sequence(gmm_losses)
+        bce_losses_summary = SequenceSummaryStats.from_sequence(bce_losses)
+        mse_losses_summary = SequenceSummaryStats.from_sequence(mse_losses)
+        return (
+            losses_summary,
+            gmm_losses_summary,
+            bce_losses_summary,
+            mse_losses_summary,
+        )
 
     @torch.no_grad()
     def _to_latent(
@@ -145,12 +133,8 @@ class MDNRNNTrainer:
         bce = F.binary_cross_entropy_with_logits(ds, terminal.float())
 
         latent_size = latent_obs.shape[1]
-        if self.include_reward:
-            mse = F.mse_loss(rs, reward)
-            scale = latent_size + 2
-        else:
-            mse = torch.tensor(0.0, device=self.device)
-            scale = latent_size + 1
+        mse = F.mse_loss(rs, reward)
+        scale = latent_size + 2
 
         loss = (gmm + bce + mse) / scale
         return {"gmm": gmm, "bce": bce, "mse": mse, "loss": loss}

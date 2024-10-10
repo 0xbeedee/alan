@@ -1,6 +1,8 @@
 from typing import Dict, Union
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
+from tianshou.data import SequenceSummaryStats
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -36,24 +38,19 @@ class VAETrainer:
 
     def train(self, data: Union[GoalBatchProtocol, GoalReplayBufferProtocol]):
         """Trains the VAE model for one epoch."""
-        self._data_pass(data, train=True)
-        # TODO possibly calculate val loss async? maybe at update() time or something? (same for mdnrnn)
-        val_loss = self._data_pass(data, train=False)
-        # TODO only update scheduler on test data
-        self.scheduler.step(val_loss)
+        losses_summary = self._data_pass(data)
+        self.scheduler.step(losses_summary.mean)
+        return losses_summary
 
     def _data_pass(
         self,
         data: Union[GoalBatchProtocol, GoalReplayBufferProtocol],
-        train: bool = True,
-    ) -> float:
+    ) -> SequenceSummaryStats:
         """Performs one pass through the data."""
-        self.vae.train() if train else self.vae.eval()
-
         total_samples = len(data)
         num_batches = (total_samples + self.batch_size - 1) // self.batch_size
 
-        cum_loss = 0.0
+        losses = []
         for i in range(num_batches):
             start_idx = i * self.batch_size
             end_idx = min(start_idx + self.batch_size, total_samples)
@@ -63,21 +60,13 @@ class VAETrainer:
             obs_batch = batch.obs
             inputs = self.obs_net(obs_batch).to(self.device)
 
-            if train:
-                self.optimizer.zero_grad()
-                loss = self._get_loss(inputs)
-                loss.backward()
-                self.optimizer.step()
-            else:
-                with torch.no_grad():
-                    loss = self._get_loss(inputs)
+            self.optimizer.zero_grad()
+            loss = self._get_loss(inputs)
+            loss.backward()
+            self.optimizer.step()
+            losses.append(loss.item())
 
-            batch_size_actual = inputs.size(0)
-            cum_loss += loss.item() * batch_size_actual
-            total_samples += batch_size_actual
-
-        avg_loss = cum_loss / total_samples
-        return avg_loss
+        return SequenceSummaryStats.from_sequence(losses)
 
     def _get_loss(self, inputs: torch.Tensor) -> Dict[str, torch.Tensor]:
         """Computes the VAE loss."""

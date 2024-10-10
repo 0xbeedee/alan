@@ -324,7 +324,7 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
         """Performs one on-policy update by passing the entire buffer to the policy's update method."""
         assert self.train_collector is not None
         training_stat = self.policy.update(
-            sample_size=0,
+            sample_size=None,  # use the whole buffer
             buffer=self.train_collector.buffer,
             batch_size=self.batch_size,
             repeat=self.repeat_per_collect,

@@ -1,4 +1,3 @@
-from ast import Del
 from typing import Tuple, Union
 
 import gymnasium as gym
@@ -20,6 +19,7 @@ from networks import (
     SimpleNetHackCritic,
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, HER
+from models import VAE, MDNRNN
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (
@@ -80,6 +80,7 @@ class ExperimentFactory:
         device: torch.device,
     ):
         fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM, "delta_icm": DeltaICM}
+        # TODO might be a good idea to have a zero_her type option, to experiment with ablating the HER component
         slow_intrinsic_map = {"her": HER}
 
         fast_intrinsic_class = fast_intrinsic_map[
@@ -101,6 +102,21 @@ class ExperimentFactory:
         )
 
         return fast_intrinsic_module, slow_intrinsic_module
+
+    def create_vae_mdnrnn(
+        self, obs_net: nn.Module, device: torch.device
+    ) -> Tuple[nn.Module, nn.Module]:
+        vae = VAE(
+            input_size=obs_net.o_dim,
+            latent_size=self.config.get("model.latent_size"),
+            device=device,
+        )
+        mdnrnn = MDNRNN(
+            **self.config.get("model"),
+            device=device,
+        )
+
+        return vae, mdnrnn
 
     def create_actor_critic(
         self, obs_net: nn.Module, action_space: gym.Space, device: torch.device

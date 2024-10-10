@@ -21,7 +21,12 @@ REC_DIR = f"{ART_DIR}/recs"
 
 
 def setup_config(
-    base_config_path, env_config, policy_config, obsnet_config, intrinsic_config
+    base_config_path,
+    env_config,
+    policy_config,
+    obsnet_config,
+    intrinsic_config,
+    model_config,
 ):
     """Sets up and validate the configuration."""
     config = ConfigManager(base_config_path)
@@ -31,6 +36,7 @@ def setup_config(
             "policy": policy_config,
             "obsnet": obsnet_config,
             "intrinsic": intrinsic_config,
+            "model": model_config,
         }
     )
     return config
@@ -75,17 +81,20 @@ def setup_networks(factory, env, device):
 
 def setup_models(factory, obs_net, env, train_buf, device):
     """Sets up the environment and self models."""
+    vae, mdnrnn = factory.create_vae_mdnrnn(obs_net, device)
+    # TODO this only works with nethack for now, what about other envs?
+    env_model = EnvModel(obs_net, vae, mdnrnn, device)
+
     fast_intrinsic_module, slow_intrinsic_module = factory.create_intrinsic_modules(
         obs_net, env.action_space, train_buf, device
     )
-
-    env_model = EnvModel()
     self_model = SelfModel(
         obs_net,
         fast_intrinsic_module,
         slow_intrinsic_module,
         device=device,
     )
+
     return env_model, self_model
 
 
@@ -205,15 +214,21 @@ def _make_save_path(
 
 
 def main(
-    base_config_path: str,
-    env_config: str,
-    policy_config: str,
-    obsnet_config: str,
-    intrinsic_config: str,
-    device: torch.device,
-) -> None:
+    base_config_path,
+    env_config,
+    policy_config,
+    obsnet_config,
+    intrinsic_config,
+    model_config,
+    device,
+):
     config = setup_config(
-        base_config_path, env_config, policy_config, obsnet_config, intrinsic_config
+        base_config_path,
+        env_config,
+        policy_config,
+        obsnet_config,
+        intrinsic_config,
+        model_config,
     )
     factory = ExperimentFactory(config)
 
@@ -247,6 +262,7 @@ def main(
     combined_params = set(list(actor_net.parameters()) + list(critic_net.parameters()))
     optimizer = torch.optim.Adam(combined_params, lr=lr)
 
+    # TODO my policy currently doesn't take time into account at all! (in the original IMPALA implementation by the NLE team, they used an LSTM)
     policy = setup_policy(
         factory, self_model, env_model, actor_net, critic_net, optimizer, env, device
     )
@@ -298,7 +314,7 @@ if __name__ == "__main__":
             """
     )
 
-    # the config needs to be passed as a full path because we need to extract the path to the config dir from it (that is what allows us to pass the rest of the arguments by name and not path)
+    # pass config as full path to extract the path to the config dir (that is what allows us to pass the rest of the arguments by name and not path)
     parser.add_argument(
         "-c",
         "--config",
@@ -340,6 +356,14 @@ if __name__ == "__main__":
         metavar="INTRINSIC_CONFIG",
     )
     parser.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        required=True,
+        help="Name of the config file for the models (without .yaml extension)",
+        metavar="MODEL_CONFIG",
+    )
+    parser.add_argument(
         "-d",
         "--device",
         type=str,
@@ -349,6 +373,12 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    device = torch.device(args.device)
-    main(args.config, args.env, args.policy, args.obsnet, args.intrinsic, device=device)
+    main(
+        args.config,
+        args.env,
+        args.policy,
+        args.obsnet,
+        args.intrinsic,
+        args.model,
+        torch.device(args.device),
+    )

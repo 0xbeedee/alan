@@ -51,7 +51,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
             action_bound_method=action_bound_method,
             lr_scheduler=lr_scheduler,
         )
-        self.self_model = self_model.to(device)
+        self.self_model = self_model
         self.env_model = env_model
         self.beta = beta
         self.device = device
@@ -130,6 +130,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         with torch_train_mode(self):
             policy_stats = self.learn(batch, **kwargs)
             self_model_stats = self.self_model.learn(batch, **kwargs)
+            env_model_stats = self.env_model.learn(batch, **kwargs)
         self.post_process_fn(batch, buffer, indices)
 
         if self.lr_scheduler is not None:
@@ -140,7 +141,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         return CoreTrainingStats(
             policy_stats=policy_stats,
             self_model_stats=self_model_stats,
-            env_model_stats=None,  # TODO
+            env_model_stats=env_model_stats,
             train_time=train_time,
         )
 
@@ -158,5 +159,4 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
     def to(self, device: torch.device) -> Self:
         self.device = device
-        self.self_model = self.self_model.to(device)
         return self

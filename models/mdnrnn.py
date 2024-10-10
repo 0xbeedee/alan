@@ -15,6 +15,7 @@ class MDNRNN(nn.Module):
 
     def __init__(
         self,
+        *,
         latent_size: int,
         action_size: int,
         hidden_size: int,
@@ -94,6 +95,7 @@ class MDNRNNCell(MDNRNN):
 
     def __init__(
         self,
+        *,
         latent_size: int,
         action_size: int,
         hidden_size: int,
@@ -157,5 +159,6 @@ class MDNRNNCell(MDNRNN):
         return mus, sigmas, logpi, r, d, next_hidden
 
     def to(self, device: torch.device) -> Self:
-        super().to(device)
-        return self
+        self.device = device
+        self.rnn = self.rnn.to(device)
+        return super().to(device)

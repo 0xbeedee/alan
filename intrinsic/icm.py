@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Sequence, Self, Any, Tuple
+from typing import Sequence, Any, Tuple
 from core.types import ObsActNextBatchProtocol, ObservationNetProtocol
 
 import torch
@@ -41,6 +41,9 @@ class ICM(IntrinsicCuriosityModule):
             device=device,
         )
         self.feature_net = self.feature_net.to(device)
+        # specifying the device above doesn't move them to the correct device
+        self.forward_model = self.forward_model.to(device)
+        self.inverse_model = self.inverse_model.to(device)
 
         # feature_net parameters not included because it's trained separately
         params = set(

@@ -97,9 +97,7 @@ def setup_models(factory, obs_net, env, train_buf, device):
     return env_model, self_model
 
 
-def setup_policy(
-    factory, self_model, env_model, actor_net, critic_net, optimizer, env, device
-):
+def setup_policy(factory, self_model, env_model, actor_net, critic_net, optimizer, env):
     """Sets up the policy."""
     return factory.create_policy(
         self_model,
@@ -110,7 +108,6 @@ def setup_policy(
         env.action_space,
         env.observation_space,
         False,  # no action scaling
-        device,
     )
 
 
@@ -251,6 +248,7 @@ def main(
     )
 
     print("[+] Setting up the networks...")
+    # TODO not all policies require all these networks => need more flexibility here
     obs_net, actor_net, critic_net = setup_networks(factory, env, device)
 
     print("[+] Setting up the models...")
@@ -263,7 +261,7 @@ def main(
 
     # TODO my policy currently doesn't take time into account at all! (in the original IMPALA implementation by the NLE team, they used an LSTM)
     policy = setup_policy(
-        factory, self_model, env_model, actor_net, critic_net, optimizer, env, device
+        factory, self_model, env_model, actor_net, critic_net, optimizer, env
     )
 
     print("[+] Setting up the collector...")
@@ -276,9 +274,7 @@ def main(
         env_name, policy_config, obsnet_config, intrinsic_config, factory.is_goal_aware
     )
 
-    trainer = factory.create_trainer(
-        policy, train_collector, test_collector, logger, device
-    )
+    trainer = factory.create_trainer(policy, train_collector, test_collector, logger)
 
     print("\n[+] Running the experiment...")
     epoch_stats = run_experiment(trainer)

@@ -1,4 +1,4 @@
-from typing import Literal, Any, Self
+from typing import Literal, Any
 
 from .types import (
     GoalReplayBufferProtocol,
@@ -17,7 +17,6 @@ from tianshou.policy import BasePolicy
 from tianshou.policy.base import TLearningRateScheduler
 from tianshou.utils.torch_utils import torch_train_mode
 
-import torch
 import gymnasium as gym
 import numpy as np
 import time
@@ -42,7 +41,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
         beta: float = 0.314,
-        device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(
             action_space=action_space,
@@ -54,7 +52,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.self_model = self_model
         self.env_model = env_model
         self.beta = beta
-        self.device = device
 
     def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
         """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value, in place.
@@ -156,7 +153,3 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # we do not check for existence of original_rew because we're guaranteed to have it
         batch.rew = batch.original_rew
         del batch.original_rew
-
-    def to(self, device: torch.device) -> Self:
-        self.device = device
-        return self

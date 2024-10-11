@@ -62,7 +62,6 @@ class GoalTrainer(BaseTrainer):
         verbose: bool = True,
         show_progress: bool = True,
         test_in_train: bool = True,
-        device: torch.device = torch.device("cpu"),
     ):
         super().__init__(
             policy,
@@ -89,8 +88,7 @@ class GoalTrainer(BaseTrainer):
             show_progress,
             test_in_train,
         )
-        self.policy = policy.to(device)
-        self.device = device
+        self.policy = policy
 
     def __next__(self) -> EpochStats:
         """Carries out one epoch."""
@@ -276,11 +274,6 @@ class GoalTrainer(BaseTrainer):
 
         return test_stat, stop_fn_flag
 
-    def to(self, device: torch.device) -> Self:
-        self.device = device
-        self.policy = self.policy.to(device)
-        return self
-
 
 class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
     """Offline trainer that works with goals. It samples mini-batches from buffer and passes them to policy.update().
@@ -289,9 +282,7 @@ class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
     """
 
     def __init__(self, *args, **kwargs):
-        device = kwargs.pop("device", torch.device("cpu"))
         super().__init__(*args, **kwargs)
-        self.to(device)
 
 
 class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):
@@ -301,9 +292,7 @@ class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):
     """
 
     def __init__(self, *args, **kwargs):
-        device = kwargs.pop("device", torch.device("cpu"))
         super().__init__(*args, **kwargs)
-        self.to(device)
 
 
 class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
@@ -313,9 +302,7 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
     """
 
     def __init__(self, *args, **kwargs):
-        device = kwargs.pop("device", torch.device("cpu"))
         super().__init__(*args, **kwargs)
-        self.to(device)
 
     def policy_update_fn(
         self,

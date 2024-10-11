@@ -143,7 +143,6 @@ class ExperimentFactory:
         action_space: gym.Space,
         observation_space: gym.Space,
         action_scaling: bool,
-        device: torch.device,
     ) -> Union[CorePolicy, BasePolicy]:
 
         policy_map = {
@@ -156,7 +155,6 @@ class ExperimentFactory:
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,
-                device=device,
             ),
             "ppo": lambda: PPOPolicy(
                 actor=act_net,
@@ -190,7 +188,6 @@ class ExperimentFactory:
         train_collector: Union[Collector, GoalCollector],
         test_collector: Union[Collector, GoalCollector],
         logger: TensorboardLogger,
-        device: torch.device,
         trainer_type: str = "onpolicy",
     ) -> Union[
         OnpolicyTrainer,
@@ -219,8 +216,7 @@ class ExperimentFactory:
             "logger": logger,
             **self.config.get("training", {}),
         }
-        if self.is_goal_aware:
-            common_kwargs["device"] = device
+
         if trainer_type != "offline":
             common_kwargs.update(
                 {

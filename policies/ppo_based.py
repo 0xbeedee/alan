@@ -42,7 +42,6 @@ class PPOBasedPolicy(CorePolicy):
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
-        device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(
             self_model=self_model,
@@ -52,12 +51,11 @@ class PPOBasedPolicy(CorePolicy):
             action_scaling=action_scaling,
             action_bound_method=action_bound_method,
             lr_scheduler=lr_scheduler,
-            device=device,
         )
 
         self.ppo_policy = PPOPolicy(
-            actor=act_net.to(device),
-            critic=critic_net.to(device),
+            actor=act_net,
+            critic=critic_net,
             optim=optim,
             action_space=action_space,
             # we can confidently hardcode these two because we intend to use NLE
@@ -66,7 +64,6 @@ class PPOBasedPolicy(CorePolicy):
         )
         # monkey patching is necessary for MPS compatibility
         self.ppo_policy._compute_returns = self._compute_returns
-        self.device = device
 
     def learn(
         self,
@@ -146,10 +143,3 @@ class PPOBasedPolicy(CorePolicy):
 
     def _dist_fn(self, logits: torch.Tensor):
         return torch.distributions.Categorical(logits=logits)
-
-    def to(self, device: torch.device) -> Self:
-        super().to(device)
-        self.device = device
-        self.ppo_policy.actor = self.ppo_policy.actor.to(device)
-        self.ppo_policy.critic = self.ppo_policy.critic.to(device)
-        return self

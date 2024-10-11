@@ -270,11 +270,12 @@ def main(
     )
 
     print("[+] Setting up the trainer...")
+    trainer = factory.create_trainer(policy, train_collector, test_collector, logger)
+
+    print("[+] Setting up the logger...")
     logger = setup_logger(
         env_name, policy_config, obsnet_config, intrinsic_config, factory.is_goal_aware
     )
-
-    trainer = factory.create_trainer(policy, train_collector, test_collector, logger)
 
     print("\n[+] Running the experiment...")
     epoch_stats = run_experiment(trainer)

@@ -13,7 +13,6 @@ from models import SelfModel, EnvModel
 from config import ConfigManager
 from utils.experiment import ExperimentFactory
 
-DEFAULT_DEVICE = "cpu"
 ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
 PLOT_DIR = f"{ART_DIR}/plots"
@@ -367,9 +366,10 @@ if __name__ == "__main__":
         "-d",
         "--device",
         type=str,
-        default=DEFAULT_DEVICE,
+        default="cpu",
         choices=["cpu", "cuda", "mps"],
         help="Device to run on",
+        metavar="DEVICE",
     )
 
     args = parser.parse_args()

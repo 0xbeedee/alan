@@ -296,10 +296,7 @@ class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):
 
 
 class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
-    """Onpolicy trainer that works with goals. It passes the entire buffer to policy.update() and resets it afterwards.
-
-    This implementation is the same as Tianshou's OnpolicyTrainer. This class exists for conceptual consistency.
-    """
+    """Onpolicy trainer that works with goals. It passes the entire buffer to policy.update() and resets it afterwards."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

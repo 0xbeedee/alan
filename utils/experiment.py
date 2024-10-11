@@ -77,6 +77,8 @@ class ExperimentFactory:
         obs_net: nn.Module,
         action_space: gym.Space,
         buf: GoalVectorReplayBuffer,
+        batch_size: int,
+        learning_rate: float,
         device: torch.device,
     ):
         fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM, "delta_icm": DeltaICM}
@@ -93,6 +95,8 @@ class ExperimentFactory:
         fast_intrinsic_module = fast_intrinsic_class(
             obs_net,
             action_space,
+            batch_size,
+            learning_rate,
             **self.config.get_except("intrinsic.fast", exclude="name"),
             device=device,
         )

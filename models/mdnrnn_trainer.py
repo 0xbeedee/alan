@@ -1,4 +1,6 @@
 from typing import Dict, Tuple
+
+from cv2 import merge
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -24,8 +26,7 @@ class MDNRNNTrainer:
         obs_net: ObservationNetProtocol,
         mdnrnn: nn.Module,
         vae: nn.Module,
-        # TODO this should be passed as input to the envmodel, probably
-        batch_size: int = 5,
+        batch_size: int,
         learning_rate: float = 1e-3,
         alpha: float = 0.9,
         device: torch.device = torch.device("cpu"),
@@ -64,16 +65,8 @@ class MDNRNNTrainer:
         data: GoalBatchProtocol | GoalReplayBufferProtocol,
     ) -> float:
         """Performs one pass through the data."""
-        total_samples = len(data)
-        num_batches = (total_samples + self.batch_size - 1) // self.batch_size
-
         losses, gmm_losses, bce_losses, mse_losses = [], [], [], []
-        for i in range(num_batches):
-            start_idx = i * self.batch_size
-            end_idx = min(start_idx + self.batch_size, total_samples)
-            batch_indices = np.arange(start_idx, end_idx)
-            batch = data[batch_indices]
-
+        for batch in data.split(self.batch_size, merge_last=True):
             obs_batch = batch.obs
             obs_next_batch = batch.obs_next
             act_batch = torch.as_tensor(batch.act, device=self.device)

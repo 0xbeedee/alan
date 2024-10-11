@@ -32,15 +32,25 @@ class EnvModel:
         obs_net: ObservationNetProtocol,
         vae: nn.Module,
         mdnrnn: nn.Module,
+        batch_size: int,
+        learning_rate: float = 1e-3,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         self.obs_net = obs_net.to(device)
         self.vae = vae.to(device)
         self.mdnrnn = mdnrnn.to(device)
 
-        self.vae_trainer = VAETrainer(obs_net, self.vae, device=device)
+        # TODO should remove the trainer init from the EnvModel and pass the instanced trainers, to have an API compatible with SelfModel
+        self.vae_trainer = VAETrainer(
+            obs_net, self.vae, batch_size, learning_rate=learning_rate, device=device
+        )
         self.mdnrnn_trainer = MDNRNNTrainer(
-            self.obs_net, self.mdnrnn, self.vae, device=device
+            self.obs_net,
+            self.mdnrnn,
+            self.vae,
+            batch_size,
+            learning_rate=learning_rate,
+            device=device,
         )
 
         self.device = device

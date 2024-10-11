@@ -78,14 +78,16 @@ def setup_networks(factory, env, device):
     return obs_net, actor_net, critic_net
 
 
-def setup_models(factory, obs_net, env, train_buf, device):
+def setup_models(factory, obs_net, env, train_buf, batch_size, learning_rate, device):
     """Sets up the environment and self models."""
     vae, mdnrnn = factory.create_vae_mdnrnn(obs_net, device)
     # TODO this only works with nethack for now, what about other envs?
-    env_model = EnvModel(obs_net, vae, mdnrnn, device)
+    env_model = EnvModel(
+        obs_net, vae, mdnrnn, batch_size, learning_rate=learning_rate, device=device
+    )
 
     fast_intrinsic_module, slow_intrinsic_module = factory.create_intrinsic_modules(
-        obs_net, env.action_space, train_buf, device
+        obs_net, env.action_space, train_buf, batch_size, learning_rate, device
     )
     self_model = SelfModel(
         obs_net,
@@ -251,13 +253,17 @@ def main(
     # TODO not all policies require all these networks => need more flexibility here
     obs_net, actor_net, critic_net = setup_networks(factory, env, device)
 
-    print("[+] Setting up the models...")
-    env_model, self_model = setup_models(factory, obs_net, env, train_buf, device)
-
     print("[+] Setting up the policy...")
     lr = config.get("policy.learning_rate")
     combined_params = set(list(actor_net.parameters()) + list(critic_net.parameters()))
     optimizer = torch.optim.Adam(combined_params, lr=lr)
+
+    print("[+] Setting up the models...")
+    # we use the same batch_size for both the models
+    batch_size = config.get("training.batch_size")
+    env_model, self_model = setup_models(
+        factory, obs_net, env, train_buf, batch_size, lr, device
+    )
 
     # TODO my policy currently doesn't take time into account at all! (in the original IMPALA implementation by the NLE team, they used an LSTM)
     policy = setup_policy(
@@ -269,13 +275,13 @@ def main(
         factory, policy, train_envs, test_envs, train_buf, test_buf
     )
 
-    print("[+] Setting up the trainer...")
-    trainer = factory.create_trainer(policy, train_collector, test_collector, logger)
-
     print("[+] Setting up the logger...")
     logger = setup_logger(
         env_name, policy_config, obsnet_config, intrinsic_config, factory.is_goal_aware
     )
+
+    print("[+] Setting up the trainer...")
+    trainer = factory.create_trainer(policy, train_collector, test_collector, logger)
 
     print("\n[+] Running the experiment...")
     epoch_stats = run_experiment(trainer)

@@ -20,10 +20,11 @@ class VAETrainer:
         self,
         obs_net: ObservationNetProtocol,
         vae: nn.Module,
-        batch_size: int = 5,
+        # TODO batch handling is all wrong, for ALL the models!!
+        batch_size: int,
         learning_rate: float = 1e-3,
         device: torch.device = torch.device("cpu"),
-    ):
+    ) -> None:
         # all are moved to the correct device by the environment model
         self.obs_net = obs_net
         self.vae = vae
@@ -36,7 +37,7 @@ class VAETrainer:
         self.batch_size = batch_size
         self.device = device
 
-    def train(self, data: Union[GoalBatchProtocol, GoalReplayBufferProtocol]):
+    def train(self, data: GoalBatchProtocol) -> SequenceSummaryStats:
         """Trains the VAE model for one epoch."""
         losses_summary = self._data_pass(data)
         self.scheduler.step(losses_summary.mean)
@@ -44,19 +45,11 @@ class VAETrainer:
 
     def _data_pass(
         self,
-        data: Union[GoalBatchProtocol, GoalReplayBufferProtocol],
+        data: GoalBatchProtocol,
     ) -> SequenceSummaryStats:
         """Performs one pass through the data."""
-        total_samples = len(data)
-        num_batches = (total_samples + self.batch_size - 1) // self.batch_size
-
         losses = []
-        for i in range(num_batches):
-            start_idx = i * self.batch_size
-            end_idx = min(start_idx + self.batch_size, total_samples)
-            batch_indices = np.arange(start_idx, end_idx)
-            batch = data[batch_indices]
-
+        for batch in data.split(self.batch_size, merge_last=True):
             obs_batch = batch.obs
             inputs = self.obs_net(obs_batch).to(self.device)
 

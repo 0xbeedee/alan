@@ -1,5 +1,7 @@
 from typing import Any
-from core.types import ObsActNextBatchProtocol
+from core.types import GoalBatchProtocol, ObsActNextBatchProtocol
+
+from tianshou.data import SequenceSummaryStats
 
 import numpy as np
 
@@ -17,9 +19,9 @@ class ZeroICM(ICM):
     def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
         return np.zeros_like(batch.act)
 
-    def learn(self, batch: ObsActNextBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
+    def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
         return ICMTrainingStats(
-            icm_loss=0.0,
-            icm_forward_loss=0.0,
-            icm_inverse_loss=0.0,
+            icm_loss=SequenceSummaryStats.from_sequence([0.0]),
+            icm_forward_loss=SequenceSummaryStats.from_sequence([0.0]),
+            icm_inverse_loss=SequenceSummaryStats.from_sequence([0.0]),
         )

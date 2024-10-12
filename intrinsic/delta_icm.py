@@ -19,6 +19,8 @@ class DeltaICM(ICM):
         self,
         obs_net: ObservationNetProtocol,
         action_space: gym.Space,
+        batch_size: int,
+        learning_rate: float = 1e-3,
         hidden_sizes: Sequence[int] = [256, 128, 64],
         beta: float = 0.2,
         eta: float = 0.07,
@@ -27,6 +29,8 @@ class DeltaICM(ICM):
         super().__init__(
             obs_net=obs_net,
             action_space=action_space,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
             hidden_sizes=hidden_sizes,
             beta=beta,
             eta=eta,

@@ -2,11 +2,11 @@ from dataclasses import dataclass
 from typing import Sequence, Any, Tuple
 from core.types import (
     ObsActNextBatchProtocol,
-    ObservationNetProtocol,
     GoalBatchProtocol,
 )
 
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 import numpy as np
@@ -30,7 +30,7 @@ class ICM(IntrinsicCuriosityModule):
 
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         action_space: gym.Space,
         batch_size: int,
         learning_rate: float = 1e-3,

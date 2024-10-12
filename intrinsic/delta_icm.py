@@ -1,7 +1,8 @@
 from typing import Sequence
-from core.types import ObsActNextBatchProtocol, ObservationNetProtocol
+from core.types import ObsActNextBatchProtocol
 
 import torch
+from torch import nn
 import numpy as np
 import gymnasium as gym
 
@@ -17,7 +18,7 @@ class DeltaICM(ICM):
 
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         action_space: gym.Space,
         batch_size: int,
         learning_rate: float = 1e-3,

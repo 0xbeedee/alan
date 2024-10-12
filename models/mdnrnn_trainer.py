@@ -8,7 +8,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from core.types import ObservationNetProtocol
 from tianshou.data import Batch
 
 from .utils import gmm_loss
@@ -21,7 +20,7 @@ class MDNRNNTrainer:
 
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         mdnrnn: nn.Module,
         vae: nn.Module,
         batch_size: int,

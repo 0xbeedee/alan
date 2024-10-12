@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Self
 from tianshou.data.types import ObsBatchProtocol
-from core.types import GoalBatchProtocol, ObservationNetProtocol
+from core.types import GoalBatchProtocol
 import gymnasium as gym
 from torch import nn
 import torch
@@ -9,7 +9,7 @@ import torch
 class SimpleNetHackActor(nn.Module):
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         action_space: gym.Space,
         device: torch.device = torch.device("cpu"),
     ):
@@ -39,7 +39,7 @@ class SimpleNetHackActor(nn.Module):
 class GoalNetHackActor(SimpleNetHackActor):
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         action_space: gym.Space,
         device: torch.device = torch.device("cpu"),
     ):
@@ -80,7 +80,7 @@ class GoalNetHackActor(SimpleNetHackActor):
 class SimpleNetHackCritic(nn.Module):
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         device: torch.device = torch.device("cpu"),
     ):
         super().__init__()
@@ -108,7 +108,7 @@ class SimpleNetHackCritic(nn.Module):
 class GoalNetHackCritic(SimpleNetHackCritic):
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         device: torch.device = torch.device("cpu"),
     ):
         super().__init__(obs_net, device)

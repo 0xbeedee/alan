@@ -71,7 +71,6 @@ class ExperimentFactory:
             device=device,
         )
 
-    # TODO the obs_net type is too generic? => it contrasts with the ICM type, which, as it is written, would only accept NetHackObsNets and similar
     def create_intrinsic_modules(
         self,
         obs_net: nn.Module,

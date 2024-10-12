@@ -1,7 +1,6 @@
 from typing import Any
 from core.types import (
     GoalBatchProtocol,
-    ObservationNetProtocol,
     GoalReplayBufferProtocol,
 )
 
@@ -29,7 +28,7 @@ class EnvModelStats(TrainingStats):
 class EnvModel:
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         vae: nn.Module,
         mdnrnn: nn.Module,
         batch_size: int,

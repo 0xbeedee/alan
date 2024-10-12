@@ -72,21 +72,6 @@ class GoalBatchProtocol(IntrinsicBatchProtocol, Protocol):
     latent_goal_next: np.ndarray
 
 
-# this type should come in handy if I want to experiment with different observation net architectures
-class ObservationNetProtocol(Protocol):
-    def __init__(
-        self,
-        observation_space: gym.Space,
-        embedding_dim: int = 32,
-        crop_dim: int = 9,
-        num_layers: int = 5,
-    ) -> None: ...
-
-    def forward(
-        self, env_out_batch: Dict[str, torch.Tensor | np.ndarray]
-    ) -> torch.Tensor: ...
-
-
 RB = TypeVar("RB", bound=ReplayBuffer)
 
 
@@ -108,13 +93,13 @@ class SlowIntrinsicModuleProtocol(Protocol): ...
 
 
 class SelfModelProtocol(Protocol):
-    obs_net: ObservationNetProtocol
+    obs_net: nn.Module
     buffer: GoalReplayBufferProtocol
     intrinsic_module: nn.Module
 
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         action_space: gym.Space,
         buffer: GoalReplayBufferProtocol,
         intrinsic_module: nn.Module,

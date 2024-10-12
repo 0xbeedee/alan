@@ -2,7 +2,6 @@ from typing import Any
 from tianshou.data.types import ObsBatchProtocol
 from core.types import (
     GoalBatchProtocol,
-    ObservationNetProtocol,
     ObsActNextBatchProtocol,
     FastIntrinsicModuleProtocol,
     SlowIntrinsicModuleProtocol,
@@ -11,6 +10,7 @@ from core.types import (
 from tianshou.policy.base import TrainingStats
 import numpy as np
 import torch
+from torch import nn
 
 
 class SelfModel:
@@ -21,7 +21,7 @@ class SelfModel:
 
     def __init__(
         self,
-        obs_net: ObservationNetProtocol,
+        obs_net: nn.Module,
         fast_intrinsic_module: FastIntrinsicModuleProtocol,
         slow_intrinsic_module: SlowIntrinsicModuleProtocol,
         device: torch.device = torch.device("cpu"),

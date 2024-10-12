@@ -21,7 +21,7 @@ from tianshou.data import (
     CollectStats,
     EpochStats,
 )
-from tianshou.data.batch import BatchProtocol, TArr
+from tianshou.data.batch import BatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
@@ -29,17 +29,14 @@ from tianshou.policy.base import (
     TrainingStats,
 )
 from tianshou.trainer.base import BaseTrainer
-from tianshou.utils import BaseLogger, LazyLogger
+from tianshou.utils import BaseLogger
 
 import torch
 from torch import nn
 import numpy as np
 import gymnasium as gym
 
-# TODO a few types in this file need to be updated
-# TODO there might be a few places where I'm supposed to use types in this file, but I don't!
-
-TArrLike = TypeVar("TArrLike", np.ndarray, torch.Tensor, Batch, None)
+TArrLike = Union[np.ndarray, torch.Tensor, Batch, None]
 
 
 class ObsActNextBatchProtocol(BatchProtocol, Protocol):
@@ -48,9 +45,9 @@ class ObsActNextBatchProtocol(BatchProtocol, Protocol):
     Usually used by the intrinsic module and obtained from the Collector.
     """
 
-    obs: TArr | BatchProtocol
-    act: TArr
-    obs_next: TArr | BatchProtocol
+    obs: Union[TArrLike, BatchProtocol]
+    act: np.ndarray
+    obs_next: Union[TArrLike, BatchProtocol]
 
 
 class IntrinsicBatchProtocol(RolloutBatchProtocol, Protocol):
@@ -65,7 +62,7 @@ class IntrinsicBatchProtocol(RolloutBatchProtocol, Protocol):
 class GoalBatchProtocol(IntrinsicBatchProtocol, Protocol):
     """An IntrinsicBatchProtocol with latent goals for the current and the next observation.
 
-    Usually obtained form sampling a GoalReplayBuffer.
+    Usually obtained from sampling a GoalReplayBuffer.
     """
 
     latent_goal: np.ndarray
@@ -84,47 +81,65 @@ class GoalReplayBufferProtocol(Protocol[RB]):
     ) -> GoalBatchProtocol: ...
 
 
-# TODO
-class FastIntrinsicModuleProtocol(Protocol): ...
+class FastIntrinsicModuleProtocol(Protocol):
+    def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray: ...
+    def learn(self, data: GoalBatchProtocol, **kwargs: Any) -> TrainingStats: ...
 
 
-# TODO
-class SlowIntrinsicModuleProtocol(Protocol): ...
+class SlowIntrinsicModuleProtocol(Protocol):
+    def get_future_observation_(self, indices: np.ndarray) -> Batch: ...
+    def rewrite_transitions_(self, future_achieved_goal: np.ndarray) -> None: ...
 
 
 class SelfModelProtocol(Protocol):
     obs_net: nn.Module
-    buffer: GoalReplayBufferProtocol
-    intrinsic_module: nn.Module
+    fast_intrinsic_module: FastIntrinsicModuleProtocol
+    slow_intrinsic_module: SlowIntrinsicModuleProtocol
 
     def __init__(
         self,
         obs_net: nn.Module,
-        action_space: gym.Space,
-        buffer: GoalReplayBufferProtocol,
-        intrinsic_module: nn.Module,
-        her_horizon: int,
+        fast_intrinsic_module: FastIntrinsicModuleProtocol,
+        slow_intrinsic_module: SlowIntrinsicModuleProtocol,
+        device: torch.device,
     ) -> None: ...
 
     @torch.no_grad()
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor: ...
 
-    @torch.no_grad()
-    def fast_intrinsic_reward(
-        self, obs: TArrLike, act: np.ndarray, obs_next: TArrLike
-    ) -> np.ndarray: ...
+    @torch.no_grad
+    def fast_intrinsic_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray: ...
 
     @torch.no_grad()
-    def slow_intrinsic_reward_(self, batch_size: int) -> np.ndarray: ...
+    def slow_intrinsic_reward_(self, indices: np.ndarray) -> np.ndarray: ...
+
+    def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> TrainingStats: ...
 
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False) -> None: ...
 
 
-# TODO
-class EnvModelProtocol(Protocol): ...
+class EnvModelProtocol(Protocol):
+    obs_net: nn.Module
+    vae: nn.Module
+    mdnrnn: nn.Module
+    device: torch.device
+
+    def __init__(
+        self,
+        obs_net: nn.Module,
+        vae: nn.Module,
+        mdnrnn: nn.Module,
+        batch_size: int,
+        learning_rate: float,
+        device: torch.device = torch.device("cpu"),
+    ) -> None: ...
+
+    def learn(
+        self, data: Union[GoalBatchProtocol, GoalReplayBufferProtocol], **kwargs: Any
+    ) -> TrainingStats: ...
 
 
-TW = TypeVar("TS", bound=TrainingStatsWrapper)
+TW = TypeVar("TW", bound=TrainingStatsWrapper)
 
 
 class CoreTrainingStatsProtocol(Protocol[TW]):
@@ -138,7 +153,6 @@ BP = TypeVar("BP", bound=BasePolicy[TS])
 class CorePolicyProtocol(Protocol[BP]):
     self_model: SelfModelProtocol
     env_model: EnvModelProtocol
-    _beta: float
 
     def __init__(
         self,
@@ -150,7 +164,7 @@ class CorePolicyProtocol(Protocol[BP]):
         action_scaling: bool = False,
         action_bound_method: Optional[Literal["clip", "tanh"]] = "clip",
         lr_scheduler: Optional[TLearningRateScheduler] = None,
-        beta0: float = 0.314,
+        beta: float,
     ) -> None: ...
 
     @property
@@ -194,10 +208,10 @@ class GoalCollectStatsProtocol(Protocol[CS]):
         returns: np.ndarray,
         int_returns: np.ndarray,
         lens: np.ndarray,
-        n_collected_episodes: int = 0,
-        n_collected_steps: int = 0,
-        collect_time: float = 0.0,
-        collect_speed: float = 0.0,
+        n_collected_episodes: int,
+        n_collected_steps: int,
+        collect_time: float,
+        collect_speed: float,
     ) -> "GoalCollectStatsProtocol": ...
 
 
@@ -212,11 +226,11 @@ class GoalCollectorProtocol(Protocol):
 
     def _collect(
         self,
-        n_step: Optional[int] = None,
-        n_episode: Optional[int] = None,
-        random: bool = False,
-        render: Optional[float] = None,
-        gym_reset_kwargs: Optional[Dict[str, Any]] = None,
+        n_step: Optional[int],
+        n_episode: Optional[int],
+        random: bool,
+        render: Optional[float],
+        gym_reset_kwargs: Optional[Dict[str, Any]],
     ) -> GoalCollectStatsProtocol: ...
 
     def _compute_action_policy_hidden(
@@ -240,26 +254,26 @@ class GoalTrainerProtocol(Protocol[BT]):
         policy: CorePolicyProtocol,
         max_epoch: int,
         batch_size: Optional[int],
-        train_collector: Optional[GoalCollectorProtocol] = None,
-        test_collector: Optional[GoalCollectorProtocol] = None,
-        buffer: Optional[GoalReplayBufferProtocol] = None,
-        step_per_epoch: Optional[int] = None,
-        repeat_per_collect: Optional[int] = None,
-        episode_per_test: Optional[int] = None,
-        update_per_step: float = 1.0,
-        step_per_collect: Optional[int] = None,
-        episode_per_collect: Optional[int] = None,
-        train_fn: Optional[Callable[[int, int], None]] = None,
-        test_fn: Optional[Callable[[int, Optional[int]], None]] = None,
-        stop_fn: Optional[Callable[[float], bool]] = None,
-        save_best_fn: Optional[Callable[[CorePolicyProtocol], None]] = None,
-        save_checkpoint_fn: Optional[Callable[[int, int, int], str]] = None,
-        resume_from_log: bool = False,
-        reward_metric: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-        logger: BaseLogger = LazyLogger(),
-        verbose: bool = True,
-        show_progress: bool = True,
-        test_in_train: bool = True,
+        train_collector: Optional[GoalCollectorProtocol],
+        test_collector: Optional[GoalCollectorProtocol],
+        buffer: Optional[GoalReplayBufferProtocol],
+        step_per_epoch: Optional[int],
+        repeat_per_collect: Optional[int],
+        episode_per_test: Optional[int],
+        update_per_step: float,
+        step_per_collect: Optional[int],
+        episode_per_collect: Optional[int],
+        train_fn: Optional[Callable[[int, int], None]],
+        test_fn: Optional[Callable[[int, Optional[int]], None]],
+        stop_fn: Optional[Callable[[float], bool]],
+        save_best_fn: Optional[Callable[[CorePolicyProtocol], None]],
+        save_checkpoint_fn: Optional[Callable[[int, int, int], str]],
+        resume_from_log: bool,
+        reward_metric: Optional[Callable[[np.ndarray], np.ndarray]],
+        logger: BaseLogger,
+        verbose: bool,
+        show_progress: bool,
+        test_in_train: bool,
     ) -> None: ...
 
     def __next__(self) -> EpochStats: ...

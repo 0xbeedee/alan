@@ -1,6 +1,5 @@
 from typing import Dict, Tuple
 
-from cv2 import merge
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -10,7 +9,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from core.types import ObservationNetProtocol
-import numpy as np
 from tianshou.data import Batch
 
 from .utils import gmm_loss

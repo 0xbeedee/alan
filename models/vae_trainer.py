@@ -1,5 +1,5 @@
-from typing import Dict, Union
-from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
+from typing import Dict
+from core.types import GoalBatchProtocol
 
 from tianshou.data import SequenceSummaryStats
 
@@ -8,7 +8,6 @@ from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from core.types import ObservationNetProtocol
-import numpy as np
 
 
 class VAETrainer:
@@ -20,7 +19,6 @@ class VAETrainer:
         self,
         obs_net: ObservationNetProtocol,
         vae: nn.Module,
-        # TODO batch handling is all wrong, for ALL the models!!
         batch_size: int,
         learning_rate: float = 1e-3,
         device: torch.device = torch.device("cpu"),

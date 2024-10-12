@@ -18,7 +18,7 @@ from networks import (
     GoalNetHackCritic,
     SimpleNetHackCritic,
 )
-from intrinsic import ICM, ZeroICM, DeltaICM, HER
+from intrinsic import ICM, ZeroICM, DeltaICM, HER, ZeroHER
 from models import VAE, MDNRNN
 from policies import PPOBasedPolicy
 from config import ConfigManager
@@ -82,8 +82,7 @@ class ExperimentFactory:
         device: torch.device,
     ):
         fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM, "delta_icm": DeltaICM}
-        # TODO might be a good idea to have a zero_her type option, to experiment with ablating the HER component
-        slow_intrinsic_map = {"her": HER}
+        slow_intrinsic_map = {"her": HER, "zero_her": ZeroHER}
 
         fast_intrinsic_class = fast_intrinsic_map[
             self.config.get("intrinsic.fast.name")

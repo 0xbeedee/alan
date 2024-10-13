@@ -1,4 +1,4 @@
 latent_size: 32
 action_size: 1
 hidden_size: 128
-gaussian_size: 5
+n_gaussian_comps: 5

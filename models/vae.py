@@ -56,7 +56,6 @@ class Decoder(nn.Module):
         self.fc3 = nn.Linear(128, input_size).to(self.device)
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
-        # Ensure input is on the correct device
         z = z.to(self.device)
         z = F.relu(self.fc1(z))
         z = F.relu(self.fc2(z))
@@ -95,8 +94,7 @@ class VAE(nn.Module):
         x = x.to(self.device)
         mu, logsigma = self.encoder(x)
         sigma = torch.exp(logsigma)
-        # Sample epsilon on the correct device
         eps = torch.randn_like(sigma, device=self.device)
-        z = mu + sigma * eps  # Reparameterization trick
+        z = mu + sigma * eps  # reparameterisation trick
         recon_x = self.decoder(z)
         return recon_x, mu, logsigma

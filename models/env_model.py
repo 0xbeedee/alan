@@ -12,9 +12,6 @@ from tianshou.data import SequenceSummaryStats
 import torch
 from torch import nn
 
-from .vae_trainer import VAETrainer
-from .mdnrnn_trainer import MDNRNNTrainer
-
 
 @dataclass(kw_only=True)
 class EnvModelStats(TrainingStats):
@@ -28,30 +25,12 @@ class EnvModelStats(TrainingStats):
 class EnvModel:
     def __init__(
         self,
-        obs_net: nn.Module,
-        vae: nn.Module,
-        mdnrnn: nn.Module,
-        batch_size: int,
-        learning_rate: float = 1e-3,
+        vae_trainer: nn.Module,
+        mdnrnn_trainer: nn.Module,
         device: torch.device = torch.device("cpu"),
     ) -> None:
-        self.obs_net = obs_net.to(device)
-        self.vae = vae.to(device)
-        self.mdnrnn = mdnrnn.to(device)
-
-        # TODO should remove the trainer init from the EnvModel and pass the instanced trainers, to have an API compatible with SelfModel
-        self.vae_trainer = VAETrainer(
-            obs_net, self.vae, batch_size, learning_rate=learning_rate, device=device
-        )
-        self.mdnrnn_trainer = MDNRNNTrainer(
-            self.obs_net,
-            self.mdnrnn,
-            self.vae,
-            batch_size,
-            learning_rate=learning_rate,
-            device=device,
-        )
-
+        self.vae_trainer = vae_trainer.to(device)
+        self.mdnrnn_trainer = mdnrnn_trainer.to(device)
         self.device = device
 
     def learn(

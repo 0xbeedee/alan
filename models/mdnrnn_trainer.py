@@ -1,5 +1,4 @@
-from typing import Dict, Tuple
-
+from typing import Dict, Tuple, Self
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -28,10 +27,9 @@ class MDNRNNTrainer:
         alpha: float = 0.9,
         device: torch.device = torch.device("cpu"),
     ):
-        # all are moved to the correct device by EnvModel
-        self.obs_net = obs_net
-        self.mdnrnn = mdnrnn
-        self.vae = vae
+        self.obs_net = obs_net.to(device)
+        self.mdnrnn = mdnrnn.to(device)
+        self.vae = vae.to(device)
 
         self.optimizer = torch.optim.RMSprop(
             self.mdnrnn.parameters(), lr=learning_rate, alpha=alpha
@@ -128,3 +126,10 @@ class MDNRNNTrainer:
 
         loss = (gmm + bce + mse) / scale
         return {"gmm": gmm, "bce": bce, "mse": mse, "loss": loss}
+
+    def to(self, device: torch.device) -> Self:
+        self.device = device
+        self.obs_net.to(device)
+        self.mdnrnn.to(device)
+        self.vae.to(device)
+        return self

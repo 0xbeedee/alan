@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Self
 from core.types import GoalBatchProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -22,9 +22,8 @@ class VAETrainer:
         learning_rate: float = 1e-3,
         device: torch.device = torch.device("cpu"),
     ) -> None:
-        # all are moved to the correct device by the environment model
-        self.obs_net = obs_net
-        self.vae = vae
+        self.obs_net = obs_net.to(device)
+        self.vae = vae.to(device)
 
         self.optimizer = torch.optim.Adam(self.vae.parameters(), lr=learning_rate)
         self.scheduler = ReduceLROnPlateau(
@@ -69,3 +68,9 @@ class VAETrainer:
         # KL divergence
         KLD = -0.5 * torch.sum(1 + 2 * logsigma - mu.pow(2) - (2 * logsigma).exp())
         return (MSE + KLD) / x.size(0)  # normalise by batch size
+
+    def to(self, device: torch.device) -> Self:
+        self.device = device
+        self.obs_net.to(device)
+        self.vae.to(device)
+        return self

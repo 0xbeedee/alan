@@ -9,7 +9,7 @@ from tianshou.utils import TensorboardLogger
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-from models import SelfModel, EnvModel
+from models import SelfModel, EnvModel, vae_trainer
 from config import ConfigManager
 from utils.experiment import ExperimentFactory
 
@@ -79,12 +79,12 @@ def setup_networks(factory, env, device):
 
 
 def setup_models(factory, obs_net, env, train_buf, batch_size, learning_rate, device):
-    """Sets up the environment and self models."""
-    vae, mdnrnn = factory.create_vae_mdnrnn(obs_net, device)
-    # TODO this only works with nethack for now, what about other envs?
-    env_model = EnvModel(
-        obs_net, vae, mdnrnn, batch_size, learning_rate=learning_rate, device=device
+    """Sets up the environment model and the self model."""
+    vae_trainer, mdnrnn_trainer = factory.create_vae_mdnrnn_trainers(
+        obs_net, batch_size, learning_rate, device
     )
+    # TODO this only works with nethack for now, what about other envs?
+    env_model = EnvModel(vae_trainer, mdnrnn_trainer, device=device)
 
     fast_intrinsic_module, slow_intrinsic_module = factory.create_intrinsic_modules(
         obs_net, env.action_space, train_buf, batch_size, learning_rate, device

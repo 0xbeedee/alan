@@ -19,7 +19,7 @@ from networks import (
     SimpleNetHackCritic,
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, HER, ZeroHER
-from models import VAE, MDNRNN
+from models import VAE, MDNRNN, VAETrainer, MDNRNNTrainer
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (
@@ -105,8 +105,12 @@ class ExperimentFactory:
 
         return fast_intrinsic_module, slow_intrinsic_module
 
-    def create_vae_mdnrnn(
-        self, obs_net: nn.Module, device: torch.device
+    def create_vae_mdnrnn_trainers(
+        self,
+        obs_net: nn.Module,
+        batch_size: int,
+        learning_rate: float,
+        device: torch.device,
     ) -> Tuple[nn.Module, nn.Module]:
         vae = VAE(
             input_size=obs_net.o_dim,
@@ -118,7 +122,19 @@ class ExperimentFactory:
             device=device,
         )
 
-        return vae, mdnrnn
+        vae_trainer = VAETrainer(
+            obs_net, vae, batch_size, learning_rate=learning_rate, device=device
+        )
+        mdnrnn_trainer = MDNRNNTrainer(
+            obs_net,
+            mdnrnn,
+            vae,
+            batch_size,
+            learning_rate=learning_rate,
+            device=device,
+        )
+
+        return vae_trainer, mdnrnn_trainer
 
     def create_actor_critic(
         self, obs_net: nn.Module, action_space: gym.Space, device: torch.device

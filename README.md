@@ -15,4 +15,4 @@ The code uses `python 3.12.7`. To run it, do the following:
 3. Install the project in editable mode (i.e., `pip install -e .`);
 4. Run the `scripts/run_experiment.py` script with whichever arguments interest you!
 
-    4. Note that some permutations of arguments might not work. This is either on purpose (if the arguments to not make sense together), or because the permutation is not yet supported.
+    4. Note that some permutations of arguments might not work. This is either on purpose (if the arguments do not make sense together), or because the permutation is not yet supported.

@@ -13,7 +13,7 @@ def gmm_loss(
 ) -> torch.Tensor:
     """Computes the Gaussian Mixture Model (GMM) loss.
 
-    More precisely, it computes minus the log probability of batch under the GMM model described by mus, sigmas, pi. Precisely, with bs1, bs2, ... the sizes of the batch dimensions (several batch dimensions are useful when you have both a batch axis and a time step axis), gs the number of mixtures, and fs the number of features.
+    More precisely, it computes minus the log probability of batch under the GMM model described by mus, sigmas and pi, with bs1, bs2, ... the sizes of the batch dimensions (several batch dimensions are useful when you have both a batch axis and a time step axis), gs the number of mixtures, and fs the number of features.
     """
     batch = batch.unsqueeze(-2)
     normal_dist = Normal(mus, sigmas)

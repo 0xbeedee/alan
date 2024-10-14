@@ -80,11 +80,11 @@ def setup_networks(factory, env, device):
 
 def setup_models(factory, obs_net, env, train_buf, batch_size, learning_rate, device):
     """Sets up the environment model and the self model."""
-    vae_trainer, mdnrnn_trainer = factory.create_vae_mdnrnn_trainers(
+    vae, mdnrnn, vae_trainer, mdnrnn_trainer = factory.create_vae_mdnrnn_trainers(
         obs_net, batch_size, learning_rate, device
     )
     # TODO this only works with nethack for now, what about other envs?
-    env_model = EnvModel(vae_trainer, mdnrnn_trainer, device=device)
+    env_model = EnvModel(vae, mdnrnn, vae_trainer, mdnrnn_trainer, device=device)
 
     fast_intrinsic_module, slow_intrinsic_module = factory.create_intrinsic_modules(
         obs_net, env.action_space, train_buf, batch_size, learning_rate, device

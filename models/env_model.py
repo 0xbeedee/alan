@@ -12,6 +12,9 @@ from tianshou.data import SequenceSummaryStats
 import torch
 from torch import nn
 
+from .vae_trainer import VAETrainer
+from .mdnrnn_trainer import MDNRNNTrainer
+
 
 @dataclass(kw_only=True)
 class EnvModelStats(TrainingStats):
@@ -25,10 +28,14 @@ class EnvModelStats(TrainingStats):
 class EnvModel:
     def __init__(
         self,
-        vae_trainer: nn.Module,
-        mdnrnn_trainer: nn.Module,
+        vae: nn.Module,
+        mdnrnn: nn.Module,
+        vae_trainer: VAETrainer,
+        mdnrnn_trainer: MDNRNNTrainer,
         device: torch.device = torch.device("cpu"),
     ) -> None:
+        self.vae = vae.to(device)
+        self.mdnrnnn = mdnrnn.to(device)
         self.vae_trainer = vae_trainer.to(device)
         self.mdnrnn_trainer = mdnrnn_trainer.to(device)
         self.device = device

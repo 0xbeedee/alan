@@ -134,7 +134,7 @@ class ExperimentFactory:
             device=device,
         )
 
-        return vae_trainer, mdnrnn_trainer
+        return vae, mdnrnn, vae_trainer, mdnrnn_trainer
 
     def create_actor_critic(
         self, obs_net: nn.Module, action_space: gym.Space, device: torch.device

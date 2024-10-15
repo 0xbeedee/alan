@@ -1,8 +1,13 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from core.types import (
     GoalBatchProtocol,
     GoalReplayBufferProtocol,
 )
+
+if TYPE_CHECKING:
+    # i only need the trainers for the type
+    from .vae_trainer import VAETrainer
+    from .mdnrnn_trainer import MDNRNNTrainer
 
 from dataclasses import dataclass
 
@@ -11,9 +16,6 @@ from tianshou.data import SequenceSummaryStats
 
 import torch
 from torch import nn
-
-from .vae_trainer import VAETrainer
-from .mdnrnn_trainer import MDNRNNTrainer
 
 
 @dataclass(kw_only=True)
@@ -30,8 +32,8 @@ class EnvModel:
         self,
         vae: nn.Module,
         mdnrnn: nn.Module,
-        vae_trainer: VAETrainer,
-        mdnrnn_trainer: MDNRNNTrainer,
+        vae_trainer: "VAETrainer",
+        mdnrnn_trainer: "MDNRNNTrainer",
         device: torch.device = torch.device("cpu"),
     ) -> None:
         self.vae = vae.to(device)

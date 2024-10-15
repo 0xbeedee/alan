@@ -37,7 +37,10 @@ class MDNRNN(nn.Module):
         self.rnn = nn.LSTM(latent_size + action_size, hidden_size).to(device)
 
     def forward(
-        self, actions: torch.Tensor, latents: torch.Tensor
+        self,
+        actions: torch.Tensor,
+        latents: torch.Tensor,
+        tau: float = 1.0,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Performs a forward pass through the MDNRNN for multiple time steps."""
         bs = latents.shape[0]  # batch size
@@ -66,12 +69,14 @@ class MDNRNN(nn.Module):
             bs, self.n_gaussian_comps, self.latent_size
         )  # (batch_size, n_gaussian_comps, latent_size)
         sigmas = torch.exp(sigmas)  # ensure positive standard deviations
+        sigmas = sigmas * tau  # scale by the temperature
 
         # GMM coefficients
         pi = gmm_outs[
             :, 2 * stride : 2 * stride + self.n_gaussian_comps
         ].contiguous()  # (batch_size, n_gaussian_comps)
         pi = pi.view(bs, self.n_gaussian_comps)
+        pi = pi / tau
         logpi = F.log_softmax(pi, dim=-1)
 
         # rewards and terminal (done) state indicators
@@ -115,6 +120,7 @@ class MDNRNNCell(MDNRNN):
         action: torch.Tensor,
         latent: torch.Tensor,
         hidden: Tuple[torch.Tensor, torch.Tensor],
+        tau: float = 1.0,
     ) -> Tuple[
         torch.Tensor,
         torch.Tensor,
@@ -149,11 +155,13 @@ class MDNRNNCell(MDNRNN):
             -1, self.n_gaussian_comps, self.latent_size
         )  # (batch_size, n_gaussian_comps, latent_size)
         sigmas = torch.exp(sigmas)
+        sigmas = sigmas * tau  # scale by the temperature
 
         pi = out_full[
             :, 2 * stride : 2 * stride + self.n_gaussian_comps
         ].contiguous()  # (batch_size, n_gaussian_comps)
         pi = pi.view(-1, self.n_gaussian_comps)
+        pi = pi / tau
         logpi = F.log_softmax(pi, dim=-1)
 
         r = out_full[:, -2]

@@ -37,7 +37,7 @@ class EnvModel:
         device: torch.device = torch.device("cpu"),
     ) -> None:
         self.vae = vae.to(device)
-        self.mdnrnnn = mdnrnn.to(device)
+        self.mdnrnn = mdnrnn.to(device)
         self.vae_trainer = vae_trainer.to(device)
         self.mdnrnn_trainer = mdnrnn_trainer.to(device)
         self.device = device

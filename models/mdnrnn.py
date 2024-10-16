@@ -49,11 +49,11 @@ class MDNRNN(nn.Module):
             [actions, latents], dim=1
         )  # (batch_size, action_size + latent_size)
 
-        hidden, _ = self.rnn(ins)  # (batch_size, hidden_size)
+        outs, _ = self.rnn(ins)  # (batch_size, hidden_size)
 
         # get GMM parameters and additional outputs
         gmm_outs = self.gmm_linear(
-            hidden
+            outs
         )  # (batch_size, (2 * latent_size + 1) * n_gaussian_comps + 2)
 
         # to separate the GMM parameters
@@ -88,88 +88,5 @@ class MDNRNN(nn.Module):
     def to(self, device: torch.device) -> Self:
         self.device = device
         self.gmm_linear = self.gmm_linear.to(device)
-        self.rnn = self.rnn.to(device)
-        return super().to(device)
-
-
-class MDNRNNCell(MDNRNN):
-    """
-    MDNRNN Cell for processing a single time step.
-
-    This subclass modifies the MDNRNN to handle one step at a time, maintaining hidden states explicitly. Useful for scenarios where predictions are made sequentially.
-    """
-
-    def __init__(
-        self,
-        *,
-        latent_size: int,
-        action_size: int,
-        hidden_size: int,
-        n_gaussian_comps: int,
-        device: torch.device = torch.device("cpu"),
-    ) -> None:
-        super().__init__(
-            latent_size, action_size, hidden_size, n_gaussian_comps, device
-        )
-
-        # replace the LSTM with an LSTMCell
-        self.rnn = nn.LSTMCell(latent_size + action_size, hidden_size).to(device)
-
-    def forward(
-        self,
-        action: torch.Tensor,
-        latent: torch.Tensor,
-        hidden: Tuple[torch.Tensor, torch.Tensor],
-        tau: float = 1.0,
-    ) -> Tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        Tuple[torch.Tensor, torch.Tensor],
-    ]:
-        """Performs a forward pass through the MDNRNNCell for a single time step."""
-        hidden = tuple(h.to(self.device) for h in hidden)
-
-        in_al = torch.cat(
-            [action, latent], dim=1
-        )  # (batch_size, action_size + latent_size)
-
-        next_hidden = self.rnn(in_al, hidden)  # next_hidden is a tuple (h_next, c_next)
-        out_rnn = next_hidden[0]  # (batch_size, hidden_size)
-
-        out_full = self.gmm_linear(
-            out_rnn
-        )  # (batch_size, (2 * latent_size + 1) * n_gaussian_comps + 2)
-
-        stride = self.n_gaussian_comps * self.latent_size
-
-        mus = out_full[:, :stride].contiguous()  # (batch_size, stride)
-        mus = mus.view(
-            -1, self.n_gaussian_comps, self.latent_size
-        )  # (batch_size, n_gaussian_comps, latent_size)
-
-        sigmas = out_full[:, stride : 2 * stride].contiguous()  # (batch_size, stride)
-        sigmas = sigmas.view(
-            -1, self.n_gaussian_comps, self.latent_size
-        )  # (batch_size, n_gaussian_comps, latent_size)
-        sigmas = torch.exp(sigmas)
-        sigmas = sigmas * tau  # scale by the temperature
-
-        pi = out_full[
-            :, 2 * stride : 2 * stride + self.n_gaussian_comps
-        ].contiguous()  # (batch_size, n_gaussian_comps)
-        pi = pi.view(-1, self.n_gaussian_comps)
-        pi = pi / tau
-        logpi = F.log_softmax(pi, dim=-1)
-
-        r = out_full[:, -2]
-        d = out_full[:, -1]
-
-        return mus, sigmas, logpi, r, d, next_hidden
-
-    def to(self, device: torch.device) -> Self:
-        self.device = device
         self.rnn = self.rnn.to(device)
         return super().to(device)

@@ -35,7 +35,7 @@ class SelfModel:
         """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
         # the batch_obs contains one (obs, info) pair per environment
         # TODO should pull form the KB (obs)?
-        batch_latent_obs = self.obs_net.forward(batch_obs)
+        batch_latent_obs = self.obs_net(batch_obs)
         # a basic goal selection mechanism: simply add some gaussian noise
         goal = batch_latent_obs + torch.randn_like(batch_latent_obs)
         # return in numpy format for consistency with the other Batch entries
@@ -57,7 +57,7 @@ class SelfModel:
         """
         # get_future_observation_ alters the indices
         future_obs = self.slow_intrinsic_module.get_future_observation_(indices)
-        latent_future_goal = self.obs_net.forward(future_obs)
+        latent_future_goal = self.obs_net(future_obs)
         # we cannot return the reward here because modifying the buffer requires access to its internals
         self.slow_intrinsic_module.rewrite_transitions_(
             latent_future_goal.cpu().numpy()
@@ -65,7 +65,3 @@ class SelfModel:
 
     def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> TrainingStats:
         return self.fast_intrinsic_module.learn(batch, **kwargs)
-
-    def __call__(self, batch: GoalBatchProtocol, sleep: bool = False):
-        # TODO
-        pass

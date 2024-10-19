@@ -1,4 +1,13 @@
 name: "nethack"
-embedding_dim: 32
-crop_dim: 9
-num_layers: 5
+
+common: &common
+  latent_dim: 32
+  hidden_dim: 128
+
+vae:
+  <<: *common
+
+mdnrnn:
+  <<: *common
+  action_dim: 1
+  n_gaussian_comps: 5

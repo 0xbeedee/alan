@@ -8,7 +8,6 @@ from typing import (
     Optional,
     Literal,
     Callable,
-    TYPE_CHECKING,
 )
 from tianshou.data.types import (
     RolloutBatchProtocol,
@@ -119,24 +118,19 @@ class SelfModelProtocol(Protocol):
     def __call__(self, batch: GoalBatchProtocol, sleep: bool = False) -> None: ...
 
 
-if TYPE_CHECKING:
-    # to avoid circular imports
-    from models import VAETrainer, MDNRNNTrainer
-
-
 class EnvModelProtocol(Protocol):
     vae: nn.Module
     mdnrnn: nn.Module
-    vae_trainer: "VAETrainer"
-    mdnrnn_trainer: "MDNRNNTrainer"
+    vae_trainer: "VAETrainer"  # type: ignore
+    mdnrnn_trainer: "MDNRNNTrainer"  # type: ignore
     device: torch.device
 
     def __init__(
         self,
         vae: nn.Module,
         mdnrnn: nn.Module,
-        vae_trainer: "VAETrainer",
-        mdnrnn_trainer: "MDNRNNTrainer",
+        vae_trainer: "VAETrainer",  # type:ignore
+        mdnrnn_trainer: "MDNRNNTrainer",  # type:ignore
         device: torch.device = torch.device("cpu"),
     ) -> None: ...
 

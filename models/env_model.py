@@ -1,13 +1,8 @@
-from typing import Any, TYPE_CHECKING
+from typing import Any
 from core.types import (
     GoalBatchProtocol,
     GoalReplayBufferProtocol,
 )
-
-if TYPE_CHECKING:
-    # i only need the trainers for the type
-    from .vae_trainer import VAETrainer
-    from .mdnrnn_trainer import MDNRNNTrainer
 
 from dataclasses import dataclass
 
@@ -32,14 +27,14 @@ class EnvModel:
         self,
         vae: nn.Module,
         mdnrnn: nn.Module,
-        vae_trainer: "VAETrainer",
-        mdnrnn_trainer: "MDNRNNTrainer",
+        vae_trainer: "VAETrainer",  # type: ignore
+        mdnrnn_trainer: "MDNRNNTrainer",  # type: ignore
         device: torch.device = torch.device("cpu"),
     ) -> None:
         self.vae = vae.to(device)
         self.mdnrnn = mdnrnn.to(device)
-        self.vae_trainer = vae_trainer.to(device)
-        self.mdnrnn_trainer = mdnrnn_trainer.to(device)
+        self.vae_trainer = vae_trainer
+        self.mdnrnn_trainer = mdnrnn_trainer
         self.device = device
 
     def learn(

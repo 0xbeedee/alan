@@ -16,25 +16,25 @@ class MDNRNN(nn.Module):
     def __init__(
         self,
         *,
-        latent_size: int,
-        action_size: int,
-        hidden_size: int,
+        action_dim: int,
+        latent_dim: int,
         n_gaussian_comps: int,
+        hidden_dim: int = 512,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__()
-        self.latent_size: int = latent_size
-        self.action_size: int = action_size
-        self.hidden_size: int = hidden_size
+        self.latent_dim: int = latent_dim
+        self.action_dim: int = action_dim
+        self.hidden_dim: int = hidden_dim
         self.n_gaussian_comps: int = n_gaussian_comps
         self.device = device
 
         # outputs parameters for the Gaussian Mixture Model (GMM)
         self.gmm_linear = nn.Linear(
-            hidden_size, (2 * latent_size + 1) * n_gaussian_comps + 2
+            hidden_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2
         ).to(device)
 
-        self.rnn = nn.LSTM(latent_size + action_size, hidden_size).to(device)
+        self.rnn = nn.LSTM(latent_dim + action_dim, hidden_dim).to(device)
 
     def forward(
         self,
@@ -47,41 +47,41 @@ class MDNRNN(nn.Module):
 
         ins = torch.cat(
             [actions, latents], dim=1
-        )  # (batch_size, action_size + latent_size)
+        )  # (batch_dim, action_dim + latent_dim)
 
-        outs, _ = self.rnn(ins)  # (batch_size, hidden_size)
+        outs, _ = self.rnn(ins)  # (batch_dim, hidden_dim)
 
         # get GMM parameters and additional outputs
         gmm_outs = self.gmm_linear(
             outs
-        )  # (batch_size, (2 * latent_size + 1) * n_gaussian_comps + 2)
+        )  # (batch_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2)
 
         # to separate the GMM parameters
-        stride = self.n_gaussian_comps * self.latent_size
+        stride = self.n_gaussian_comps * self.latent_dim
 
-        mus = gmm_outs[:, :stride].contiguous()  # (batch_size, stride)
+        mus = gmm_outs[:, :stride].contiguous()  # (batch_dim, stride)
         mus = mus.view(
-            bs, self.n_gaussian_comps, self.latent_size
-        )  # (batch_size, n_gaussian_comps, latent_size)
+            bs, self.n_gaussian_comps, self.latent_dim
+        )  # (batch_dim, n_gaussian_comps, latent_dim)
 
-        sigmas = gmm_outs[:, stride : 2 * stride].contiguous()  # (batch_size, stride)
+        sigmas = gmm_outs[:, stride : 2 * stride].contiguous()  # (batch_dim, stride)
         sigmas = sigmas.view(
-            bs, self.n_gaussian_comps, self.latent_size
-        )  # (batch_size, n_gaussian_comps, latent_size)
+            bs, self.n_gaussian_comps, self.latent_dim
+        )  # (batch_dim, n_gaussian_comps, latent_dim)
         sigmas = torch.exp(sigmas)  # ensure positive standard deviations
         sigmas = sigmas * tau  # scale by the temperature
 
         # GMM coefficients
         pi = gmm_outs[
             :, 2 * stride : 2 * stride + self.n_gaussian_comps
-        ].contiguous()  # (batch_size, n_gaussian_comps)
+        ].contiguous()  # (batch_dim, n_gaussian_comps)
         pi = pi.view(bs, self.n_gaussian_comps)
         pi = pi / tau
         logpi = F.log_softmax(pi, dim=-1)
 
         # rewards and terminal (done) state indicators
-        rs = gmm_outs[:, -2]  # (batch_size,)
-        ds = gmm_outs[:, -1]  # (batch_size,)
+        rs = gmm_outs[:, -2]  # (batch_dim,)
+        ds = gmm_outs[:, -1]  # (batch_dim,)
 
         return mus, sigmas, logpi, rs, ds
 

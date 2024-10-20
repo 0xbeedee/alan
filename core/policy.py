@@ -87,7 +87,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # we must compute the latent_goals here because
         # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
         # 2) it centralises goal selection
-        # 3) it makes conceptual sense
         latent_goal = self.self_model.select_goal(batch.obs)
         return latent_goal
 
@@ -117,7 +116,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         start_time = time.time()
 
         indices = buffer.sample_indices(sample_size)
-        # we copy the indices because they get modified within combine_slow_reward_
+        # we copy the indices because they get modified within combine_slow_reward_()
         self.combine_slow_reward_(indices.copy())
         batch = buffer[indices]
 
@@ -150,6 +149,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> None:
         """Post-processes the data from the provided replay buffer."""
         super().post_process_fn(batch, buffer, indices)
-        # we do not check for existence of original_rew because we're guaranteed to have it
+        # original_rew is guaranteed to exist because process_fn() always gets called before post_process_fn()
         batch.rew = batch.original_rew
         del batch.original_rew

@@ -43,7 +43,7 @@ class SpatialEncoder(nn.Module):
             # combine embedding and conv into a module
             self.encoders[key] = nn.ModuleDict({"embedding": embedding, "conv": conv})
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, inputs: Dict[str, np.ndarray]) -> torch.Tensor:
         features = []
         for key, modules in self.encoders.items():
             embedding = modules["embedding"]
@@ -66,97 +66,35 @@ class SpatialDecoder(nn.Module):
         self,
         h_dim: int,
         output_shapes: Dict[str, Tuple[int, Tuple[int, int]]],
-        embedding_dim: int = 32,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__()
         self.device = device
         self.h_dim = h_dim
-        self.output_shapes = output_shapes  # dict of {key: (num_classes, shape)}
-        self.embedding_dim = embedding_dim
+        self.output_shapes = output_shapes  # dict of {key: (num_classes, (H, W))}
 
-        # linear layers and deconvolutional decoders for each key
         self.decoders = nn.ModuleDict()
-        self.decoder_shapes = {}
-        for key, (num_classes, shape) in output_shapes.items():
+        for key, (num_classes, shape) in self.output_shapes.items():
             H, W = shape
-            # compute the required number of upsampling layers to reach the desired H and W
-            upsample_layers = self._compute_upsample_layers(H, W)
-
-            # linear layer to expand latent vector
-            fc = nn.Sequential(
-                nn.Linear(h_dim, 128 * upsample_layers["start_size"] ** 2),
+            decoder = nn.Sequential(
+                nn.Linear(h_dim, h_dim * H * W),
                 nn.ReLU(),
+                nn.Unflatten(1, (h_dim, H, W)),  # (B, h_dim, H, W)
+                nn.Conv2d(h_dim, h_dim // 2, kernel_size=3, padding=1),
+                nn.ReLU(),
+                nn.Conv2d(h_dim // 2, num_classes, kernel_size=3, padding=1),
             ).to(device)
-
-            deconv_layers = []
-            in_channels = 128
-            for i in range(upsample_layers["num_layers"]):
-                out_channels = (
-                    64 if i < upsample_layers["num_layers"] - 1 else self.embedding_dim
-                )
-                deconv_layers.append(
-                    nn.ConvTranspose2d(
-                        in_channels, out_channels, kernel_size=4, stride=2, padding=1
-                    )
-                )
-                deconv_layers.append(nn.ReLU())
-                in_channels = out_channels
-
-            deconv = nn.Sequential(*deconv_layers).to(device)
-            # output layer to produce logits
-            output_layer = nn.Conv2d(
-                self.embedding_dim, num_classes, kernel_size=1, device=self.device
-            )
-
-            # combine into a module
-            self.decoders[key] = nn.ModuleDict(
-                {
-                    "fc": fc,
-                    "deconv": deconv,
-                    "output_layer": output_layer,
-                }
-            )
-            self.decoder_shapes[key] = (H, W)
+            self.decoders[key] = decoder
 
     def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         outputs = {}
         num_keys = len(self.decoders)
         split_sizes = [self.h_dim] * num_keys
-        x_split = torch.split(x, split_sizes, dim=1)  # tensors of shape (B, h_dim)
-
-        for (key, modules), x_key in zip(self.decoders.items(), x_split):
-            H, W = self.decoder_shapes[key]
-            upsample_info = self._compute_upsample_layers(H, W)
-
-            fc = modules["fc"]
-            deconv = modules["deconv"]
-            output_layer = modules["output_layer"]
-            # expand latent vector
-            x_fc = fc(x_key)  # (B, 128 * start_size * start_size)
-            x_fc = x_fc.view(
-                x_key.size(0),
-                128,
-                upsample_info["start_size"],
-                upsample_info["start_size"],
-            )
-            # pass through deconvolutional layers
-            x_deconv = deconv(x_fc)
-            # output layer
-            logits = output_layer(x_deconv)
-            # adjust dimensions to match output_shape
-            logits = logits[:, :, :H, :W]
-            outputs[key] = logits  # (B, num_classes, H, W)
-
+        x_split = torch.split(x, split_sizes, dim=1)
+        for (key, decoder), x_key in zip(self.decoders.items(), x_split):
+            logits = decoder(x_key)  # (B, num_classes, H, W)
+            outputs[key] = logits
         return outputs
-
-    def _compute_upsample_layers(self, H: int, W: int) -> Dict[str, int]:
-        """Computes the number of upsampling layers needed based on H and W."""
-        num_layers = max(
-            int(np.ceil(np.log2(max(H, W))) - 2), 1
-        )  # subtracting 2 for the initial size
-        start_size = max(H // (2**num_layers), 1)  # need start_size >= 1
-        return {"num_layers": num_layers, "start_size": start_size}
 
 
 class InventoryEncoder(nn.Module):
@@ -190,7 +128,7 @@ class InventoryEncoder(nn.Module):
 
             self.encoders[key] = nn.ModuleDict({"embedding": embedding, "fc": fc})
 
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def forward(self, inputs: Dict[str, np.ndarray]) -> torch.Tensor:
         features = []
         for key, modules in self.encoders.items():
             x = torch.as_tensor(inputs[key], device=self.device).long()
@@ -253,44 +191,24 @@ class EgocentricDecoder(nn.Module):
         self,
         h_dim: int,
         output_shape: Tuple[int, Tuple[int, int]],
-        embedding_dim: int = 32,
         device: torch.device = torch.device("cpu"),
     ):
         super().__init__()
         self.device = device
         self.h_dim = h_dim
-        self.num_classes, self.output_shape = (
-            output_shape  # (num_classes, (H_crop, W_crop))
-        )
-        self.embedding_dim = embedding_dim
+        self.num_classes, (H, W) = output_shape
 
-        # linear layer to expand latent vector
-        self.fc = nn.Sequential(
-            nn.Linear(
-                h_dim, 128 * (self.output_shape[0] // 4) * (self.output_shape[1] // 4)
-            ),
+        self.decoder = nn.Sequential(
+            nn.Linear(h_dim, h_dim * H * W),
             nn.ReLU(),
+            nn.Unflatten(1, (h_dim, H, W)),
+            nn.Conv2d(h_dim, h_dim // 2, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(h_dim // 2, self.num_classes, kernel_size=3, padding=1),
         ).to(self.device)
-
-        self.deconv = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, embedding_dim, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-        ).to(self.device)
-
-        self.output_layer = nn.Conv2d(
-            embedding_dim, self.num_classes, kernel_size=1, device=self.device
-        )
 
     def forward(self, x):
-        B = x.size(0)
-        H, W = self.output_shape
-        x_fc = self.fc(x)  # (B, 128 * H' * W')
-        H_fc, W_fc = (H + 3) // 4, (W + 3) // 4  # must be at least 1
-        x_fc = x_fc.view(B, 128, H_fc, W_fc)
-        x_deconv = self.deconv(x_fc)  # (B, embedding_dim, H, W)
-        logits = self.output_layer(x_deconv)  # (B, num_classes, H, W)
+        logits = self.decoder(x)  # (B, num_classes, H, W)
         return logits
 
 
@@ -326,7 +244,7 @@ class InventoryDecoder(nn.Module):
         for (key, decoder), x_key in zip(self.decoders.items(), x_split):
             logits = decoder(x_key)  # (B, output_dim)
             num_classes, shape = self.inv_shapes[key]
-            logits = logits.view(-1, *shape, num_classes)  # (B, ..., num_classes)
+            logits = logits.view(-1, num_classes, *shape)  # (B, num_clases, ...)
             outputs[key] = logits
         return outputs
 
@@ -357,7 +275,7 @@ class MessageEncoder(nn.Module):
             nn.ReLU(),
         ).to(self.device)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: np.ndarray) -> torch.Tensor:
         x = torch.as_tensor(x, device=self.device).long()  # (B, message_length)
         x_embedded = self.embedding(x)  # (B, message_length, E)
         x_embedded = x_embedded.view(
@@ -410,7 +328,7 @@ class BlstatsEncoder(nn.Module):
             nn.ReLU(),
         ).to(self.device)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: np.ndarray) -> torch.Tensor:
         x = torch.as_tensor(x, device=self.device).float()
         x = self.fc(x)  # (B, h_dim)
         return x  # (B, h_dim)
@@ -473,7 +391,7 @@ class ScreenDescriptionsEncoder(nn.Module):
             nn.AdaptiveAvgPool3d((1, 1, 1)),  # global average pooling
         ).to(self.device)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: np.ndarray) -> torch.Tensor:
         B = torch.as_tensor(x, device=self.device).size(0)
 
         x = torch.as_tensor(x, device=self.device).long()  # (B, H, W, D)
@@ -489,49 +407,24 @@ class ScreenDescriptionsDecoder(nn.Module):
         self,
         h_dim: int,
         output_shape: Tuple[int, Tuple[int, int, int]],
-        embedding_dim: int = 32,
         device: torch.device = torch.device("cpu"),
-    ) -> None:
+    ):
         super().__init__()
         self.device = device
         self.h_dim = h_dim
-        self.vocab_size, self.output_shape = output_shape  # vocab_size, (H, W, D)
-        self.embedding_dim = embedding_dim
+        self.vocab_size, (H, W, D) = output_shape
 
-        # linear layer to expand latent vector
-        self.fc = nn.Sequential(
-            nn.Linear(h_dim, 128 * 2 * 2 * 2),
+        self.decoder = nn.Sequential(
+            nn.Linear(h_dim, h_dim * H * W * D),
             nn.ReLU(),
+            nn.Unflatten(1, (h_dim, H, W, D)),
+            nn.Conv3d(h_dim, h_dim // 2, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv3d(h_dim // 2, self.vocab_size, kernel_size=3, padding=1),
         ).to(self.device)
 
-        # deconvolutional layers
-        self.deconv = nn.Sequential(
-            nn.ConvTranspose3d(128, 128, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose3d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.ReLU(),
-            nn.ConvTranspose3d(
-                64, self.embedding_dim, kernel_size=4, stride=2, padding=1
-            ),
-            nn.ReLU(),
-        ).to(self.device)
-
-        # output layer to produce logits over vocab_size
-        self.output_layer = nn.Conv3d(
-            self.embedding_dim, self.vocab_size, kernel_size=1, device=self.device
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B = x.size(0)
-
-        x = self.fc(x)  # (B, 128 * 2 * 2 * 2)
-        x = x.view(B, 128, 2, 2, 2)  # reshape to start deconvolution
-        x = self.deconv(x)
-
-        logits = self.output_layer(x)  # (B, vocab_size, H, W, D)
-        logits = logits[
-            :, :, : self.output_shape[0], : self.output_shape[1], : self.output_shape[2]
-        ]
+    def forward(self, x):
+        logits = self.decoder(x)  # (B, vocab_size, H, W, D)
         return logits
 
 
@@ -552,7 +445,7 @@ class TTYCursorEncoder(nn.Module):
             nn.ReLU(),
         ).to(self.device)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: np.ndarray) -> torch.Tensor:
         x = torch.as_tensor(x, device=self.device).float()  # (B, 2)
         x = self.encoder(x)  # (B, h_dim)
         return x

@@ -1,7 +1,7 @@
 name: "nethack"
 
 common: &common
-  latent_dim: 32
+  latent_dim: 1024
   hidden_dim: 128
 
 vae:

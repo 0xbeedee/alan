@@ -7,6 +7,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import numpy as np
 
 
 class NetHackVAETrainer:
@@ -14,13 +15,11 @@ class NetHackVAETrainer:
 
     def __init__(
         self,
-        obs_net: nn.Module,
         vae: nn.Module,
         batch_size: int,
         learning_rate: float = 1e-3,
         device: torch.device = torch.device("cpu"),
     ) -> None:
-        self.obs_net = obs_net.to(device)
         self.vae = vae.to(device)
 
         self.optimizer = torch.optim.Adam(self.vae.parameters(), lr=learning_rate)
@@ -53,16 +52,23 @@ class NetHackVAETrainer:
         # TODO probably a good idea to have more granularity for these losses
         return SequenceSummaryStats.from_sequence(losses)
 
-    def _get_loss(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _get_loss(self, inputs: Dict[str, np.ndarray]) -> torch.Tensor:
         """Computes the VAE loss."""
-        outputs = self.vae(inputs)
-        reconstructions = outputs["reconstructions"]
-        mu = outputs["mu"]
-        logsigma = outputs["logsigma"]
-        loss = self._xentropy_mse_kld(reconstructions, inputs, mu, logsigma)
+        reconstructions, mu, logsigma = self.vae(inputs)
+        loss = self._xentropy_mse_kld(
+            reconstructions, inputs, mu, logsigma, self.vae.encoder.crop
+        )
         return loss
 
-    def _xentropy_mse_kld(self, reconstructions, inputs, mu, logsigma, kl_weight=1.0):
+    def _xentropy_mse_kld(
+        self,
+        reconstructions: Dict[str, torch.Tensor],
+        inputs: Dict[str, np.ndarray],
+        mu: torch.Tensor,
+        logsigma: torch.Tensor,
+        enc_crop: "Crop",  # type:ignore
+        kl_weight: float = 1.0,
+    ):
         """Computes the cross-entropy loss, the MSE loss and the KLD loss, depending on the various parts of the observation."""
         recon_loss = 0.0
         total_elements = 0
@@ -72,26 +78,29 @@ class NetHackVAETrainer:
             "chars",
             "colors",
             "specials",
+            "tty_chars",
+            "tty_colors",
+            "egocentric_view",
             "inv_glyphs",
             "inv_letters",
             "inv_oclasses",
             "inv_strs",
             "message",
             "screen_descriptions",
-            "tty_chars",
-            "tty_colors",
         ]
         continuous_keys = ["blstats", "tty_cursor"]
 
+        # egocentric_view is not part of the vanilla env observations, so we need to compute its ground truth here (using the encoder's Crop instance)
+        inputs["egocentric_view"] = enc_crop(
+            torch.as_tensor(inputs["glyphs"], device=self.device),
+            torch.as_tensor(inputs["blstats"][:, :2], device=self.device),
+        )
         for key in categorical_keys:
             if key in reconstructions:
-                logits = reconstructions[key]
-                target = inputs[key].long().to(self.device)
-                # Adjust dimensions if necessary
-                if logits.dim() > target.dim():
-                    # For cases where logits have extra dimensions (e.g., channels)
-                    logits = logits.view(-1, logits.size(-1))
-                    target = target.view(-1)
+                logits = reconstructions[key]  # (B, num_classes, H, W)
+                target = torch.as_tensor(
+                    inputs[key], device=self.device
+                ).long()  # (B, H, W)
                 loss = F.cross_entropy(logits, target, reduction="mean")
                 recon_loss += loss
                 total_elements += 1
@@ -99,11 +108,12 @@ class NetHackVAETrainer:
         for key in continuous_keys:
             if key in reconstructions:
                 recon = reconstructions[key]
-                target = inputs[key].float().to(self.device)
+                target = torch.as_tensor(inputs[key], device=self.device).float()
                 loss = F.mse_loss(recon, target, reduction="mean")
                 recon_loss += loss
                 total_elements += 1
 
+        # TODO check the balance between recon and KLD losses!
         recon_loss /= total_elements
         kld_loss = -0.5 * torch.mean(1 + logsigma - mu.pow(2) - logsigma.exp())
         total_loss = recon_loss + kl_weight * kld_loss

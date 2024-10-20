@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Self
+from typing import Dict, Tuple
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -19,7 +19,6 @@ class MDNRNNTrainer:
 
     def __init__(
         self,
-        obs_net: nn.Module,
         mdnrnn: nn.Module,
         vae: nn.Module,
         batch_size: int,
@@ -27,7 +26,6 @@ class MDNRNNTrainer:
         alpha: float = 0.9,
         device: torch.device = torch.device("cpu"),
     ):
-        self.obs_net = obs_net.to(device)
         self.mdnrnn = mdnrnn.to(device)
         self.vae = vae.to(device)
 
@@ -47,6 +45,7 @@ class MDNRNNTrainer:
         losses_summary, gmm_losses_summary, bce_losses_summary, mse_losses_summary = (
             self._data_pass(data)
         )
+        # TODO if I want to control latent imagination by checking loss threshold, it's probably a good idea to get the loss on some evaluation set
         self.scheduler.step(losses_summary.mean)
         return (
             losses_summary,
@@ -62,17 +61,12 @@ class MDNRNNTrainer:
         """Performs one pass through the data."""
         losses, gmm_losses, bce_losses, mse_losses = [], [], [], []
         for batch in data.split(self.batch_size, merge_last=True):
-            obs_batch = batch.obs
-            obs_next_batch = batch.obs_next
-            act_batch = torch.as_tensor(batch.act, device=self.device)
-            rew_batch = torch.as_tensor(batch.rew, device=self.device)
-            done_batch = torch.as_tensor(batch.done, device=self.device)
-
-            latent_obs, latent_obs_next = self._to_latent(obs_batch, obs_next_batch)
+            batch = batch.to_torch(device=self.device)
+            latent_obs, latent_obs_next = self._to_latent(batch.obs, batch.obs)
 
             self.optimizer.zero_grad()
             loss_dict = self._get_loss(
-                latent_obs, act_batch, rew_batch, done_batch, latent_obs_next
+                latent_obs, batch.act, batch.rew, batch.done, latent_obs_next
             )
             loss_dict["loss"].backward()
             losses.append(loss_dict["loss"].item())
@@ -96,8 +90,8 @@ class MDNRNNTrainer:
         self, obs: Batch, obs_next: Batch
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Transforms observations to latent space using the VAE."""
-        obs_mu, obs_logsigma = self.vae.encoder(self.obs_net(obs))
-        obs_next_mu, obs_next_logsigma = self.vae.encoder(self.obs_net(obs_next))
+        obs_mu, obs_logsigma = self.vae.encoder(obs)
+        obs_next_mu, obs_next_logsigma = self.vae.encoder(obs_next)
 
         latent_obs = obs_mu + obs_logsigma.exp() * torch.randn_like(obs_mu)
         latent_obs_next = obs_next_mu + obs_next_logsigma.exp() * torch.randn_like(
@@ -126,10 +120,3 @@ class MDNRNNTrainer:
 
         loss = (gmm + bce + mse) / scale
         return {"gmm": gmm, "bce": bce, "mse": mse, "loss": loss}
-
-    def to(self, device: torch.device) -> Self:
-        self.device = device
-        self.obs_net.to(device)
-        self.mdnrnn.to(device)
-        self.vae.to(device)
-        return self

@@ -11,15 +11,16 @@ from tianshou.utils import TensorboardLogger
 
 from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
-    NetHackObsNet,
-    DiscreteObsNet,
+    ObsNet,
     GoalNetHackActor,
     SimpleNetHackActor,
     GoalNetHackCritic,
     SimpleNetHackCritic,
+    NetHackVAE,
+    MDNRNN,
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, HER, ZeroHER
-from models import VAE, MDNRNN, VAETrainer, MDNRNNTrainer
+from models import NetHackVAETrainer, MDNRNNTrainer
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (
@@ -60,16 +61,22 @@ class ExperimentFactory:
         buf_class = GoalVectorReplayBuffer if self.is_goal_aware else VectorReplayBuffer
         return buf_class(buf_size, env_num)
 
-    def create_obsnet(
-        self, observation_space: gym.Space, device: torch.device
-    ) -> nn.Module:
-        obs_net_map = {"nethack": NetHackObsNet, "discrete": DiscreteObsNet}
-        obs_class = obs_net_map[self.config.get("obsnet.name")]
-        return obs_class(
-            observation_space,
-            **self.config.get_except("obsnet", exclude="name"),
+    def create_vae_mdnrnn(self, observation_space: gym.Space, device: torch.device):
+        # TODO add DiscreteVAE and MDNRNN (? => the MDNRNN could probably always be the same, as long as the shapes match)
+        vae = NetHackVAE(
+            **self.config.get("obsnet.vae"),
+            observation_space=observation_space,
             device=device,
         )
+        mdnrnn = MDNRNN(
+            **self.config.get("obsnet.mdnrnn"),
+            device=device,
+        )
+        return vae, mdnrnn
+
+    def create_obsnet(self, vae_encoder: nn.Module, device: torch.device) -> nn.Module:
+        # the vae_encoder is the part that adapts to the environment
+        return ObsNet(vae_encoder=vae_encoder, device=device)
 
     def create_intrinsic_modules(
         self,
@@ -105,36 +112,26 @@ class ExperimentFactory:
 
         return fast_intrinsic_module, slow_intrinsic_module
 
-    def create_vae_mdnrnn_trainers(
+    def create_trainers(
         self,
-        obs_net: nn.Module,
+        vae: nn.Module,
+        mdnrnn: nn.Module,
         batch_size: int,
         learning_rate: float,
         device: torch.device,
     ) -> Tuple[nn.Module, nn.Module]:
-        vae = VAE(
-            input_size=obs_net.o_dim,
-            latent_size=self.config.get("model.latent_size"),
-            device=device,
-        )
-        mdnrnn = MDNRNN(
-            **self.config.get("model"),
-            device=device,
-        )
-
-        vae_trainer = VAETrainer(
-            obs_net, vae, batch_size, learning_rate=learning_rate, device=device
+        vae_trainer = NetHackVAETrainer(
+            vae, batch_size, learning_rate=learning_rate, device=device
         )
         mdnrnn_trainer = MDNRNNTrainer(
-            obs_net,
-            mdnrnn,
             vae,
+            mdnrnn,
             batch_size,
             learning_rate=learning_rate,
             device=device,
         )
 
-        return vae, mdnrnn, vae_trainer, mdnrnn_trainer
+        return vae_trainer, mdnrnn_trainer
 
     def create_actor_critic(
         self, obs_net: nn.Module, action_space: gym.Space, device: torch.device

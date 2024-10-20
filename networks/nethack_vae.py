@@ -3,9 +3,10 @@ import gymnasium as gym
 
 import torch
 from torch import nn
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 
 from .nethack_encoders_decoders import *
+from .utils import Crop
 
 
 class NetHackEncoder(nn.Module):
@@ -14,12 +15,16 @@ class NetHackEncoder(nn.Module):
         observation_space: gym.Space,
         latent_dim: int,
         hidden_dim: int = 512,
+        crop_dim: int = 9,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__()
         self.observation_space = observation_space
-        self.h_dim = hidden_dim
+        # latent dimension of mu and logsigma (and, thus, z)
         self.latent_dim = latent_dim
+        # each encoder outputs h_dim-dimensional tensors
+        self.h_dim = hidden_dim
+        self.crop_dim = crop_dim
         self.device = device
 
         self.spatial_keys = [
@@ -39,6 +44,18 @@ class NetHackEncoder(nn.Module):
             h_dim=self.h_dim,
             input_shapes=spatial_data,
             device=device,
+        )
+
+        self.ego_encoder = EgocentricEncoder(
+            h_dim=self.h_dim,
+            input_shape=(
+                self._observation_data("glyphs").num_classes,
+                (self.crop_dim, self.crop_dim),
+            ),
+            device=device,
+        )
+        self.crop = Crop(
+            *observation_space["glyphs"].shape, self.crop_dim, self.crop_dim
         )
 
         inv_data = dict([(key, self._observation_data(key)) for key in self.inv_keys])
@@ -63,17 +80,17 @@ class NetHackEncoder(nn.Module):
         self.screen_descriptions_encoder = ScreenDescriptionsEncoder(
             h_dim=self.h_dim,
             input_shape=self._observation_data("screen_descriptions"),
-            embedding_dim=32,
             device=device,
         )
 
-        self.tty_cursor_encoder = TtyCursorEncoder(
+        self.tty_cursor_encoder = TTYCursorEncoder(
             h_dim=self.h_dim,
             device=device,
         )
 
+        # one h_dim-dimensional tensor per key in observation_space, + 1 for the crop
+        self.o_dim = self.h_dim * (len(observation_space.keys()) + 1)
         # combine all features and output mu and logsigma
-        self.o_dim = self.h_dim * len(observation_space.keys())
         self.fc_mu = nn.Linear(self.o_dim, self.latent_dim).to(device)
         self.fc_logsigma = nn.Linear(self.o_dim, self.latent_dim).to(device)
 
@@ -81,9 +98,14 @@ class NetHackEncoder(nn.Module):
         self, inputs: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         spatial_inputs = {key: inputs[key] for key in self.spatial_keys}
+        cropped_inputs = self.crop(
+            torch.as_tensor(inputs["glyphs"], device=self.device),
+            torch.as_tensor(inputs["blstats"][:, :2], device=self.device),
+        )
         inventory_inputs = {key: inputs[key] for key in self.inv_keys}
 
         spatial_features = self.spatial_encoder(spatial_inputs)
+        egocentric_features = self.ego_encoder(cropped_inputs)
         inventory_features = self.inventory_encoder(inventory_inputs)
         message_features = self.message_encoder(inputs["message"])
         blstats_features = self.blstats_encoder(inputs["blstats"])
@@ -95,6 +117,7 @@ class NetHackEncoder(nn.Module):
         combined = torch.cat(
             [
                 spatial_features,
+                egocentric_features,
                 inventory_features,
                 message_features,
                 blstats_features,
@@ -106,7 +129,7 @@ class NetHackEncoder(nn.Module):
 
         mu = self.fc_mu(combined)  # (B, latent_dim)
         logsigma = self.fc_logsigma(combined)  # (B, latent_dim)
-        # it's convenient to have the encoder also return z
+        # it's convenient to have the encoder return z as well
         z = self._reparameterise(mu, logsigma)  # (B, latent_dim)
         return z, mu, logsigma
 
@@ -132,18 +155,22 @@ class NetHackDecoder(nn.Module):
         self,
         observation_space: gym.Space,
         latent_dim: int,
+        encoder_out_dim: int,
         hidden_dim: int = 512,
+        crop_dim: int = 9,
         device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__()
         self.observation_space = observation_space
-        self.h_dim = hidden_dim
         self.latent_dim = latent_dim
+        self.eo_dim = encoder_out_dim
+        self.h_dim = hidden_dim
+        self.crop_dim = crop_dim
         self.device = device
 
         # fully connected layer to expand latent vector
         self.fc = nn.Sequential(
-            nn.Linear(latent_dim, self.h_dim),
+            nn.Linear(latent_dim, self.eo_dim),
             nn.ReLU(),
         ).to(device)
 
@@ -162,7 +189,16 @@ class NetHackDecoder(nn.Module):
         )
         self.spatial_decoder = SpatialDecoder(
             h_dim=self.h_dim,
-            input_shapes=spatial_data,
+            output_shapes=spatial_data,
+            device=device,
+        )
+
+        self.ego_decoder = EgocentricDecoder(
+            h_dim=self.h_dim,
+            output_shape=(
+                self._observation_data("glyphs").num_classes,
+                (self.crop_dim, self.crop_dim),
+            ),
             device=device,
         )
 
@@ -187,27 +223,53 @@ class NetHackDecoder(nn.Module):
 
         self.screen_descriptions_decoder = ScreenDescriptionsDecoder(
             h_dim=self.h_dim,
-            input_shape=self._observation_data("screen_descriptions"),
-            embedding_dim=32,
+            output_shape=self._observation_data("screen_descriptions"),
             device=device,
         )
 
-        self.tty_cursor_decoder = TtyCursorDecoder(
+        self.tty_cursor_decoder = TTYCursorDecoder(
             h_dim=self.h_dim,
             device=device,
         )
 
+        self.decoders = OrderedDict()
+        self.decoders["spatial"] = (
+            self.spatial_decoder,
+            self.h_dim * len(self.spatial_keys),
+        )
+        self.decoders["egocentric_view"] = (self.ego_decoder, self.h_dim)
+        self.decoders["inventory"] = (
+            self.inventory_decoder,
+            self.h_dim * len(self.inv_keys),
+        )
+        self.decoders["message"] = (self.message_decoder, self.h_dim)
+        self.decoders["blstats"] = (self.blstats_decoder, self.h_dim)
+        self.decoders["screen_descriptions"] = (
+            self.screen_descriptions_decoder,
+            self.h_dim,
+        )
+        self.decoders["tty_cursor"] = (self.tty_cursor_decoder, self.h_dim)
+
     def forward(self, z: torch.Tensor) -> Dict[str, torch.Tensor]:
-        x = self.fc(z)  # (B, h_dim)
-
-        spatial_outputs = self.spatial_decoder(x)
-        inventory_outputs = self.inventory_decoder(x)
-
+        # TODO for some reason running the experiment is tremdendously slow!!
         reconstructions = {}
-        reconstructions.update(spatial_outputs)
-        reconstructions.update(inventory_outputs)
-        reconstructions["message"] = self.message_decoder(x)
-        reconstructions["blstats"] = self.blstats_decoder(x)
+        x = self.fc(z)  # (B, eo_dim)
+
+        chunk_sizes = [size for _, size in self.decoders.values()]
+        x_chunks = torch.split(x, chunk_sizes, dim=1)
+
+        for (name, (decoder, _)), x_chunk in zip(self.decoders.items(), x_chunks):
+            if name == "spatial":
+                # spatial_decoder returns multiple keys
+                spatial_outputs = decoder(x_chunk)
+                reconstructions.update(spatial_outputs)
+            elif name == "inventory":
+                # inventory_decoder returns multiple keys
+                inventory_outputs = decoder(x_chunk)
+                reconstructions.update(inventory_outputs)
+            else:
+                # other decoders return a single output
+                reconstructions[name] = decoder(x_chunk)
 
         return reconstructions
 
@@ -225,6 +287,7 @@ class NetHackDecoder(nn.Module):
 class NetHackVAE(nn.Module):
     def __init__(
         self,
+        *,
         observation_space: gym.Space,
         latent_dim: int,
         hidden_dim: int = 512,
@@ -242,6 +305,7 @@ class NetHackVAE(nn.Module):
         self.decoder = NetHackDecoder(
             observation_space,
             latent_dim,
+            self.encoder.o_dim,
             hidden_dim=hidden_dim,
             device=device,
         )

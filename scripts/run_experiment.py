@@ -9,9 +9,12 @@ from tianshou.utils import TensorboardLogger
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-from models import SelfModel, EnvModel, vae_trainer
+from models import SelfModel, EnvModel
 from config import ConfigManager
 from utils.experiment import ExperimentFactory
+
+# TODO test code
+from environments import DreamEnv
 
 ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
@@ -71,17 +74,20 @@ def setup_buffers(config, num_train_envs, num_test_envs, factory):
 
 def setup_networks(factory, env, device):
     """Sets up the observation, actor, and critic networks."""
-    obs_net = factory.create_obsnet(env.observation_space, device)
+    vae, mdnrnn = factory.create_vae_mdnrnn(env.observation_space, device)
+    obs_net = factory.create_obsnet(vae.encoder, device)
     actor_net, critic_net = factory.create_actor_critic(
         obs_net, env.action_space, device
     )
-    return obs_net, actor_net, critic_net
+    return vae, mdnrnn, obs_net, actor_net, critic_net
 
 
-def setup_models(factory, obs_net, env, train_buf, batch_size, learning_rate, device):
+def setup_models(
+    factory, obs_net, vae, mdnrnn, env, train_buf, batch_size, learning_rate, device
+):
     """Sets up the environment model and the self model."""
-    vae, mdnrnn, vae_trainer, mdnrnn_trainer = factory.create_vae_mdnrnn_trainers(
-        obs_net, batch_size, learning_rate, device
+    vae_trainer, mdnrnn_trainer = factory.create_trainers(
+        vae, mdnrnn, batch_size, learning_rate, device
     )
     # TODO this only works with nethack for now, what about other envs?
     env_model = EnvModel(vae, mdnrnn, vae_trainer, mdnrnn_trainer, device=device)
@@ -251,7 +257,7 @@ def main(
 
     print("[+] Setting up the networks...")
     # TODO not all policies require all these networks => need more flexibility here
-    obs_net, actor_net, critic_net = setup_networks(factory, env, device)
+    vae, mdnrnn, obs_net, actor_net, critic_net = setup_networks(factory, env, device)
 
     print("[+] Setting up the policy...")
     lr = config.get("policy.learning_rate")
@@ -262,13 +268,30 @@ def main(
     # we use the same batch_size for both the models
     batch_size = config.get("training.batch_size")
     env_model, self_model = setup_models(
-        factory, obs_net, env, train_buf, batch_size, lr, device
+        factory, obs_net, vae, mdnrnn, env, train_buf, batch_size, lr, device
     )
 
     # TODO my policy currently doesn't take time into account at all! (in the original IMPALA implementation by the NLE team, they used an LSTM)
     policy = setup_policy(
         factory, self_model, env_model, actor_net, critic_net, optimizer, env
     )
+
+    # # TODO test code
+    # dream = DreamEnv(env_model, env.action_space, env.observation_space)
+
+    # # this obviously needs to be the current observation, not the initial one int the env
+    # obs_0, info = env.reset()
+    # obs, info = dream.reset(initial_obs=obs_0)
+    # done = False
+    # total_reward = 0
+    # for _ in range(100):
+    #     # TODO I need a new, latent policy derived form the current one (like for the DreameEnv!
+    #     # TODO no problem! I simply need to mock the useless pieces => transferring the weights will be a triviality, because the networks remain unchaged, the only difference is that i operate entirely in the latent space provided by the obs_net
+    #     action = policy.forward(obs)
+    #     obs, reward, done, truncated, info = dream.step(action)
+    #     total_reward += reward
+
+    # raise Exception("YOU SHALL NOT PASS!")
 
     print("[+] Setting up the collector...")
     train_collector, test_collector = setup_collectors(

@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 
 class Crop(nn.Module):
-    """Helper class for NetHackObsNet."""
+    """Helper class to provide the agent with an egocentric representation of NetHack."""
 
     def __init__(self, height, width, height_target, width_target):
         super(Crop, self).__init__()
@@ -24,13 +24,7 @@ class Crop(nn.Module):
         self.register_buffer("height_grid", height_grid.clone())
 
     def forward(self, inputs, coordinates):
-        """Calculates centered crop around given x,y coordinates.
-        Args:
-           inputs [B x H x W]
-           coordinates [B x 2] x,y coordinates
-        Returns:
-           [B x H' x W'] inputs cropped and centered around x,y coordinates.
-        """
+        """Calculates centered crop around given x,y coordinates (usually the agent's position)."""
         assert inputs.shape[1] == self.height
         assert inputs.shape[2] == self.width
 

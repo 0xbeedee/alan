@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -7,7 +7,6 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from tianshou.data import Batch
 
 from .utils import gmm_loss
 
@@ -62,7 +61,8 @@ class MDNRNNTrainer:
         losses, gmm_losses, bce_losses, mse_losses = [], [], [], []
         for batch in data.split(self.batch_size, merge_last=True):
             batch = batch.to_torch(device=self.device)
-            latent_obs, latent_obs_next = self._to_latent(batch.obs, batch.obs)
+            latent_obs, *_ = self.vae.encoder(batch.obs)
+            latent_obs_next, *_ = self.vae.encoder(batch.obs_next)
 
             self.optimizer.zero_grad()
             loss_dict = self._get_loss(
@@ -84,20 +84,6 @@ class MDNRNNTrainer:
             bce_losses_summary,
             mse_losses_summary,
         )
-
-    @torch.no_grad()
-    def _to_latent(
-        self, obs: Batch, obs_next: Batch
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Transforms observations to latent space using the VAE."""
-        obs_mu, obs_logsigma = self.vae.encoder(obs)
-        obs_next_mu, obs_next_logsigma = self.vae.encoder(obs_next)
-
-        latent_obs = obs_mu + obs_logsigma.exp() * torch.randn_like(obs_mu)
-        latent_obs_next = obs_next_mu + obs_next_logsigma.exp() * torch.randn_like(
-            obs_next_mu
-        )
-        return latent_obs, latent_obs_next
 
     def _get_loss(
         self,

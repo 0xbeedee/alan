@@ -112,7 +112,7 @@ class ExperimentFactory:
 
         return fast_intrinsic_module, slow_intrinsic_module
 
-    def create_trainers(
+    def create_envmodel_trainers(
         self,
         vae: nn.Module,
         mdnrnn: nn.Module,
@@ -124,8 +124,8 @@ class ExperimentFactory:
             vae, batch_size, learning_rate=learning_rate, device=device
         )
         mdnrnn_trainer = MDNRNNTrainer(
-            vae,
             mdnrnn,
+            vae,
             batch_size,
             learning_rate=learning_rate,
             device=device,

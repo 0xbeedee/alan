@@ -22,7 +22,7 @@ class ObsNet(nn.Module):
         self.o_dim = self.encoder.latent_dim
 
     @torch.no_grad()
-    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tuple[torch.Tensor]:
+    def forward(self, inputs: Dict[str, torch.Tensor]) -> torch.Tensor:
         # ignore the mus and logsigmas
         z, *_ = self.encoder.forward(inputs)
         return z

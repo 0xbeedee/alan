@@ -8,10 +8,13 @@ For our own experiments, we use [NetHack](https://github.com/heiner/nle), but th
 
 ## Running the code
 
-The code uses `python 3.12.7`. To run it, do the following:
+The code uses `python 3.11.10`. To run it, do the following:
 
 1. (Optional) Set up a virtual environment;
 2. Install all the requirements (i.e, `pip install -r requirements.txt`);
+
+    2. `tianshou` is missing from the file because `nle` requires `gymnasium==0.29.1`, while `tianshou==1.1.0` requires `gymnasium<0.29.0`. Forcing `tianshou` to use `0.29.1` seems to be fine, though, so running `pip install tianshou` and ignoring the compatibility warning should work.
+
 3. Install the project in editable mode (i.e., `pip install -e .`);
 4. Run the `scripts/run_experiment.py` script with whichever arguments interest you!
 

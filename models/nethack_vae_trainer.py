@@ -73,29 +73,12 @@ class NetHackVAETrainer:
         recon_loss = 0.0
         total_elements = 0
 
-        categorical_keys = [
-            "glyphs",
-            "chars",
-            "colors",
-            "specials",
-            "tty_chars",
-            "tty_colors",
-            "egocentric_view",
-            "inv_glyphs",
-            "inv_letters",
-            "inv_oclasses",
-            "inv_strs",
-            "message",
-            "screen_descriptions",
-        ]
-        continuous_keys = ["blstats", "tty_cursor"]
-
         # egocentric_view is not part of the vanilla env observations, so we need to compute its ground truth here (using the encoder's Crop instance)
         inputs["egocentric_view"] = enc_crop(
             torch.as_tensor(inputs["glyphs"], device=self.device),
             torch.as_tensor(inputs["blstats"][:, :2], device=self.device),
         )
-        for key in categorical_keys:
+        for key in self.vae.categorical_keys:
             if key in reconstructions:
                 logits = reconstructions[key]  # (B, num_classes, H, W)
                 target = torch.as_tensor(
@@ -105,7 +88,7 @@ class NetHackVAETrainer:
                 recon_loss += loss
                 total_elements += 1
 
-        for key in continuous_keys:
+        for key in self.vae.continuous_keys:
             if key in reconstructions:
                 recon = reconstructions[key]
                 target = torch.as_tensor(inputs[key], device=self.device).float()

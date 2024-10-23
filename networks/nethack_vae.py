@@ -29,13 +29,13 @@ class NetHackEncoder(nn.Module):
 
         self.spatial_keys = [
             "glyphs",
-            "chars",
-            "colors",
-            "specials",
-            "tty_chars",
-            "tty_colors",
+            # "chars",
+            # "colors",
+            # "specials",
+            # "tty_chars",
+            # "tty_colors",
         ]
-        self.inv_keys = ["inv_glyphs", "inv_letters", "inv_oclasses", "inv_strs"]
+        # self.inv_keys = ["inv_glyphs", "inv_letters", "inv_oclasses", "inv_strs"]
 
         spatial_data = dict(
             [(key, self._observation_data(key)) for key in self.spatial_keys]
@@ -58,18 +58,18 @@ class NetHackEncoder(nn.Module):
             *observation_space["glyphs"].shape, self.crop_dim, self.crop_dim
         )
 
-        inv_data = dict([(key, self._observation_data(key)) for key in self.inv_keys])
-        self.inventory_encoder = InventoryEncoder(
-            h_dim=self.h_dim,
-            inv_shapes=inv_data,
-            device=device,
-        )
+        # inv_data = dict([(key, self._observation_data(key)) for key in self.inv_keys])
+        # self.inventory_encoder = InventoryEncoder(
+        #     h_dim=self.h_dim,
+        #     inv_shapes=inv_data,
+        #     device=device,
+        # )
 
-        self.message_encoder = MessageEncoder(
-            h_dim=self.h_dim,
-            message_shape=self._observation_data("message"),
-            device=device,
-        )
+        # self.message_encoder = MessageEncoder(
+        #     h_dim=self.h_dim,
+        #     message_shape=self._observation_data("message"),
+        #     device=device,
+        # )
 
         self.blstats_encoder = BlstatsEncoder(
             h_dim=self.h_dim,
@@ -77,19 +77,19 @@ class NetHackEncoder(nn.Module):
             device=device,
         )
 
-        self.screen_descriptions_encoder = ScreenDescriptionsEncoder(
-            h_dim=self.h_dim,
-            input_shape=self._observation_data("screen_descriptions"),
-            device=device,
-        )
+        # self.screen_descriptions_encoder = ScreenDescriptionsEncoder(
+        #     h_dim=self.h_dim,
+        #     input_shape=self._observation_data("screen_descriptions"),
+        #     device=device,
+        # )
 
-        self.tty_cursor_encoder = TTYCursorEncoder(
-            h_dim=self.h_dim,
-            device=device,
-        )
+        # self.tty_cursor_encoder = TTYCursorEncoder(
+        #     h_dim=self.h_dim,
+        #     device=device,
+        # )
 
-        # one h_dim-dimensional tensor per key in observation_space, + 1 for the crop
-        self.o_dim = self.h_dim * (len(observation_space.keys()) + 1)
+        # just as in the original obs_net, we only consider the glyphs, the blstats and the egocentric view of the agent
+        self.o_dim = self.h_dim * 3
         # combine all features and output mu and logsigma
         self.fc_mu = nn.Linear(self.o_dim, self.latent_dim).to(device)
         self.fc_logsigma = nn.Linear(self.o_dim, self.latent_dim).to(device)
@@ -102,27 +102,27 @@ class NetHackEncoder(nn.Module):
             torch.as_tensor(inputs["glyphs"], device=self.device),
             torch.as_tensor(inputs["blstats"][:, :2], device=self.device),
         )
-        inventory_inputs = {key: inputs[key] for key in self.inv_keys}
+        # inventory_inputs = {key: inputs[key] for key in self.inv_keys}
 
         spatial_features = self.spatial_encoder(spatial_inputs)
         egocentric_features = self.ego_encoder(cropped_inputs)
-        inventory_features = self.inventory_encoder(inventory_inputs)
-        message_features = self.message_encoder(inputs["message"])
+        # inventory_features = self.inventory_encoder(inventory_inputs)
+        # message_features = self.message_encoder(inputs["message"])
         blstats_features = self.blstats_encoder(inputs["blstats"])
-        screen_description_features = self.screen_descriptions_encoder(
-            inputs["screen_descriptions"]
-        )
-        tty_cursor_features = self.tty_cursor_encoder(inputs["tty_cursor"])
+        # screen_description_features = self.screen_descriptions_encoder(
+        #     inputs["screen_descriptions"]
+        # )
+        # tty_cursor_features = self.tty_cursor_encoder(inputs["tty_cursor"])
 
         combined = torch.cat(
             [
                 spatial_features,
                 egocentric_features,
-                inventory_features,
-                message_features,
+                # inventory_features,
+                # message_features,
                 blstats_features,
-                screen_description_features,
-                tty_cursor_features,
+                # screen_description_features,
+                # tty_cursor_features,
             ],
             dim=1,
         )  # (B, o_dim)
@@ -176,13 +176,13 @@ class NetHackDecoder(nn.Module):
 
         self.spatial_keys = [
             "glyphs",
-            "chars",
-            "colors",
-            "specials",
-            "tty_chars",
-            "tty_colors",
+            # "chars",
+            # "colors",
+            # "specials",
+            # "tty_chars",
+            # "tty_colors",
         ]
-        self.inv_keys = ["inv_glyphs", "inv_letters", "inv_oclasses", "inv_strs"]
+        # self.inv_keys = ["inv_glyphs", "inv_letters", "inv_oclasses", "inv_strs"]
 
         spatial_data = dict(
             [(key, self._observation_data(key)) for key in self.spatial_keys]
@@ -202,18 +202,18 @@ class NetHackDecoder(nn.Module):
             device=device,
         )
 
-        inv_data = dict([(key, self._observation_data(key)) for key in self.inv_keys])
-        self.inventory_decoder = InventoryDecoder(
-            h_dim=self.h_dim,
-            inv_shapes=inv_data,
-            device=device,
-        )
+        # inv_data = dict([(key, self._observation_data(key)) for key in self.inv_keys])
+        # self.inventory_decoder = InventoryDecoder(
+        #     h_dim=self.h_dim,
+        #     inv_shapes=inv_data,
+        #     device=device,
+        # )
 
-        self.message_decoder = MessageDecoder(
-            h_dim=self.h_dim,
-            message_shape=self._observation_data("message"),
-            device=device,
-        )
+        # self.message_decoder = MessageDecoder(
+        #     h_dim=self.h_dim,
+        #     message_shape=self._observation_data("message"),
+        #     device=device,
+        # )
 
         self.blstats_decoder = BlstatsDecoder(
             h_dim=self.h_dim,
@@ -221,16 +221,16 @@ class NetHackDecoder(nn.Module):
             device=device,
         )
 
-        self.screen_descriptions_decoder = ScreenDescriptionsDecoder(
-            h_dim=self.h_dim,
-            output_shape=self._observation_data("screen_descriptions"),
-            device=device,
-        )
+        # self.screen_descriptions_decoder = ScreenDescriptionsDecoder(
+        #     h_dim=self.h_dim,
+        #     output_shape=self._observation_data("screen_descriptions"),
+        #     device=device,
+        # )
 
-        self.tty_cursor_decoder = TTYCursorDecoder(
-            h_dim=self.h_dim,
-            device=device,
-        )
+        # self.tty_cursor_decoder = TTYCursorDecoder(
+        #     h_dim=self.h_dim,
+        #     device=device,
+        # )
 
         self.decoders = OrderedDict()
         self.decoders["spatial"] = (
@@ -238,20 +238,19 @@ class NetHackDecoder(nn.Module):
             self.h_dim * len(self.spatial_keys),
         )
         self.decoders["egocentric_view"] = (self.ego_decoder, self.h_dim)
-        self.decoders["inventory"] = (
-            self.inventory_decoder,
-            self.h_dim * len(self.inv_keys),
-        )
-        self.decoders["message"] = (self.message_decoder, self.h_dim)
+        # self.decoders["inventory"] = (
+        #     self.inventory_decoder,
+        #     self.h_dim * len(self.inv_keys),
+        # )
+        # self.decoders["message"] = (self.message_decoder, self.h_dim)
         self.decoders["blstats"] = (self.blstats_decoder, self.h_dim)
-        self.decoders["screen_descriptions"] = (
-            self.screen_descriptions_decoder,
-            self.h_dim,
-        )
-        self.decoders["tty_cursor"] = (self.tty_cursor_decoder, self.h_dim)
+        # self.decoders["screen_descriptions"] = (
+        #     self.screen_descriptions_decoder,
+        #     self.h_dim,
+        # )
+        # self.decoders["tty_cursor"] = (self.tty_cursor_decoder, self.h_dim)
 
     def forward(self, z: torch.Tensor) -> Dict[str, torch.Tensor]:
-        # TODO for some reason running the experiment is tremdendously slow!!
         reconstructions = {}
         x = self.fc(z)  # (B, eo_dim)
 
@@ -263,10 +262,10 @@ class NetHackDecoder(nn.Module):
                 # spatial_decoder returns multiple keys
                 spatial_outputs = decoder(x_chunk)
                 reconstructions.update(spatial_outputs)
-            elif name == "inventory":
-                # inventory_decoder returns multiple keys
-                inventory_outputs = decoder(x_chunk)
-                reconstructions.update(inventory_outputs)
+            # elif name == "inventory":
+            #     # inventory_decoder returns multiple keys
+            #     inventory_outputs = decoder(x_chunk)
+            #     reconstructions.update(inventory_outputs)
             else:
                 # other decoders return a single output
                 reconstructions[name] = decoder(x_chunk)
@@ -309,6 +308,27 @@ class NetHackVAE(nn.Module):
             hidden_dim=hidden_dim,
             device=device,
         )
+
+        # it's convenient to keep these here to centralise key handling
+        self.categorical_keys = [
+            "glyphs",
+            # "chars",
+            # "colors",
+            # "specials",
+            # "tty_chars",
+            # "tty_colors",
+            "egocentric_view",
+            # "inv_glyphs",
+            # "inv_letters",
+            # "inv_oclasses",
+            # "inv_strs",
+            # "message",
+            # "screen_descriptions",
+        ]
+        self.continuous_keys = [
+            "blstats",
+            # "tty_cursor",
+        ]
 
     def forward(
         self, inputs: Dict[str, torch.Tensor]

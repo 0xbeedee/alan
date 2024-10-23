@@ -12,8 +12,7 @@ from models import SelfModel, EnvModel
 from config import ConfigManager
 from .experiment_factory import ExperimentFactory
 
-# TODO test code
-# from environments import DreamEnv
+from environments import DreamEnv
 
 ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
@@ -24,13 +23,13 @@ REC_DIR = f"{ART_DIR}/recs"
 class ExperimentRunner:
     def __init__(
         self,
-        base_config_path,
-        env_config,
-        policy_config,
-        obsnet_config,
-        intrinsic_config,
-        model_config,
-        device,
+        base_config_path: str,
+        env_config: str,
+        policy_config: str,
+        obsnet_config: str,
+        intrinsic_config: str,
+        model_config: str,
+        device: torch.device,
     ):
         self.base_config_path = base_config_path
         self.env_config = env_config
@@ -41,54 +40,48 @@ class ExperimentRunner:
         self.device = device
 
         self._setup_config()
+        self.env_name = self.config.get("environment.base.name")
+        self.num_train_envs = self.config.get("environment.vec.num_train_envs")
+        self.num_test_envs = self.config.get("environment.vec.num_test_envs")
+        self.train_buf_size = self.config.get("buffers.train_buf_size")
+        self.test_buf_size = self.config.get("buffers.test_buf_size")
+        self.batch_size = self.config.get("training.batch_size")
+        self.learning_rate = self.config.get("policy.learning_rate")
+
         self.factory = ExperimentFactory(self.config)
         self.is_goal_aware = self.factory.is_goal_aware
 
+    def setup(self):
         print("[+] Setting up the environments...")
         self._setup_environment()
-        self.rec_path = self._make_save_path(
-            REC_DIR,
-            self.env_name,
-            self.policy_config,
-            self.obsnet_config,
-            self.intrinsic_config,
-            self.is_goal_aware,
-            ext="mp4" if self.env.render_mode == "rgb_array" else "ttyrec",
-        )
-        self.env = self.factory.wrap_env(self.env, self.rec_path)
-        self._setup_vector_envs()
-
+        self._setup_vector_envs(self.env, is_dream=False)
         print("[+] Setting up the buffers...")
-        self._setup_buffers()
-
+        self._setup_buffers(is_dream=False)
         print("[+] Setting up the networks...")
         self._setup_networks()
-
         print("[+] Setting up the models...")
         self._setup_models()
-
         print("[+] Setting up the policy...")
         self._setup_policy()
-
-        print("[+] Setting up the collector...")
-        self._setup_collectors()
-
+        print("[+] Setting up the collectors...")
+        self._setup_collectors(is_dream=False)
         print("[+] Setting up the logger...")
         self._setup_logger()
-
         print("[+] Setting up the trainer...")
-        self._setup_trainer()
+        self._setup_trainer(is_dream=False)
 
-    def run(self):
+        print("[+] Weaving the dream...")
+        self._setup_dream()
+
+    def run(self, save_pdf_plot: bool = True):
         """Runs the experiment and collects epoch statistics."""
         print("\n[+] Running the experiment...")
         self.epoch_stats = []
         for epoch_stat in self.trainer:
             self.epoch_stats.append(epoch_stat)
 
-        save_pdf = True
-        print("\n[+] Plotting..." if not save_pdf else "\n[+] Saving the plot...")
-        self._plot(save_pdf=save_pdf)
+        print("\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot...")
+        self._plot(save_pdf=save_pdf_plot)
 
         print("[+] Recording a rollout...")
         self._record_rollout()
@@ -110,33 +103,50 @@ class ExperimentRunner:
 
     def _setup_environment(self):
         """Sets up the gym environment."""
-        self.env_name = self.config.get("environment.base.name")
         try:
             self.env = gym.make(
                 self.env_name, **self.config.get_except("environment.base", "name")
             )
+            self.rec_path = self._make_save_path(
+                REC_DIR,
+                self.env_name,
+                self.policy_config,
+                self.obsnet_config,
+                self.intrinsic_config,
+                self.is_goal_aware,
+                ext="mp4" if self.env.render_mode == "rgb_array" else "ttyrec",
+            )
+            self.env = self.factory.wrap_env(self.env, self.rec_path)
         except gym.error.Error as e:
             raise RuntimeError(f"Failed to create environment {self.env_name}: {e}")
 
-    def _setup_vector_envs(self):
+    def _setup_vector_envs(self, environment: gym.Env, is_dream: bool = False):
         """Sets up the vector environments for training and testing."""
-        num_train_envs = self.config.get("environment.vec.num_train_envs")
-        num_test_envs = self.config.get("environment.vec.num_test_envs")
-        self.train_envs = ts.env.DummyVectorEnv(
-            [lambda: self.env for _ in range(num_train_envs)]
+        train_envs = ts.env.DummyVectorEnv(
+            [lambda: environment for _ in range(self.num_train_envs)]
         )
-        self.test_envs = ts.env.DummyVectorEnv(
-            [lambda: self.env for _ in range(num_test_envs)]
+        test_envs = ts.env.DummyVectorEnv(
+            [lambda: environment for _ in range(self.num_test_envs)]
         )
 
-    def _setup_buffers(self):
+        if is_dream:
+            self.dream_train_envs = train_envs
+            self.dream_test_envs = test_envs
+        else:
+            self.train_envs = train_envs
+            self.test_envs = test_envs
+
+    def _setup_buffers(self, is_dream: bool = False):
         """Sets up the replay buffers for training and testing."""
-        train_buf_size = self.config.get("buffers.train_buf_size")
-        test_buf_size = self.config.get("buffers.test_buf_size")
-        self.train_buf = self.factory.create_buffer(
-            train_buf_size, len(self.train_envs)
-        )
-        self.test_buf = self.factory.create_buffer(test_buf_size, len(self.test_envs))
+        train_buf = self.factory.create_buffer(self.train_buf_size, self.num_train_envs)
+        test_buf = self.factory.create_buffer(self.test_buf_size, self.num_test_envs)
+
+        if is_dream:
+            self.dream_train_buf = train_buf
+            self.dream_test_buf = test_buf
+        else:
+            self.train_buf = train_buf
+            self.test_buf = test_buf
 
     def _setup_networks(self):
         """Sets up the observation, actor, and critic networks."""
@@ -150,11 +160,8 @@ class ExperimentRunner:
 
     def _setup_models(self):
         """Sets up the environment model and the self model."""
-        batch_size = self.config.get("training.batch_size")
-        learning_rate = self.config.get("policy.learning_rate")
-
         self.vae_trainer, self.mdnrnn_trainer = self.factory.create_envmodel_trainers(
-            self.vae, self.mdnrnn, batch_size, learning_rate, self.device
+            self.vae, self.mdnrnn, self.batch_size, self.learning_rate, self.device
         )
         self.env_model = EnvModel(
             self.vae,
@@ -169,8 +176,8 @@ class ExperimentRunner:
                 self.obs_net,
                 self.env.action_space,
                 self.train_buf,
-                batch_size,
-                learning_rate,
+                self.batch_size,
+                self.learning_rate,
                 self.device,
             )
         )
@@ -183,11 +190,10 @@ class ExperimentRunner:
 
     def _setup_policy(self):
         """Sets up the policy."""
-        lr = self.config.get("policy.learning_rate")
         combined_params = set(
             list(self.actor_net.parameters()) + list(self.critic_net.parameters())
         )
-        self.optimizer = torch.optim.Adam(combined_params, lr=lr)
+        self.optimizer = torch.optim.Adam(combined_params, lr=self.learning_rate)
         self.policy = self.factory.create_policy(
             self.self_model,
             self.env_model,
@@ -196,17 +202,25 @@ class ExperimentRunner:
             self.optimizer,
             self.env.action_space,
             self.env.observation_space,
-            False,  # No action scaling
+            False,  # no action scaling
         )
 
-    def _setup_collectors(self):
+    def _setup_collectors(self, is_dream: bool = False):
         """Sets up the collectors for training and testing."""
-        self.train_collector = self.factory.create_collector(
-            self.policy, self.train_envs, self.train_buf
-        )
-        self.test_collector = self.factory.create_collector(
-            self.policy, self.test_envs, self.test_buf
-        )
+        if is_dream:
+            self.dream_train_collector = self.factory.create_collector(
+                self.policy, self.dream_train_envs, self.dream_train_buf
+            )
+            self.dream_test_collector = self.factory.create_collector(
+                self.policy, self.dream_test_envs, self.dream_test_buf
+            )
+        else:
+            self.train_collector = self.factory.create_collector(
+                self.policy, self.train_envs, self.train_buf
+            )
+            self.test_collector = self.factory.create_collector(
+                self.policy, self.test_envs, self.test_buf
+            )
 
     def _setup_logger(self):
         """Sets up the TensorboardLogger."""
@@ -221,13 +235,35 @@ class ExperimentRunner:
         self.writer = SummaryWriter(os.path.split(self.log_path)[0])
         self.logger = TensorboardLogger(self.writer)
 
-    def _setup_trainer(self):
+    def _setup_trainer(self, is_dream: bool = False):
         """Sets up the trainer."""
-        self.trainer = self.factory.create_trainer(
-            self.policy, self.train_collector, self.test_collector, self.logger
-        )
+        if is_dream:
+            self.dream_trainer = self.factory.create_trainer(
+                self.policy,
+                self.dream_train_collector,
+                self.dream_test_collector,
+                self.logger,
+            )
+        else:
+            self.trainer = self.factory.create_trainer(
+                self.policy, self.train_collector, self.test_collector, self.logger
+            )
 
-    def _plot(self, save_pdf=True):
+    def _setup_dream(self):
+        """Sets up the dream environment and associated components."""
+        self.dream_env = DreamEnv(
+            self.env_model, self.env.observation_space, self.env.action_space
+        )
+        self._setup_vector_envs(self.dream_env, is_dream=True)
+        self._setup_buffers(is_dream=True)
+
+        # TODO manually updating the buffer here breaks run() when using the trainer for the real environment!
+        # self.self_model.slow_intrinsic_module.buf = self.dream_train_buf
+
+        self._setup_collectors(is_dream=True)
+        self._setup_trainer(is_dream=True)
+
+    def _plot(self, save_pdf: bool = True):
         """Plots the data.
 
         Its default behaviour is to save the plot to a PDF file to not block execution.
@@ -261,13 +297,13 @@ class ExperimentRunner:
 
     def _make_save_path(
         self,
-        base_path,
-        env_config,
-        policy_config,
-        obsnet_config,
-        intrinsic_config,
-        is_goal_aware,
-        ext=None,
+        base_path: str,
+        env_config: str,
+        policy_config: str,
+        obsnet_config: str,
+        intrinsic_config: str,
+        is_goal_aware: bool,
+        ext: str | None = None,
     ):
         """Creates a path to save the artefacts (plots, recordings, and logs)."""
         timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
@@ -280,6 +316,6 @@ class ExperimentRunner:
             "goal" if is_goal_aware else "vanilla",
             f"{timestamp}.{ext}" if ext else timestamp,
         )
-        # make the directory if it doesn't exist
+        # create the directory if it doesn't exist
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
         return save_path

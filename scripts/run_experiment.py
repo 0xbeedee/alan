@@ -22,6 +22,8 @@ def main(
         model_config,
         device,
     )
+
+    runner.setup()
     runner.run()
 
 

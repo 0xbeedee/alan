@@ -4,10 +4,21 @@ buffers:
   train_buf_size: 20
   test_buf_size: 20
 
+  dream_train_buf_size: 50
+
 training:
-  max_epoch: 3
-  step_per_epoch: 50
-  step_per_collect: 20
-  episode_per_test: 1
-  batch_size: 5
-  repeat_per_collect: 1
+  real:
+    max_epoch: 3
+    step_per_epoch: 50
+    step_per_collect: 20
+    episode_per_test: 1
+    batch_size: 5
+    repeat_per_collect: 1
+  dream:
+    max_epoch: 2
+    step_per_epoch: 100
+    step_per_collect: 20
+    # this needs to be defined to comply with Tianshou's API, even though we do not test in the dream
+    episode_per_test: 1
+    batch_size: 5
+    repeat_per_collect: 1

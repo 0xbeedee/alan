@@ -1,5 +1,7 @@
+from contextlib import contextmanager
 from datetime import datetime
 import os
+from typing import final
 
 import torch
 import gymnasium as gym
@@ -42,10 +44,17 @@ class ExperimentRunner:
         self._setup_config()
         self.env_name = self.config.get("environment.base.name")
         self.num_train_envs = self.config.get("environment.vec.num_train_envs")
+        self.dream_num_train_envs = self.config.get(
+            "environment.vec.dream_num_train_envs"
+        )
         self.num_test_envs = self.config.get("environment.vec.num_test_envs")
+
         self.train_buf_size = self.config.get("buffers.train_buf_size")
+        self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
         self.test_buf_size = self.config.get("buffers.test_buf_size")
-        self.batch_size = self.config.get("training.batch_size")
+
+        # use the real batch size by default
+        self.batch_size = self.config.get("training.real.batch_size")
         self.learning_rate = self.config.get("policy.learning_rate")
 
         self.factory = ExperimentFactory(self.config)
@@ -76,9 +85,14 @@ class ExperimentRunner:
     def run(self, save_pdf_plot: bool = True):
         """Runs the experiment and collects epoch statistics."""
         print("\n[+] Running the experiment...")
-        self.epoch_stats = []
+        self.epoch_stats, self.dream_epoch_stats = [], []
         for epoch_stat in self.trainer:
             self.epoch_stats.append(epoch_stat)
+
+            # TODO this is possibly the simplest approach we could take (making it more complex is mostly a triviality, though)
+            with self._dream_buffer() as _:
+                for dream_epoch_stat in self.dream_trainer:
+                    self.dream_epoch_stats.append(dream_epoch_stat)
 
         print("\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot...")
         self._plot(save_pdf=save_pdf_plot)
@@ -89,7 +103,7 @@ class ExperimentRunner:
         print("[+] All done!")
 
     def _setup_config(self):
-        """Sets up and validates the configuration."""
+        """Sets up the configuration."""
         self.config = ConfigManager(self.base_config_path)
         self.config.create_config(
             {
@@ -122,31 +136,33 @@ class ExperimentRunner:
 
     def _setup_vector_envs(self, environment: gym.Env, is_dream: bool = False):
         """Sets up the vector environments for training and testing."""
-        train_envs = ts.env.DummyVectorEnv(
-            [lambda: environment for _ in range(self.num_train_envs)]
-        )
-        test_envs = ts.env.DummyVectorEnv(
-            [lambda: environment for _ in range(self.num_test_envs)]
-        )
-
         if is_dream:
-            self.dream_train_envs = train_envs
-            self.dream_test_envs = test_envs
+            self.dream_train_envs = ts.env.DummyVectorEnv(
+                [lambda: environment for _ in range(self.dream_num_train_envs)]
+            )
+            # only test in the real environment, no need to create test_envs
         else:
-            self.train_envs = train_envs
-            self.test_envs = test_envs
+            self.train_envs = ts.env.DummyVectorEnv(
+                [lambda: environment for _ in range(self.num_train_envs)]
+            )
+            self.test_envs = ts.env.DummyVectorEnv(
+                [lambda: environment for _ in range(self.num_test_envs)]
+            )
 
     def _setup_buffers(self, is_dream: bool = False):
         """Sets up the replay buffers for training and testing."""
-        train_buf = self.factory.create_buffer(self.train_buf_size, self.num_train_envs)
-        test_buf = self.factory.create_buffer(self.test_buf_size, self.num_test_envs)
-
         if is_dream:
-            self.dream_train_buf = train_buf
-            self.dream_test_buf = test_buf
+            self.dream_train_buf = self.factory.create_buffer(
+                self.dream_train_buf_size, self.dream_num_train_envs
+            )
+            # only test in the real environment, no need to create test_buf
         else:
-            self.train_buf = train_buf
-            self.test_buf = test_buf
+            self.train_buf = self.factory.create_buffer(
+                self.train_buf_size, self.num_train_envs
+            )
+            self.test_buf = self.factory.create_buffer(
+                self.test_buf_size, self.num_test_envs
+            )
 
     def _setup_networks(self):
         """Sets up the observation, actor, and critic networks."""
@@ -211,9 +227,8 @@ class ExperimentRunner:
             self.dream_train_collector = self.factory.create_collector(
                 self.policy, self.dream_train_envs, self.dream_train_buf
             )
-            self.dream_test_collector = self.factory.create_collector(
-                self.policy, self.dream_test_envs, self.dream_test_buf
-            )
+            # only test in the real environment, need set test_collector to None to skip the Trainer's test_step()
+            self.dream_test_collector = None
         else:
             self.train_collector = self.factory.create_collector(
                 self.policy, self.train_envs, self.train_buf
@@ -237,17 +252,21 @@ class ExperimentRunner:
 
     def _setup_trainer(self, is_dream: bool = False):
         """Sets up the trainer."""
-        if is_dream:
-            self.dream_trainer = self.factory.create_trainer(
-                self.policy,
-                self.dream_train_collector,
-                self.dream_test_collector,
-                self.logger,
-            )
-        else:
-            self.trainer = self.factory.create_trainer(
-                self.policy, self.train_collector, self.test_collector, self.logger
-            )
+        train_collector = (
+            self.dream_train_collector if is_dream else self.train_collector
+        )
+        test_collector = self.dream_test_collector if is_dream else self.test_collector
+
+        trainer = self.factory.create_trainer(
+            self.policy,
+            train_collector,
+            test_collector,
+            self.logger,
+            is_dream=is_dream,
+        )
+
+        attr_name = "dream_trainer" if is_dream else "trainer"
+        setattr(self, attr_name, trainer)
 
     def _setup_dream(self):
         """Sets up the dream environment and associated components."""
@@ -257,11 +276,19 @@ class ExperimentRunner:
         self._setup_vector_envs(self.dream_env, is_dream=True)
         self._setup_buffers(is_dream=True)
 
-        # TODO manually updating the buffer here breaks run() when using the trainer for the real environment!
-        # self.self_model.slow_intrinsic_module.buf = self.dream_train_buf
-
         self._setup_collectors(is_dream=True)
         self._setup_trainer(is_dream=True)
+
+    @contextmanager
+    def _dream_buffer(self):
+        """Changes the SelfModel buffer to point to the dream buffer and switches it back before returning to the real environment."""
+        try:
+            print("\n[+] Dreaming...")
+            self.self_model.slow_intrinsic_module.buf = self.dream_train_buf
+            yield
+        finally:
+            self.self_model.slow_intrinsic_module.buf = self.train_buf
+            print()
 
     def _plot(self, save_pdf: bool = True):
         """Plots the data.

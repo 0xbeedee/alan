@@ -4,3 +4,5 @@ base:
 vec:
   num_train_envs: 1
   num_test_envs: 1
+
+  dream_num_train_envs: 2

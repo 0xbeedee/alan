@@ -204,6 +204,7 @@ class ExperimentFactory:
         test_collector: Union[Collector, GoalCollector],
         logger: TensorboardLogger,
         trainer_type: str = "onpolicy",
+        is_dream: bool = False,
     ) -> Union[
         OnpolicyTrainer,
         OffpolicyTrainer,
@@ -226,10 +227,11 @@ class ExperimentFactory:
         standard_trainer, goal_trainer = trainer_map[trainer_type]
         trainer_class = goal_trainer if self.is_goal_aware else standard_trainer
 
+        train_type = "dream" if is_dream else "real"
         common_kwargs = {
             "policy": policy,
             "logger": logger,
-            **self.config.get("training", {}),
+            **self.config.get(f"training.{train_type}", {}),
         }
 
         if trainer_type != "offline":

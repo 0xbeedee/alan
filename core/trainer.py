@@ -1,5 +1,5 @@
 from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
-from typing import Callable, Self
+from typing import Callable
 import logging
 from dataclasses import asdict
 
@@ -24,7 +24,6 @@ from tianshou.utils import (
 )
 from tianshou.utils.logging import set_numerical_fields_to_precision
 
-import torch
 from .stats import EpNStepCollectStats
 from .policy import CoreTrainingStats
 

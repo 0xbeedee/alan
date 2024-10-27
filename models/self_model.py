@@ -38,10 +38,6 @@ class SelfModel:
         batch_latent_obs = self.obs_net(batch_obs)
         # a basic goal selection mechanism: simply add some gaussian noise
         goal = batch_latent_obs + torch.randn_like(batch_latent_obs)
-        # TODO a temporary fix
-        if not torch.isfinite(goal).all():
-            # goal contains NaNs or Infs (this could happen with an untrained obs_net)
-            goal = torch.nan_to_num(goal, nan=0.0, posinf=0.0, neginf=0.0)
         # return in numpy format for consistency with the other Batch entries
         return goal.cpu().numpy().astype(np.float32)
 

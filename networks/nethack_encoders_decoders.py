@@ -32,11 +32,11 @@ class SpatialEncoder(nn.Module):
             # convolutional encoder for the key
             conv = nn.Sequential(
                 nn.Conv2d(self.embedding_dim, 64, kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Conv2d(128, self.h_dim, kernel_size=3, stride=2, padding=1),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.AdaptiveAvgPool2d((1, 1)),  # global average pooling
             ).to(self.device)
 
@@ -78,10 +78,10 @@ class SpatialDecoder(nn.Module):
             H, W = shape
             decoder = nn.Sequential(
                 nn.Linear(h_dim, h_dim * H * W),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Unflatten(1, (h_dim, H, W)),  # (B, h_dim, H, W)
                 nn.Conv2d(h_dim, h_dim // 2, kernel_size=3, padding=1),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Conv2d(h_dim // 2, num_classes, kernel_size=3, padding=1),
             ).to(device)
             self.decoders[key] = decoder
@@ -123,7 +123,7 @@ class InventoryEncoder(nn.Module):
             # linear layer to produce feature vector
             fc = nn.Sequential(
                 nn.Linear(np.prod(shape) * self.embedding_dim, h_dim),
-                nn.ReLU(),
+                nn.SiLU(),
             ).to(device)
 
             self.encoders[key] = nn.ModuleDict({"embedding": embedding, "fc": fc})
@@ -143,73 +143,6 @@ class InventoryEncoder(nn.Module):
 
         combined_features = torch.cat(features, dim=1)  # (B, h_dim * num_keys)
         return combined_features
-
-
-class EgocentricEncoder(nn.Module):
-    def __init__(
-        self,
-        h_dim: int,
-        input_shape: Tuple[int, Tuple[int, int]],
-        embedding_dim: int = 32,
-        device: torch.device = torch.device("cpu"),
-    ):
-        super().__init__()
-        self.device = device
-        self.h_dim = h_dim
-        self.embedding_dim = embedding_dim
-        self.num_classes, self.input_shape = (
-            input_shape  # (num_classes, (H_crop, W_crop))
-        )
-
-        self.embedding = nn.Embedding(
-            num_embeddings=self.num_classes,
-            embedding_dim=embedding_dim,
-            device=self.device,
-        )
-
-        self.conv = nn.Sequential(
-            nn.Conv2d(embedding_dim, 64, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, h_dim, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(),
-            nn.AdaptiveAvgPool2d((1, 1)),  # global average pooling
-        ).to(self.device)
-
-    def forward(self, inputs):
-        x = torch.as_tensor(inputs, device=self.device).long()  # (B, H_crop, W_crop)
-        x_embedded = self.embedding(x)  # (B, H_crop, W_crop, E)
-        x_embedded = x_embedded.permute(0, 3, 1, 2)  # (B, E, H_crop, W_crop)
-        x_feature = self.conv(x_embedded)  # (B, h_dim, 1, 1)
-        x_feature = x_feature.view(x_feature.size(0), -1)  # (B, h_dim)
-        return x_feature
-
-
-class EgocentricDecoder(nn.Module):
-    def __init__(
-        self,
-        h_dim: int,
-        output_shape: Tuple[int, Tuple[int, int]],
-        device: torch.device = torch.device("cpu"),
-    ):
-        super().__init__()
-        self.device = device
-        self.h_dim = h_dim
-        self.num_classes, (H, W) = output_shape
-
-        self.decoder = nn.Sequential(
-            nn.Linear(h_dim, h_dim * H * W),
-            nn.ReLU(),
-            nn.Unflatten(1, (h_dim, H, W)),
-            nn.Conv2d(h_dim, h_dim // 2, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(h_dim // 2, self.num_classes, kernel_size=3, padding=1),
-        ).to(self.device)
-
-    def forward(self, x):
-        logits = self.decoder(x)  # (B, num_classes, H, W)
-        return logits
 
 
 class InventoryDecoder(nn.Module):
@@ -249,6 +182,73 @@ class InventoryDecoder(nn.Module):
         return outputs
 
 
+class EgocentricEncoder(nn.Module):
+    def __init__(
+        self,
+        h_dim: int,
+        input_shape: Tuple[int, Tuple[int, int]],
+        embedding_dim: int = 32,
+        device: torch.device = torch.device("cpu"),
+    ):
+        super().__init__()
+        self.device = device
+        self.h_dim = h_dim
+        self.embedding_dim = embedding_dim
+        self.num_classes, self.input_shape = (
+            input_shape  # (num_classes, (H_crop, W_crop))
+        )
+
+        self.embedding = nn.Embedding(
+            num_embeddings=self.num_classes,
+            embedding_dim=embedding_dim,
+            device=self.device,
+        )
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(embedding_dim, 64, kernel_size=3, stride=1, padding=1),
+            nn.SiLU(),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),
+            nn.SiLU(),
+            nn.Conv2d(128, h_dim, kernel_size=3, stride=1, padding=1),
+            nn.SiLU(),
+            nn.AdaptiveAvgPool2d((1, 1)),  # global average pooling
+        ).to(self.device)
+
+    def forward(self, inputs):
+        x = torch.as_tensor(inputs, device=self.device).long()  # (B, H_crop, W_crop)
+        x_embedded = self.embedding(x)  # (B, H_crop, W_crop, E)
+        x_embedded = x_embedded.permute(0, 3, 1, 2)  # (B, E, H_crop, W_crop)
+        x_feature = self.conv(x_embedded)  # (B, h_dim, 1, 1)
+        x_feature = x_feature.view(x_feature.size(0), -1)  # (B, h_dim)
+        return x_feature
+
+
+class EgocentricDecoder(nn.Module):
+    def __init__(
+        self,
+        h_dim: int,
+        output_shape: Tuple[int, Tuple[int, int]],
+        device: torch.device = torch.device("cpu"),
+    ):
+        super().__init__()
+        self.device = device
+        self.h_dim = h_dim
+        self.num_classes, (H, W) = output_shape
+
+        self.decoder = nn.Sequential(
+            nn.Linear(h_dim, h_dim * H * W),
+            nn.SiLU(),
+            nn.Unflatten(1, (h_dim, H, W)),
+            nn.Conv2d(h_dim, h_dim // 2, kernel_size=3, padding=1),
+            nn.SiLU(),
+            nn.Conv2d(h_dim // 2, self.num_classes, kernel_size=3, padding=1),
+        ).to(self.device)
+
+    def forward(self, x):
+        logits = self.decoder(x)  # (B, num_classes, H, W)
+        return logits
+
+
 class MessageEncoder(nn.Module):
     def __init__(
         self,
@@ -272,7 +272,7 @@ class MessageEncoder(nn.Module):
         )
         self.fc = nn.Sequential(
             nn.Linear(self.message_length * embedding_dim, h_dim),
-            nn.ReLU(),
+            nn.SiLU(),
         ).to(self.device)
 
     def forward(self, x: np.ndarray) -> torch.Tensor:
@@ -325,7 +325,7 @@ class BlstatsEncoder(nn.Module):
 
         self.fc = nn.Sequential(
             nn.Linear(blstats_size, h_dim),
-            nn.ReLU(),
+            nn.SiLU(),
         ).to(self.device)
 
     def forward(self, x: np.ndarray) -> torch.Tensor:
@@ -383,11 +383,11 @@ class ScreenDescriptionsEncoder(nn.Module):
                 stride=2,
                 padding=1,
             ),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Conv3d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Conv3d(128, h_dim, kernel_size=3, stride=2, padding=1),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.AdaptiveAvgPool3d((1, 1, 1)),  # global average pooling
         ).to(self.device)
 
@@ -416,10 +416,10 @@ class ScreenDescriptionsDecoder(nn.Module):
 
         self.decoder = nn.Sequential(
             nn.Linear(h_dim, h_dim * H * W * D),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Unflatten(1, (h_dim, H, W, D)),
             nn.Conv3d(h_dim, h_dim // 2, kernel_size=3, padding=1),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Conv3d(h_dim // 2, self.vocab_size, kernel_size=3, padding=1),
         ).to(self.device)
 
@@ -440,9 +440,9 @@ class TTYCursorEncoder(nn.Module):
 
         self.encoder = nn.Sequential(
             nn.Linear(2, 64),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(64, h_dim),
-            nn.ReLU(),
+            nn.SiLU(),
         ).to(self.device)
 
     def forward(self, x: np.ndarray) -> torch.Tensor:
@@ -462,7 +462,7 @@ class TTYCursorDecoder(nn.Module):
 
         self.decoder = nn.Sequential(
             nn.Linear(h_dim, 64),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(64, 2),
             nn.Sigmoid(),  # output between 0 and 1
         ).to(self.device)
@@ -470,3 +470,4 @@ class TTYCursorDecoder(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.decoder(x) * 255  # (B, 2), scaled to [0, 255]
         return x
+        return x  # (B, h_dim)

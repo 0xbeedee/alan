@@ -3,6 +3,7 @@ import gymnasium as gym
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 from collections import namedtuple, OrderedDict
 
 from .nethack_encoders_decoders import *
@@ -143,11 +144,15 @@ class NetHackEncoder(nn.Module):
         )
         return data
 
-    def _reparameterise(self, mu: torch.Tensor, logsigma: torch.Tensor) -> torch.Tensor:
+    def _reparameterise(
+        self, mu: torch.Tensor, logsigma: torch.Tensor, eps: float = 1e-8
+    ) -> torch.Tensor:
         """Uses the reparameterisatin trick to obtain an observation in latent space, given the means and logsigmas."""
-        sigma = torch.exp(logsigma)
-        eps = torch.randn_like(sigma, device=self.device)
-        return mu + sigma * eps
+        # from https://hunterheidenreich.com/posts/modern-variational-autoencoder-in-pytorch/
+        sigma = F.softplus(logsigma) + eps
+        scale_tril = torch.diag_embed(sigma)
+        dist = torch.distributions.MultivariateNormal(mu, scale_tril=scale_tril)
+        return dist.rsample()
 
 
 class NetHackDecoder(nn.Module):

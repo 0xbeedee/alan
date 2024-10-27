@@ -6,7 +6,9 @@ from tianshou.data import SequenceSummaryStats
 import torch
 from torch import nn
 import torch.nn.functional as F
+from torch.distributions import MultivariateNormal, kl
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 import numpy as np
 
 
@@ -54,9 +56,9 @@ class NetHackVAETrainer:
 
     def _get_loss(self, inputs: Dict[str, np.ndarray]) -> torch.Tensor:
         """Computes the VAE loss."""
-        reconstructions, mu, logsigma = self.vae(inputs)
+        reconstructions, z, dist = self.vae(inputs)
         loss = self._xentropy_mse_kld(
-            reconstructions, inputs, mu, logsigma, self.vae.encoder.crop
+            reconstructions, inputs, z, dist, self.vae.encoder.crop
         )
         return loss
 
@@ -64,8 +66,8 @@ class NetHackVAETrainer:
         self,
         reconstructions: Dict[str, torch.Tensor],
         inputs: Dict[str, np.ndarray],
-        mu: torch.Tensor,
-        logsigma: torch.Tensor,
+        z: torch.Tensor,
+        dist: torch.distributions.Distribution,
         enc_crop: "Crop",  # type:ignore
         kl_weight: float = 1.0,
     ):
@@ -95,9 +97,16 @@ class NetHackVAETrainer:
                 loss = F.mse_loss(recon, target, reduction="mean")
                 recon_loss += loss
                 total_elements += 1
-
-        # TODO check the balance between recon and KLD losses!
         recon_loss /= total_elements
-        kld_loss = -0.5 * torch.mean(1 + logsigma - mu.pow(2) - logsigma.exp())
-        total_loss = recon_loss + kl_weight * kld_loss
+
+        # from https://hunterheidenreich.com/posts/modern-variational-autoencoder-in-pytorch/
+        std_normal = MultivariateNormal(
+            torch.zeros_like(z, device=z.device),
+            scale_tril=torch.eye(z.shape[-1], device=z.device)
+            .unsqueeze(0)
+            .expand(z.shape[0], -1, -1),
+        )
+        kl_loss = kl.kl_divergence(dist, std_normal).mean()
+
+        total_loss = recon_loss + kl_weight * kl_loss
         return total_loss

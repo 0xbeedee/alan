@@ -1,10 +1,12 @@
 from typing import Tuple, Dict
 import gymnasium as gym
 
+from collections import namedtuple, OrderedDict
+
 import torch
 from torch import nn
 import torch.nn.functional as F
-from collections import namedtuple, OrderedDict
+from torch.distributions import MultivariateNormal
 
 from .nethack_encoders_decoders import *
 from .utils import Crop
@@ -131,8 +133,8 @@ class NetHackEncoder(nn.Module):
         mu = self.fc_mu(combined)  # (B, latent_dim)
         logsigma = self.fc_logsigma(combined)  # (B, latent_dim)
         # it's convenient to have the encoder return z as well
-        z = self._reparameterise(mu, logsigma)  # (B, latent_dim)
-        return z, mu, logsigma
+        z, dist = self._reparameterise(mu, logsigma)  # (B, latent_dim)
+        return z, dist
 
     def _observation_data(self, key: str) -> Tuple[int, Tuple[int, ...]]:
         """Extracts the observation data corresponding to a key."""
@@ -151,8 +153,9 @@ class NetHackEncoder(nn.Module):
         # from https://hunterheidenreich.com/posts/modern-variational-autoencoder-in-pytorch/
         sigma = F.softplus(logsigma) + eps
         scale_tril = torch.diag_embed(sigma)
-        dist = torch.distributions.MultivariateNormal(mu, scale_tril=scale_tril)
-        return dist.rsample()
+        dist = MultivariateNormal(mu, scale_tril=scale_tril)
+        # we'll need the dist for training the VAE
+        return dist.rsample(), dist
 
 
 class NetHackDecoder(nn.Module):
@@ -338,6 +341,6 @@ class NetHackVAE(nn.Module):
     def forward(
         self, inputs: Dict[str, torch.Tensor]
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-        z, mu, logsigma = self.encoder(inputs)
+        z, dist = self.encoder(inputs)
         reconstructions = self.decoder(z)
-        return reconstructions, mu, logsigma
+        return reconstructions, z, dist

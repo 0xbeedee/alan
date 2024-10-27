@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 from datetime import datetime
 import os
-from typing import final
 
 import torch
 import gymnasium as gym
@@ -206,9 +205,18 @@ class ExperimentRunner:
 
     def _setup_policy(self):
         """Sets up the policy."""
-        combined_params = set(
-            list(self.actor_net.parameters()) + list(self.critic_net.parameters())
-        )
+        assert self.actor_net.obs_net is self.critic_net.obs_net
+        obs_net_params = set(self.actor_net.obs_net.parameters())
+
+        # exclude the obs_net parameters because the obs_net is trained separately
+        actor_params = [
+            p for p in self.actor_net.parameters() if p not in obs_net_params
+        ]
+        critic_params = [
+            p for p in self.critic_net.parameters() if p not in obs_net_params
+        ]
+        combined_params = actor_params + critic_params
+
         self.optimizer = torch.optim.Adam(combined_params, lr=self.learning_rate)
         self.policy = self.factory.create_policy(
             self.self_model,

@@ -10,6 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
 from models import SelfModel, EnvModel
+from intrinsic import ZeroICM, ZeroHER
 from config import ConfigManager
 from .experiment_factory import ExperimentFactory
 
@@ -89,7 +90,7 @@ class ExperimentRunner:
             self.epoch_stats.append(epoch_stat)
 
             # TODO this is possibly the simplest approach we could take (making it more complex is mostly a triviality, though)
-            with self._dream_buffer() as _:
+            with self._enter_dream() as _:
                 for dream_epoch_stat in self.dream_trainer:
                     self.dream_epoch_stats.append(dream_epoch_stat)
 
@@ -283,19 +284,31 @@ class ExperimentRunner:
         )
         self._setup_vector_envs(self.dream_env, is_dream=True)
         self._setup_buffers(is_dream=True)
-
         self._setup_collectors(is_dream=True)
         self._setup_trainer(is_dream=True)
 
     @contextmanager
-    def _dream_buffer(self):
-        """Changes the SelfModel buffer to point to the dream buffer and switches it back before returning to the real environment."""
+    def _enter_dream(self):
+        """Modifies the execution context to enable the agent to act within its dream, restoring the old execution context once dreaming is over."""
         try:
-            print("\n[+] Dreaming...")
+            # __enter__()
+            old_fast = self.self_model.fast_intrinsic_module
+            old_slow = self.self_model.slow_intrinsic_module
+            # disable ICM and HER while dreaming
+            self.self_model.fast_intrinsic_module = ZeroICM(
+                self.obs_net, self.dream_env.action_space, 0
+            )
+            self.self_model.slow_intrinsic_module = ZeroHER(self.dream_train_buf, 0)
+
             self.self_model.slow_intrinsic_module.buf = self.dream_train_buf
+            print("\n[+] Dreaming...")
             yield
         finally:
+            # __exit__()
             self.self_model.slow_intrinsic_module.buf = self.train_buf
+
+            self.self_model.fast_intrinsic_module = old_fast
+            self.self_model.slow_intrinsic_module = old_slow
             print()
 
     def _plot(self, save_pdf: bool = True):

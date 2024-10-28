@@ -1,5 +1,7 @@
 from core.types import GoalReplayBufferProtocol
 
+from torch import nn
+
 from tianshou.data import Batch
 import numpy as np
 
@@ -12,6 +14,7 @@ class HER:
 
     def __init__(
         self,
+        obs_net: nn.Module,
         buffer: GoalReplayBufferProtocol,
         horizon: int,
         future_k: float = 8.0,
@@ -20,13 +23,32 @@ class HER:
         assert (
             buffer._save_obs_next == True
         ), "obs_next is needed for HER to work properly"
+        self.obs_net = obs_net
         self.buf = buffer
 
         self.horizon = horizon
         self.future_p = 1 - 1 / future_k
         self.epsilon = epsilon
 
-    def get_future_observation_(self, indices: np.ndarray) -> Batch:
+    def rewrite_rewards_(self, indices: np.ndarray) -> np.ndarray:
+        future_obs = self._get_future_observation_(indices)
+        future_achieved_goal = self.obs_net(future_obs).cpu().numpy()
+        # desired
+        desired_goal = self.buf[self.unique_indices].latent_goal_next
+        reassigned_desired_goal = desired_goal.copy()
+        # achieved
+        reassigned_desired_goal[:, self.her_indices] = future_achieved_goal[
+            None, self.her_indices
+        ]
+
+        rew = self.buf[self.unique_indices].rew
+        # we add instead of assigning because we want to keep the fast intrinsic bonus
+        # (as for the sparsity argument in the HER paper: the fast intrinsic contribution decreases over time, so we will eventually reach a sparse reward setting)
+        rew += self._compute_reward(desired_goal, reassigned_desired_goal)
+        # unlike in the Tianshou implementation, we don't need to restore anything
+        self.buf._meta.rew[self.unique_indices] = rew
+
+    def _get_future_observation_(self, indices: np.ndarray) -> Batch:
         # we need to keep the chronological order
         indices[indices < (self.buf.last_index[0] + 1)] += self.buf.maxsize
         indices = np.sort(indices)
@@ -62,22 +84,6 @@ class HER:
 
         future_obs = self.buf[future_t[unique_close_indices]].obs_next
         return future_obs
-
-    def rewrite_transitions_(self, future_achieved_goal: np.ndarray) -> np.ndarray:
-        next_desired_goal = self.buf[self.unique_indices].latent_goal_next
-        reassigned_desired_goal = next_desired_goal.copy()
-        reassigned_desired_goal[:, self.her_indices] = future_achieved_goal[
-            None, self.her_indices
-        ]
-
-        rew = self.buf[self.unique_indices].rew
-        # we add instead of assigning because we want to keep the fast intrinsic bonus
-        # (as for the sparsity argument in the HER paper: we decrease the fast intrinsic contribution over time, so we will eventually reach a situation in which we'll only operate with env rewards and the sparse binary ones provided by HER)
-        rew[:, self.her_indices] += self._compute_reward(
-            next_desired_goal, reassigned_desired_goal
-        )[:, self.her_indices]
-        # unlike in the Tianshou case, we don't need to restore anything
-        self.buf._meta.rew[self.unique_indices] = rew
 
     def _compute_reward(
         self,

@@ -106,6 +106,7 @@ class ExperimentFactory:
             device=device,
         )
         slow_intrinsic_module = slow_intrinsic_class(
+            obs_net,
             buf,
             **self.config.get_except("intrinsic.slow", exclude="name"),
         )

@@ -55,13 +55,8 @@ class SelfModel:
 
         This intrinsic computation happens at update time, and is somewhat conceptually analogous to Kahneman's System 2.
         """
-        # get_future_observation_ alters the indices
-        future_obs = self.slow_intrinsic_module.get_future_observation_(indices)
-        latent_future_goal = self.obs_net(future_obs)
         # we cannot return the reward here because modifying the buffer requires access to its internals
-        self.slow_intrinsic_module.rewrite_transitions_(
-            latent_future_goal.cpu().numpy()
-        )
+        self.slow_intrinsic_module.rewrite_rewards_(indices)
 
     def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> TrainingStats:
         return self.fast_intrinsic_module.learn(batch, **kwargs)

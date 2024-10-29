@@ -2,6 +2,8 @@ from core.types import GoalReplayBufferProtocol
 from tianshou.data import Batch
 import numpy as np
 
+from torch import nn
+
 from .her import HER
 
 
@@ -15,12 +17,13 @@ class ZeroHER(HER):
 
     def __init__(
         self,
+        obs_net: nn.Module,
         buffer: GoalReplayBufferProtocol,
         horizon: int,
         future_k: float = 8.0,
         epsilon: float = 0.001,
     ) -> None:
-        super().__init__(buffer, horizon, future_k, epsilon)
+        super().__init__(obs_net, buffer, horizon, future_k, epsilon)
 
     def get_future_observation_(self, indices: np.ndarray) -> Batch:
         # return the next observations without any modifications

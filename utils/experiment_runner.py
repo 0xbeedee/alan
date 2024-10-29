@@ -298,7 +298,9 @@ class ExperimentRunner:
             self.self_model.fast_intrinsic_module = ZeroICM(
                 self.obs_net, self.dream_env.action_space, 0
             )
-            self.self_model.slow_intrinsic_module = ZeroHER(self.dream_train_buf, 0)
+            self.self_model.slow_intrinsic_module = ZeroHER(
+                self.obs_net, self.dream_train_buf, 0
+            )
 
             self.self_model.slow_intrinsic_module.buf = self.dream_train_buf
             print("\n[+] Dreaming...")

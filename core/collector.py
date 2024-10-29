@@ -83,7 +83,7 @@ class GoalCollector(Collector):
         # to track the episodic intrinsic reward
         episode_intrinsic_returns: list[float] = []
 
-        # to track the reward if we do not mangate to finish one episode
+        # to track the reward if we do not manage to finish one episode
         nstep_returns: list[float] = []
         # to track the n_step (fast) intrinsic reward
         nstep_intrinsic_returns: list[float] = []

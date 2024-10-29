@@ -95,7 +95,7 @@ class MDNRNNTrainer:
     ) -> Dict[str, torch.Tensor]:
         """Computes the losses for the MDNRNN model."""
         action = action.unsqueeze(1)
-        mus, sigmas, logpi, rs, ds = self.mdnrnn(action, latent_obs)
+        mus, sigmas, logpi, rs, ds, _ = self.mdnrnn(action, latent_obs)
 
         gmm = gmm_loss(latent_obs_next, mus, sigmas, logpi)
         bce = F.binary_cross_entropy_with_logits(ds, terminal.float())

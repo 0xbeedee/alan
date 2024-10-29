@@ -1,7 +1,7 @@
 from typing import Dict, Any
 
 import torch
-from torch.distributions.normal import Normal
+from torch.distributions import Categorical, Normal, MixtureSameFamily, Independent
 
 
 def gmm_loss(
@@ -13,19 +13,16 @@ def gmm_loss(
 ) -> torch.Tensor:
     """Computes the Gaussian Mixture Model (GMM) loss.
 
-    More precisely, it computes minus the log probability of batch under the GMM model described by mus, sigmas and pi, with bs1, bs2, ... the sizes of the batch dimensions (several batch dimensions are useful when you have both a batch axis and a time step axis), gs the number of mixtures, and fs the number of features.
+    More precisely, it computes minus the log probability of the batch under the GMM model described by mus, sigmas and pi.
     """
-    batch = batch.unsqueeze(-2)
-    normal_dist = Normal(mus, sigmas)
-    g_log_probs = normal_dist.log_prob(batch)
-    g_log_probs = logpi + torch.sum(g_log_probs, dim=-1)
-    max_log_probs, _ = torch.max(g_log_probs, dim=-1, keepdim=True)
-    g_log_probs = g_log_probs - max_log_probs
+    # categorical for mixture weights
+    mix = Categorical(logits=logpi)
+    # multivariate normal mixture components
+    comp = Independent(Normal(loc=mus, scale=sigmas), 1)
+    gmm = MixtureSameFamily(mix, comp)
 
-    g_probs = torch.exp(g_log_probs)
-    probs = torch.sum(g_probs, dim=-1)
-
-    log_prob = max_log_probs.squeeze(-1) + torch.log(probs)
+    # log probability of the batch under the GMM
+    log_prob = gmm.log_prob(batch)
     if reduce:
         return -torch.mean(log_prob)
     return -log_prob

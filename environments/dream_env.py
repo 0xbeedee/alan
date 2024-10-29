@@ -4,7 +4,6 @@ import gymnasium as gym
 import numpy as np
 
 import torch
-import torch.nn.functional as F
 
 
 class DreamEnv(gym.Env):
@@ -68,12 +67,9 @@ class DreamEnv(gym.Env):
             torch.as_tensor(action, device=self.device).unsqueeze(0).unsqueeze(1)
         )  # (1, action_dim)
         z_t = self.z  # (1, latent_dim)
-        input_tensor = torch.cat([action, z_t], dim=1)
-
-        output, self.hidden_state = self.mdnrnn.rnn(input_tensor, self.hidden_state)
-        gmm_output = self.mdnrnn.gmm_linear(output.squeeze(0))  # remove seq dim
-
-        mus, sigmas, logpi, r, d = self._parse_gmm_output(gmm_output)
+        mus, sigmas, logpi, r, d, self.hidden_state = self.mdnrnn(
+            action, z_t, hidden=self.hidden_state
+        )
 
         self.z = self._sample_mdn(mus, sigmas, logpi)
 
@@ -95,7 +91,8 @@ class DreamEnv(gym.Env):
         return env_obs
 
     def _decode(self, z):
-        """Decodes the latent observation returned by the VAE encoder into an observation compatible with the ones provided by the real environment."""
+        """Decodes the reconstruction returned by the VAE decoder into an observation compatible with the ones provided by the real environment."""
+        # TODO only works for NetHack at present
         recons = self.vae.decoder(z)
 
         observation = {}
@@ -106,28 +103,6 @@ class DreamEnv(gym.Env):
                 else recon.squeeze()
             )
         return observation
-
-    def _parse_gmm_output(self, gmm_outs):
-        stride = self.mdnrnn.n_gaussian_comps * self.mdnrnn.latent_dim
-
-        # gmm_outs must have shape (1, output_dim)
-        if gmm_outs.dim() == 1:
-            gmm_outs = gmm_outs.unsqueeze(0)
-
-        mus = gmm_outs[:, :stride]
-        mus = mus.view(1, self.mdnrnn.n_gaussian_comps, self.mdnrnn.latent_dim)
-
-        sigmas = gmm_outs[:, stride : 2 * stride]
-        sigmas = sigmas.view(1, self.mdnrnn.n_gaussian_comps, self.mdnrnn.latent_dim)
-        sigmas = torch.exp(sigmas)
-
-        pi = gmm_outs[:, 2 * stride : 2 * stride + self.mdnrnn.n_gaussian_comps]
-        logpi = F.log_softmax(pi, dim=-1)
-
-        r = gmm_outs[:, -2]
-        d = gmm_outs[:, -1]
-
-        return mus, sigmas, logpi, r, d
 
     def _sample_mdn(self, mus, sigmas, logpi):
         """Samples from the MDN output to get the next latent state."""

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Tuple, Self
+from typing import Optional, Tuple, Self
 
 
 class MDNRNN(nn.Module):
@@ -40,6 +40,7 @@ class MDNRNN(nn.Module):
         self,
         actions: torch.Tensor,
         latents: torch.Tensor,
+        hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
         tau: float = 1.0,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Performs a forward pass through the MDNRNN for multiple time steps."""
@@ -49,9 +50,8 @@ class MDNRNN(nn.Module):
             [actions, latents], dim=1
         )  # (batch_dim, action_dim + latent_dim)
 
-        outs, _ = self.rnn(ins)  # (batch_dim, hidden_dim)
+        outs, hidden = self.rnn(ins, hx=hidden)  # (batch_dim, hidden_dim)
 
-        # get GMM parameters and additional outputs
         gmm_outs = self.gmm_linear(
             outs
         )  # (batch_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2)
@@ -71,19 +71,18 @@ class MDNRNN(nn.Module):
         sigmas = torch.exp(sigmas)  # ensure positive standard deviations
         sigmas = sigmas * tau  # scale by the temperature
 
-        # GMM coefficients
         pi = gmm_outs[
             :, 2 * stride : 2 * stride + self.n_gaussian_comps
         ].contiguous()  # (batch_dim, n_gaussian_comps)
         pi = pi.view(bs, self.n_gaussian_comps)
-        pi = pi / tau
+        pi = pi / tau  # scale by the temperature
         logpi = F.log_softmax(pi, dim=-1)
 
         # rewards and terminal (done) state indicators
         rs = gmm_outs[:, -2]  # (batch_dim,)
         ds = gmm_outs[:, -1]  # (batch_dim,)
 
-        return mus, sigmas, logpi, rs, ds
+        return mus, sigmas, logpi, rs, ds, hidden
 
     def to(self, device: torch.device) -> Self:
         self.device = device

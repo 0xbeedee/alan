@@ -88,7 +88,9 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
         # 2) it centralises goal selection
         latent_goal = self.self_model.select_goal(batch.obs)
-        return latent_goal
+        # TODO there are too many passes through the obs_net in a single forward call! => i need to somehow centralise the obs_net and minimise them, that should improve performance quite a bit
+        latent_obs = self.self_model.obs_net(batch.obs)
+        return latent_goal, latent_obs
 
     def process_fn(
         self,

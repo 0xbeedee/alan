@@ -78,15 +78,25 @@ class PPOBasedPolicy(CorePolicy):
     def forward(
         self,
         batch: ObsBatchProtocol,
-        state: dict | BatchProtocol | np.ndarray | None = None,
+        state: torch.Tensor = None,
         **kwargs: Any,
     ) -> GoalBatchProtocol:
-        latent_goal = super().forward(batch, state)
+        latent_goal, latent_obs = super().forward(batch, state)
         # this is somewhat hacky, but it provides a cleaner interface with Tianshou
         batch.obs["latent_goal"] = latent_goal
 
         result = self.ppo_policy.forward(batch, state, **kwargs)
         result.latent_goal = latent_goal
+
+        if state is not None:
+            # the LSTM expects an (h, c) tuple as the hidden state
+            state = torch.split(state, state.shape[1] // 2, dim=1)
+        _, hidden = self.env_model.mdnrnn.pass_through_rnn(
+            result.act.unsqueeze(0), latent_obs, hidden=state
+        )
+        # we need to concat else we get an error when adding to the buffer
+        result.state = torch.cat(hidden, dim=1)  # (1, hidden_dim * 2)
+
         return cast(GoalBatchProtocol, result)
 
     def process_fn(

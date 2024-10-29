@@ -44,16 +44,31 @@ class MDNRNN(nn.Module):
         tau: float = 1.0,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Performs a forward pass through the MDNRNN for multiple time steps."""
-        bs = latents.shape[0]  # batch size
+        outs, hidden = self.pass_through_rnn(actions, latents, hidden=hidden)
 
+        bs = latents.shape[0]  # batch size
+        mus, sigmas, logpi, rs, ds = self._compute_gmm_parameters(outs, bs, tau=tau)
+
+        return mus, sigmas, logpi, rs, ds, hidden
+
+    def pass_through_rnn(
+        self,
+        actions: torch.Tensor,
+        latents: torch.Tensor,
+        hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         ins = torch.cat(
             [actions, latents], dim=1
         )  # (batch_dim, action_dim + latent_dim)
-
         outs, hidden = self.rnn(ins, hx=hidden)  # (batch_dim, hidden_dim)
 
+        return outs, hidden
+
+    def _compute_gmm_parameters(
+        self, rnn_outs: torch.Tensor, bs: int, tau: float = 1.0
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         gmm_outs = self.gmm_linear(
-            outs
+            rnn_outs
         )  # (batch_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2)
 
         # to separate the GMM parameters
@@ -82,7 +97,7 @@ class MDNRNN(nn.Module):
         rs = gmm_outs[:, -2]  # (batch_dim,)
         ds = gmm_outs[:, -1]  # (batch_dim,)
 
-        return mus, sigmas, logpi, rs, ds, hidden
+        return mus, sigmas, logpi, rs, ds
 
     def to(self, device: torch.device) -> Self:
         self.device = device

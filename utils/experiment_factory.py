@@ -117,8 +117,8 @@ class ExperimentFactory:
         ]
 
         fast_intrinsic_module = fast_intrinsic_class(
-            obs_net,
-            action_space,
+            obs_net.o_dim,
+            action_space.n,
             batch_size,
             learning_rate,
             **self.config.get_except("intrinsic.fast", exclude="name"),
@@ -157,6 +157,7 @@ class ExperimentFactory:
         self,
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
+        obs_net: nn.Module,
         act_net: Union[GoalNetHackActor, SimpleNetHackActor],
         critic_net: Union[GoalNetHackCritic, SimpleNetHackCritic],
         optim: torch.optim.Optimizer,
@@ -169,6 +170,7 @@ class ExperimentFactory:
             "ppo_based": lambda: PPOBasedPolicy(
                 self_model=self_model,
                 env_model=env_model,
+                obs_net=obs_net,
                 act_net=act_net,
                 critic_net=critic_net,
                 optim=optim,

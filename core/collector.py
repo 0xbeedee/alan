@@ -98,6 +98,7 @@ class GoalCollector(Collector):
 
         while True:
             (
+                latent_last_obs_RO,
                 act_RA,
                 act_normalized_RA,
                 latent_goal_R,
@@ -119,17 +120,24 @@ class GoalCollector(Collector):
             rew_R = rew_R.astype(np.float32)
             nstep_returns.extend(rew_R)
 
+            # the obs_next MUST be passed through the obs_net only here
+            latent_obs_next_RO = self.policy.obs_net(Batch(obs_next_RO))
+
             int_rew_R = self.policy.self_model.fast_intrinsic_reward(
-                Batch(obs=last_obs_RO, act=act_RA, obs_next=obs_next_RO)
+                Batch(
+                    latent_obs=latent_last_obs_RO,
+                    act=act_RA,
+                    latent_obs_next=latent_obs_next_RO,
+                )
             )
             nstep_intrinsic_returns.extend(int_rew_R)
+
+            latent_goal_next_R = self.policy.self_model.select_goal(latent_obs_next_RO)
 
             if isinstance(info_R, dict):  # type: ignore[unreachable]
                 # This can happen if the env is an envpool env. Then the info returned by step is a dict
                 info_R = _dict_of_arr_to_arr_of_dicts(info_R)  # type: ignore[unreachable]
             done_R = np.logical_or(terminated_R, truncated_R)
-
-            latent_goal_next_R = self.policy.self_model.select_goal(Batch(obs_next_RO))
 
             # construct the goal-aware batch
             current_iteration_batch = cast(
@@ -308,10 +316,12 @@ class GoalCollector(Collector):
                 ObsBatchProtocol, Batch(obs=last_obs_RO, info=info_batch)
             )
 
+            # the last_obs MUST be passed through the obs_net only here
+            latent_last_obs_RO = self.policy.obs_net(Batch(last_obs_RO))
+
             # call the policy's forward() method
             act_batch_RA = self.policy(
-                obs_batch_R,
-                last_hidden_state_RH,
+                obs_batch_R, last_hidden_state_RH, latent_obs=latent_last_obs_RO
             )
 
             act_RA = to_numpy(act_batch_RA.act)
@@ -336,6 +346,7 @@ class GoalCollector(Collector):
                 raise RuntimeError("The latent goals should not be None!")
 
         return (
+            latent_last_obs_RO,
             act_RA,
             act_normalized_RA,
             latent_goal_R,

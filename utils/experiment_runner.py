@@ -199,10 +199,8 @@ class ExperimentRunner:
             )
         )
         self.self_model = SelfModel(
-            self.obs_net,
             fast_intrinsic_module,
             slow_intrinsic_module,
-            device=self.device,
         )
 
     def _setup_policy(self):
@@ -223,6 +221,7 @@ class ExperimentRunner:
         self.policy = self.factory.create_policy(
             self.self_model,
             self.env_model,
+            self.obs_net,
             self.actor_net,
             self.critic_net,
             self.optimizer,
@@ -243,9 +242,7 @@ class ExperimentRunner:
             self.train_collector = self.factory.create_collector(
                 self.policy, self.train_envs, self.train_buf
             )
-            self.test_collector = self.factory.create_collector(
-                self.policy, self.test_envs, self.test_buf
-            )
+            self.test_collector = None
 
     def _setup_logger(self):
         """Sets up the TensorboardLogger."""
@@ -297,7 +294,7 @@ class ExperimentRunner:
             old_slow = self.self_model.slow_intrinsic_module
             # disable ICM and HER while dreaming
             self.self_model.fast_intrinsic_module = ZeroICM(
-                self.obs_net, self.dream_env.action_space, 0
+                self.obs_net.o_dim, self.dream_env.action_space.n, 0
             )
             self.self_model.slow_intrinsic_module = ZeroHER(
                 self.obs_net, self.dream_train_buf, 0

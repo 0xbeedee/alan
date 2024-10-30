@@ -1,5 +1,5 @@
 from typing import Any
-from core.types import GoalBatchProtocol, ObsActNextBatchProtocol
+from core.types import GoalBatchProtocol, LatentObsActNextBatchProtocol
 
 from tianshou.data import SequenceSummaryStats
 
@@ -16,7 +16,7 @@ class ZeroICM(ICM):
     This allows us to easily zero out the fast intrinsic reward, thus better studying its effect on our agent.
     """
 
-    def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
+    def get_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
         return np.zeros_like(batch.act)
 
     def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> ICMTrainingStats:

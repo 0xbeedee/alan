@@ -1,5 +1,5 @@
 from typing import Sequence
-from core.types import ObsActNextBatchProtocol
+from core.types import LatentObsActNextBatchProtocol
 
 import torch
 from torch import nn
@@ -41,7 +41,7 @@ class DeltaICM(ICM):
         self.running_avg_intrinsic = 0.0
         self.n_intrinsic = 0
 
-    def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
+    def get_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
         vanilla_intrew = super().get_reward(batch)
         self.n_intrinsic += vanilla_intrew.size
 

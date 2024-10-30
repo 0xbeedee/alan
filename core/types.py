@@ -39,15 +39,15 @@ import gymnasium as gym
 TArrLike = Union[np.ndarray, torch.Tensor, Batch, None]
 
 
-class ObsActNextBatchProtocol(BatchProtocol, Protocol):
-    """A BatchProtocol containing an observation, an action, and the observation after it.
+class LatentObsActNextBatchProtocol(BatchProtocol, Protocol):
+    """A BatchProtocol containing a latent observation, an action, and the latent observation after it.
 
     Usually used by the intrinsic module and obtained from the Collector.
     """
 
-    obs: Union[TArrLike, BatchProtocol]
+    latent_obs: torch.Tensor
     act: np.ndarray
-    obs_next: Union[TArrLike, BatchProtocol]
+    latent_obs_next: torch.Tensor
 
 
 class IntrinsicBatchProtocol(RolloutBatchProtocol, Protocol):
@@ -82,7 +82,7 @@ class GoalReplayBufferProtocol(Protocol[RB]):
 
 
 class FastIntrinsicModuleProtocol(Protocol):
-    def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray: ...
+    def get_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray: ...
     def learn(self, data: GoalBatchProtocol, **kwargs: Any) -> TrainingStats: ...
 
 
@@ -108,7 +108,9 @@ class SelfModelProtocol(Protocol):
     def select_goal(self, batch_obs: ObsBatchProtocol) -> torch.Tensor: ...
 
     @torch.no_grad
-    def fast_intrinsic_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray: ...
+    def fast_intrinsic_reward(
+        self, batch: LatentObsActNextBatchProtocol
+    ) -> np.ndarray: ...
 
     @torch.no_grad()
     def slow_intrinsic_reward_(self, indices: np.ndarray) -> np.ndarray: ...

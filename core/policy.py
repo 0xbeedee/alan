@@ -17,6 +17,7 @@ from tianshou.policy import BasePolicy
 from tianshou.policy.base import TLearningRateScheduler
 from tianshou.utils.torch_utils import torch_train_mode
 
+from torch import nn
 import gymnasium as gym
 import numpy as np
 import time
@@ -35,6 +36,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         *,
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
+        obs_net: nn.Module,
         action_space: gym.Space,
         observation_space: gym.Space | None,
         action_scaling: bool = False,
@@ -51,6 +53,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         )
         self.self_model = self_model
         self.env_model = env_model
+        self.obs_net = obs_net
         self.beta = beta
 
     def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
@@ -84,13 +87,12 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with no_grad().)
         """
+        assert "latent_obs" in kwargs
         # we must compute the latent_goals here because
         # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
         # 2) it centralises goal selection
-        latent_goal = self.self_model.select_goal(batch.obs)
-        # TODO there are too many passes through the obs_net in a single forward call! => i need to somehow centralise the obs_net and minimise them, that should improve performance quite a bit
-        latent_obs = self.self_model.obs_net(batch.obs)
-        return latent_goal, latent_obs
+        latent_goal = self.self_model.select_goal(kwargs["latent_obs"])
+        return latent_goal
 
     def process_fn(
         self,
@@ -103,6 +105,8 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         It is meant to be overwritten by the policy. The current implementation simply adds the fast intrinsic reward.
         """
         self.combine_fast_reward_(batch)
+        batch.latent_obs = self.obs_net(batch.obs)
+        batch.latent_obs_next = self.obs_net(batch.obs_next)
         return super().process_fn(batch, buffer, indices)
 
     def update(

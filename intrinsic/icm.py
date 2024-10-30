@@ -1,18 +1,16 @@
 from dataclasses import dataclass
 from typing import Sequence, Any, Tuple
 from core.types import (
-    ObsActNextBatchProtocol,
+    LatentObsActNextBatchProtocol,
     GoalBatchProtocol,
 )
 
 import torch
-from torch import nn
 from torch.nn import functional as F
 
 import numpy as np
-import gymnasium as gym
 
-from tianshou.utils.net.discrete import IntrinsicCuriosityModule
+from tianshou.utils.net.common import MLP
 from tianshou.policy.base import TrainingStats
 from tianshou.data import to_torch, SequenceSummaryStats
 
@@ -25,13 +23,13 @@ class ICMTrainingStats(TrainingStats):
     icm_inverse_loss: SequenceSummaryStats
 
 
-class ICM(IntrinsicCuriosityModule):
+class ICM:
     """An implementation of the Intrinsic Curiosity Module introduced by Pathak et al. (https://arxiv.org/abs/1705.05363)."""
 
     def __init__(
         self,
-        obs_net: nn.Module,
-        action_space: gym.Space,
+        feature_dim: int,
+        action_dim: int,
         batch_size: int,
         learning_rate: float = 1e-3,
         hidden_sizes: Sequence[int] = [256, 128, 64],
@@ -39,31 +37,33 @@ class ICM(IntrinsicCuriosityModule):
         eta: float = 0.07,
         device: torch.device = torch.device("cpu"),
     ) -> None:
-        super().__init__(
-            feature_net=obs_net.to(device),
-            feature_dim=obs_net.o_dim,
-            action_dim=action_space.n,
+        super().__init__()
+        self.forward_model = MLP(
+            feature_dim + action_dim,
+            output_dim=feature_dim,
             hidden_sizes=hidden_sizes,
             device=device,
-        )
-        self.feature_net = self.feature_net.to(device)
-        # specifying the device above doesn't move them to the correct device
-        self.forward_model = self.forward_model.to(device)
-        self.inverse_model = self.inverse_model.to(device)
+        ).to(device)
+        self.inverse_model = MLP(
+            feature_dim * 2,
+            output_dim=action_dim,
+            hidden_sizes=hidden_sizes,
+            device=device,
+        ).to(device)
 
-        # feature_net parameters not included because it's trained separately
         params = set(
             list(self.forward_model.parameters())
             + list(self.inverse_model.parameters())
         )
         self.optim = torch.optim.Adam(params, lr=learning_rate)
 
+        self.action_dim = action_dim
         self.batch_size = batch_size
         self.beta = beta
         self.eta = eta
         self.device = device
 
-    def get_reward(self, batch: ObsActNextBatchProtocol) -> np.ndarray:
+    def get_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
         # no need torch.no_grad() as SelfModel takes care of it
         forward_loss, _ = self._forward(batch)
 
@@ -99,13 +99,13 @@ class ICM(IntrinsicCuriosityModule):
         )
 
     def _forward(
-        self, batch: ObsActNextBatchProtocol
+        self, batch: LatentObsActNextBatchProtocol
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
-        batch_obs = to_torch(batch.obs, device=self.device)
-        batch_obs_next = to_torch(batch.obs_next, device=self.device)
+        # the batch.obs and batch.obs_next have already been passed through the obs_net by the Collector
+        phi1 = to_torch(batch.latent_obs, device=self.device)
+        phi2 = to_torch(batch.latent_obs_next, device=self.device)
 
-        phi1, phi2 = self.feature_net(batch_obs), self.feature_net(batch_obs_next)
         phi2_hat = self._forward_dynamics(phi1, batch_actions)
 
         forward_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)

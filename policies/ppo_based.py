@@ -7,11 +7,11 @@ from core.types import (
 )
 
 from tianshou.data import ReplayBuffer, to_torch_as
-from tianshou.data.batch import BatchProtocol
 from tianshou.data.types import ObsBatchProtocol, BatchWithAdvantagesProtocol
 from tianshou.policy.modelfree.ppo import PPOPolicy, TPPOTrainingStats
 from tianshou.policy.base import TLearningRateScheduler
 
+from torch import nn
 import numpy as np
 import gymnasium as gym
 
@@ -34,6 +34,7 @@ class PPOBasedPolicy(CorePolicy):
         *,
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
+        obs_net: nn.Module,
         act_net: GoalNetHackActor,
         critic_net: GoalNetHackCritic,
         optim: torch.optim.Optimizer,
@@ -46,6 +47,7 @@ class PPOBasedPolicy(CorePolicy):
         super().__init__(
             self_model=self_model,
             env_model=env_model,
+            obs_net=obs_net,
             action_space=action_space,
             observation_space=observation_space,
             action_scaling=action_scaling,
@@ -81,7 +83,7 @@ class PPOBasedPolicy(CorePolicy):
         state: torch.Tensor = None,
         **kwargs: Any,
     ) -> GoalBatchProtocol:
-        latent_goal, latent_obs = super().forward(batch, state)
+        latent_goal = super().forward(batch, state, **kwargs)
         # this is somewhat hacky, but it provides a cleaner interface with Tianshou
         batch.obs["latent_goal"] = latent_goal
 
@@ -89,13 +91,15 @@ class PPOBasedPolicy(CorePolicy):
         result.latent_goal = latent_goal
 
         if state is not None:
-            # the LSTM expects an (h, c) tuple as the hidden state
+            # the RNN expects an (h, c) tuple as the hidden state
             state = torch.split(state, state.shape[1] // 2, dim=1)
-        _, hidden = self.env_model.mdnrnn.pass_through_rnn(
-            result.act.unsqueeze(0), latent_obs, hidden=state
+        action = result.act.unsqueeze(1)
+        latent = kwargs["latent_obs"]  # we are guaranteed that this exists
+        outs, hidden = self.env_model.mdnrnn.pass_through_rnn(
+            action, latent, hidden=state
         )
-        # we need to concat else we get an error when adding to the buffer
-        result.state = torch.cat(hidden, dim=1)  # (1, hidden_dim * 2)
+        # we need to concat because both need to be passed to the RNN
+        result.state = torch.cat((outs, hidden), dim=1)
 
         return cast(GoalBatchProtocol, result)
 

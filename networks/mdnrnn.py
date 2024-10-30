@@ -34,7 +34,7 @@ class MDNRNN(nn.Module):
             hidden_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2
         ).to(device)
 
-        self.rnn = nn.LSTM(latent_dim + action_dim, hidden_dim).to(device)
+        self.rnn_cell = nn.LSTMCell(latent_dim + action_dim, hidden_dim).to(device)
 
     def forward(
         self,
@@ -49,7 +49,7 @@ class MDNRNN(nn.Module):
         bs = latents.shape[0]  # batch size
         mus, sigmas, logpi, rs, ds = self._compute_gmm_parameters(outs, bs, tau=tau)
 
-        return mus, sigmas, logpi, rs, ds, hidden
+        return mus, sigmas, logpi, rs, ds, (outs, hidden)
 
     def pass_through_rnn(
         self,
@@ -60,9 +60,10 @@ class MDNRNN(nn.Module):
         ins = torch.cat(
             [actions, latents], dim=1
         )  # (batch_dim, action_dim + latent_dim)
-        outs, hidden = self.rnn(ins, hx=hidden)  # (batch_dim, hidden_dim)
+        # h_t = hidden state at time t, c_t = cell state at time t
+        h_t, c_t = self.rnn_cell(ins, hx=hidden)  # each (batch_dim, hidden_dim)
 
-        return outs, hidden
+        return h_t, c_t
 
     def _compute_gmm_parameters(
         self, rnn_outs: torch.Tensor, bs: int, tau: float = 1.0
@@ -102,5 +103,5 @@ class MDNRNN(nn.Module):
     def to(self, device: torch.device) -> Self:
         self.device = device
         self.gmm_linear = self.gmm_linear.to(device)
-        self.rnn = self.rnn.to(device)
+        self.rnn_cell = self.rnn_cell.to(device)
         return super().to(device)

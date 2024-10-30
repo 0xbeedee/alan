@@ -78,6 +78,25 @@ class ExperimentFactory:
         # the vae_encoder is the part that adapts to the environment
         return ObsNet(vae_encoder=vae_encoder, device=device)
 
+    def create_actor_critic(
+        self,
+        obs_net: nn.Module,
+        state_dim: int,
+        action_space: gym.Space,
+        device: torch.device,
+    ) -> Tuple[
+        Union[GoalNetHackActor, SimpleNetHackActor],
+        Union[GoalNetHackCritic, SimpleNetHackCritic],
+    ]:
+        actor_class, critic_class = (
+            (GoalNetHackActor, GoalNetHackCritic)
+            if self.is_goal_aware
+            else (SimpleNetHackActor, SimpleNetHackCritic)
+        )
+        return actor_class(
+            obs_net, state_dim, action_space, device=device
+        ), critic_class(obs_net, device=device)
+
     def create_intrinsic_modules(
         self,
         obs_net: nn.Module,
@@ -133,21 +152,6 @@ class ExperimentFactory:
         )
 
         return vae_trainer, mdnrnn_trainer
-
-    def create_actor_critic(
-        self, obs_net: nn.Module, action_space: gym.Space, device: torch.device
-    ) -> Tuple[
-        Union[GoalNetHackActor, SimpleNetHackActor],
-        Union[GoalNetHackCritic, SimpleNetHackCritic],
-    ]:
-        actor_class, critic_class = (
-            (GoalNetHackActor, GoalNetHackCritic)
-            if self.is_goal_aware
-            else (SimpleNetHackActor, SimpleNetHackCritic)
-        )
-        return actor_class(obs_net, action_space, device=device), critic_class(
-            obs_net, device=device
-        )
 
     def create_policy(
         self,

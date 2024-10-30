@@ -170,8 +170,9 @@ class ExperimentRunner:
             self.env.observation_space, self.device
         )
         self.obs_net = self.factory.create_obsnet(self.vae.encoder, self.device)
+        # hidden_dim * 2 because we concat (h, c) into a single tensor in the policy.forward()
         self.actor_net, self.critic_net = self.factory.create_actor_critic(
-            self.obs_net, self.env.action_space, self.device
+            self.obs_net, self.mdnrnn.hidden_dim * 2, self.env.action_space, self.device
         )
 
     def _setup_models(self):

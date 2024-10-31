@@ -30,7 +30,7 @@ class HER:
         self.future_p = 1 - 1 / future_k
         self.epsilon = epsilon
 
-    def rewrite_rewards_(self, indices: np.ndarray) -> np.ndarray:
+    def rewrite_rewards_(self, indices: np.ndarray) -> None:
         future_obs = self._get_future_observation_(indices)
         future_achieved_goal = self.obs_net(future_obs).cpu().numpy()
         # desired

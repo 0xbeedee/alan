@@ -53,7 +53,7 @@ class GoalCollector(Collector):
         random: bool = False,
         render: float | None = None,
         gym_reset_kwargs: dict[str, Any] | None = None,
-    ) -> CollectStats:
+    ) -> EpNStepCollectStats:
         """Collects a specified number of steps or episodes.
 
         Note that the collect() method in BaseCollector calls this method to do the actual collecting.

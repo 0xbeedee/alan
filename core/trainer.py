@@ -3,15 +3,16 @@ from typing import Callable
 import logging
 from dataclasses import asdict
 
+import torch
 import numpy as np
+import tqdm
+
 from tianshou.trainer.base import (
     BaseTrainer,
     OfflineTrainer,
     OffpolicyTrainer,
     OnpolicyTrainer,
 )
-import tqdm
-
 from tianshou.data import EpochStats, SequenceSummaryStats
 from tianshou.data.collector import CollectStatsBase
 from tianshou.policy import BasePolicy

@@ -242,7 +242,9 @@ class ExperimentRunner:
             self.train_collector = self.factory.create_collector(
                 self.policy, self.train_envs, self.train_buf
             )
-            self.test_collector = None
+            self.test_collector = self.factory.create_collector(
+                self.policy, self.test_envs, self.test_buf
+            )
 
     def _setup_logger(self):
         """Sets up the TensorboardLogger."""

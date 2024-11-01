@@ -13,6 +13,8 @@ class DreamEnv(gym.Env):
     The idea is the same as the one used for the VizDoom experiment in the World Models paper (https://arxiv.org/abs/1803.10122).
     """
 
+    # TODO only works for NetHack at present
+
     def __init__(
         self,
         env_model: EnvModelProtocol,
@@ -47,8 +49,7 @@ class DreamEnv(gym.Env):
         )
 
         if initial_obs is not None:
-            obs_out = self._pass_through_obsnet(initial_obs)
-            self.z, *_ = self.obs_net(obs_out)
+            self.z, *_ = self.obs_net(initial_obs)
         else:
             # sample random latent vector from standard normal distribution
             latent_dim = self.mdnrnn.latent_dim
@@ -75,8 +76,8 @@ class DreamEnv(gym.Env):
 
         obs = self._decode(self.z)
         info = {}
-        # TODO this might not be such a bad idea => if the ds estimate is too high we'll end things too soon!
-        # TODO could add some counter to track the number of steps and only after that number check the d array
+        # TODO this might not be such a good idea => if the ds estimate is too high we'll end things too soon!
+        # could add some counter to track the number of steps and only after that number check the d array
         done = self.t >= self.max_episode_length or torch.sigmoid(d).item() > 0.5
         return obs, r.item(), done, False, info
 
@@ -87,12 +88,8 @@ class DreamEnv(gym.Env):
     def close(self):
         pass
 
-    def _pass_through_obsnet(self, env_obs):
-        return env_obs
-
     def _decode(self, z):
         """Decodes the reconstruction returned by the VAE decoder into an observation compatible with the ones provided by the real environment."""
-        # TODO only works for NetHack at present
         recons = self.vae.decoder(z)
 
         observation = {}

@@ -28,14 +28,12 @@ class SelfModel:
     @torch.no_grad()
     def select_goal(self, latent_obs: torch.Tensor) -> np.ndarray:
         """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
-        # the batch_obs contains one (obs, info) pair per environment
-        # TODO should pull form the KB (obs)?
         # a basic goal selection mechanism: simply add some gaussian noise
         goal = latent_obs + torch.randn_like(latent_obs)
         # return in numpy format for consistency with the other Batch entries
         return goal.cpu().numpy().astype(np.float32)
 
-    @torch.no_grad
+    @torch.no_grad()
     def fast_intrinsic_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
         """A fast system for computing intrinsic motivation, inspired by the dual process theory (https://en.wikipedia.org/wiki/Dual_process_theory).
 

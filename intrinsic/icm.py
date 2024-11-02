@@ -12,7 +12,7 @@ import numpy as np
 
 from tianshou.utils.net.common import MLP
 from tianshou.policy.base import TrainingStats
-from tianshou.data import to_torch, SequenceSummaryStats
+from tianshou.data import SequenceSummaryStats
 
 
 @dataclass(kw_only=True)
@@ -29,7 +29,7 @@ class ICM:
     def __init__(
         self,
         feature_dim: int,
-        action_dim: int,
+        n_actions: int,
         batch_size: int,
         learning_rate: float = 1e-3,
         hidden_sizes: Sequence[int] = [256, 128, 64],
@@ -39,17 +39,17 @@ class ICM:
     ) -> None:
         super().__init__()
         self.forward_model = MLP(
-            feature_dim + action_dim,
+            feature_dim + n_actions,
             output_dim=feature_dim,
             hidden_sizes=hidden_sizes,
             device=device,
-        ).to(device)
+        )
         self.inverse_model = MLP(
             feature_dim * 2,
-            output_dim=action_dim,
+            output_dim=n_actions,
             hidden_sizes=hidden_sizes,
             device=device,
-        ).to(device)
+        )
 
         params = set(
             list(self.forward_model.parameters())
@@ -57,7 +57,7 @@ class ICM:
         )
         self.optim = torch.optim.Adam(params, lr=learning_rate)
 
-        self.action_dim = action_dim
+        self.n_actions = n_actions
         self.batch_size = batch_size
         self.beta = beta
         self.eta = eta
@@ -70,7 +70,6 @@ class ICM:
         # clip the reward to be in the [0, 1] range
         # we do so to mainly to have the fast intrinsic reward play well with the slow intrinsic one
         intrinsic_reward = torch.clamp(forward_loss * self.eta, min=0.0, max=1.0)
-
         return intrinsic_reward.cpu().numpy().astype(np.float32)
 
     def learn(self, data: GoalBatchProtocol, **kwargs: Any) -> ICMTrainingStats:
@@ -101,27 +100,25 @@ class ICM:
     def _forward(
         self, batch: LatentObsActNextBatchProtocol
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        batch_actions = to_torch(batch.act, dtype=torch.long, device=self.device)
-        # the batch.obs and batch.obs_next have already been passed through the obs_net by the Collector
-        phi1 = to_torch(batch.latent_obs, device=self.device)
-        phi2 = to_torch(batch.latent_obs_next, device=self.device)
+        batch_actions = torch.as_tensor(batch.act, dtype=torch.long, device=self.device)
+        phi1 = torch.as_tensor(batch.latent_obs, device=self.device)
+        phi2 = torch.as_tensor(batch.latent_obs_next, device=self.device)
 
-        phi2_hat = self._forward_dynamics(phi1, batch_actions)
-
-        forward_loss = 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
+        forward_loss = self._forward_dynamics(phi1, phi2, batch_actions)
         inverse_loss = self._inverse_dynamics(phi1, phi2, batch_actions)
         return forward_loss, inverse_loss
 
     def _forward_dynamics(
-        self, phi1: torch.Tensor, actions: torch.Tensor
+        self, phi1: torch.Tensor, phi2: torch.Tensor, actions: torch.Tensor
     ) -> torch.Tensor:
         """Predicts the feature representation (i.e., latent vector) of the next state, given the latent representation of the current state and the action."""
-        one_hot_actions = F.one_hot(actions, num_classes=self.action_dim)
-        return self.forward_model(torch.cat([phi1, one_hot_actions], dim=1))
+        one_hot_actions = F.one_hot(actions, num_classes=self.n_actions)
+        phi2_hat = self.forward_model(torch.cat([phi1, one_hot_actions], dim=1))
+        return 0.5 * F.mse_loss(phi2_hat, phi2, reduction="none").sum(1)
 
     def _inverse_dynamics(
         self, phi1: torch.Tensor, phi2: torch.Tensor, actions: torch.Tensor
     ) -> torch.Tensor:
-        """Predicts the action taken, given the feature representations of the currnt state and the next one."""
+        """Predicts the action taken, given the feature representations of the current state and the next one."""
         act_hat = self.inverse_model(torch.cat([phi1, phi2], dim=1))
         return F.cross_entropy(act_hat, actions)

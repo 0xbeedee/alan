@@ -1,4 +1,5 @@
 from typing import Tuple, Dict
+from tianshou.data import Batch
 import gymnasium as gym
 
 from collections import namedtuple, OrderedDict
@@ -97,9 +98,7 @@ class NetHackEncoder(nn.Module):
         self.fc_mu = nn.Linear(self.o_dim, self.latent_dim).to(device)
         self.fc_logsigma = nn.Linear(self.o_dim, self.latent_dim).to(device)
 
-    def forward(
-        self, inputs: Dict[str, torch.Tensor]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, inputs: Batch) -> Tuple[torch.Tensor, torch.Tensor]:
         spatial_inputs = {key: inputs[key] for key in self.spatial_keys}
         cropped_inputs = self.crop(
             torch.as_tensor(inputs["glyphs"], device=self.device),
@@ -339,7 +338,7 @@ class NetHackVAE(nn.Module):
         ]
 
     def forward(
-        self, inputs: Dict[str, torch.Tensor]
+        self, inputs: Batch
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
         z, dist = self.encoder(inputs)
         reconstructions = self.decoder(z)

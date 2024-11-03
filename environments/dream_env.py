@@ -1,3 +1,4 @@
+from typing import Any, Dict, Optional
 from core.types import EnvModelProtocol
 
 import gymnasium as gym
@@ -20,6 +21,8 @@ class DreamEnv(gym.Env):
         env_model: EnvModelProtocol,
         observation_space: gym.Space,
         action_space: gym.Space,
+        min_nsteps: int = 100,
+        max_nsteps: int = 1000,
     ):
         super().__init__()
 
@@ -28,18 +31,25 @@ class DreamEnv(gym.Env):
         self.mdnrnn = env_model.mdnrnn
         self.device = env_model.device
 
-        # these are usually exactly the same as in the original environment
+        # these need to be the same as in the original environment
         self.action_space = action_space
         self.observation_space = observation_space
 
+        self.min_nsteps = min_nsteps
+        self.max_nsteps = max_nsteps
+
         self.hidden_state = None
         self.z = None
-
         self.t = 0
-        # TODO possibly as input to init?
-        self.max_episode_length = 1000
 
-    def reset(self, initial_obs=None):
+    # TODO i don't correctly set this initial_obs!
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        options: Optional[Any] = None,
+        initial_obs: Optional[Dict[str, np.ndarray | torch.Tensor]] = None,
+    ):
+        super().reset(seed=seed)
         self.t = 0
 
         hidden_dim = self.mdnrnn.hidden_dim
@@ -54,41 +64,43 @@ class DreamEnv(gym.Env):
             # sample random latent vector from standard normal distribution
             latent_dim = self.mdnrnn.latent_dim
             self.z = torch.randn(1, latent_dim, device=self.device)
-
         obs = self._decode(self.z)
-        # TODO could I not use info?
+        # TODO how can I use info?
         info = {}
+
         return obs, info
 
     @torch.no_grad()
-    def step(self, action):
+    def step(self, action: int):
         self.t += 1
 
-        action = (
-            torch.as_tensor(action, device=self.device).unsqueeze(0).unsqueeze(1)
-        )  # (1, action_dim)
+        action = torch.tensor([[action]], device=self.device)  # (1, action_dim)
         z_t = self.z  # (1, latent_dim)
         mus, sigmas, logpi, r, d, self.hidden_state = self.mdnrnn(
             action, z_t, hidden=self.hidden_state
         )
+        reward = r.item()
 
         self.z = self._sample_mdn(mus, sigmas, logpi)
-
         obs = self._decode(self.z)
         info = {}
-        # TODO this might not be such a good idea => if the ds estimate is too high we'll end things too soon!
-        # could add some counter to track the number of steps and only after that number check the d array
-        done = self.t >= self.max_episode_length or torch.sigmoid(d).item() > 0.5
-        return obs, r.item(), done, False, info
 
-    def render(self, mode="human"):
-        # TODO we could try rendering the latent space
+        terminated = torch.sigmoid(d).item() > 0.5
+        truncated = self.t > self.max_nsteps
+        if self.t < self.min_nsteps:
+            # take at least min_nsteps in the environment
+            terminated, truncated = False, False
+
+        return obs, reward, terminated, truncated, info
+
+    def render(self, mode: str = "human"):
+        # TODO try rendering the latent space?
         pass
 
     def close(self):
         pass
 
-    def _decode(self, z):
+    def _decode(self, z: torch.Tensor):
         """Decodes the reconstruction returned by the VAE decoder into an observation compatible with the ones provided by the real environment."""
         recons = self.vae.decoder(z)
 
@@ -101,7 +113,9 @@ class DreamEnv(gym.Env):
             )
         return observation
 
-    def _sample_mdn(self, mus, sigmas, logpi):
+    def _sample_mdn(
+        self, mus: torch.Tensor, sigmas: torch.testing, logpi: torch.Tensor
+    ):
         """Samples from the MDN output to get the next latent state."""
         # remove batch dimensions
         mus = mus.squeeze(0)  # (n_gaussian_comps, latent_dim)

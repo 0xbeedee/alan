@@ -280,7 +280,10 @@ class ExperimentRunner:
     def _setup_dream(self):
         """Sets up the dream environment and associated components."""
         self.dream_env = DreamEnv(
-            self.env_model, self.env.observation_space, self.env.action_space
+            self.env_model,
+            self.env.observation_space,
+            self.env.action_space,
+            **self.config.get("environment.dream"),
         )
         self._setup_vector_envs(self.dream_env, is_dream=True)
         self._setup_buffers(is_dream=True)

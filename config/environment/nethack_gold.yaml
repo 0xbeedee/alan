@@ -1,6 +1,10 @@
 base:
   name: "NetHackGold-v0"
 
+dream:
+  min_nsteps: 100
+  max_nsteps: 1000
+
 vec:
   num_train_envs: 1
   num_test_envs: 1

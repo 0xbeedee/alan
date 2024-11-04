@@ -1,6 +1,8 @@
 from typing import Dict, Optional, Self
-from tianshou.data.types import ObsBatchProtocol
 from core.types import GoalBatchProtocol
+from tianshou.data.types import ObsBatchProtocol
+
+from tianshou.data import Batch
 import gymnasium as gym
 from torch import nn
 import torch
@@ -72,7 +74,9 @@ class GoalNetHackActor(SimpleNetHackActor):
         state: Optional[torch.Tensor] = None,
         info: Dict = {},
     ):
-        batch_obs = {k: v for k, v in batch_obs_goal.items() if k != "latent_goal"}
+        batch_obs = Batch(
+            {k: v for k, v in batch_obs_goal.items() if k != "latent_goal"}
+        )
         obs_out = self.obs_net(batch_obs)
         obss = self.obs_munet(obs_out)
         goals = self.goal_munet(

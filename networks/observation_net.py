@@ -1,4 +1,3 @@
-from typing import Dict
 from tianshou.data import Batch
 
 import torch
@@ -24,5 +23,5 @@ class ObsNet(nn.Module):
 
     @torch.no_grad()
     def forward(self, inputs: Batch) -> torch.Tensor:
-        z, *_ = self.encoder.forward(inputs)
+        z, *_ = self.encoder(inputs)
         return z

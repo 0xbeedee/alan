@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 from core.types import GoalBatchProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -32,27 +32,34 @@ class NetHackVAETrainer:
         self.batch_size = batch_size
         self.device = device
 
-    def train(self, data: GoalBatchProtocol) -> SequenceSummaryStats:
+    def train(
+        self, data: GoalBatchProtocol
+    ) -> Tuple[SequenceSummaryStats, SequenceSummaryStats, SequenceSummaryStats]:
         """Trains the VAE model for one epoch."""
-        losses_summary = self._data_pass(data)
+        losses_summary, recon_losses_summary, kl_losses_summary = self._data_pass(data)
         self.scheduler.step(losses_summary.mean)
-        return losses_summary
+        return losses_summary, recon_losses_summary, kl_losses_summary
 
     def _data_pass(
         self,
         data: GoalBatchProtocol,
-    ) -> SequenceSummaryStats:
+    ) -> Tuple[SequenceSummaryStats, SequenceSummaryStats, SequenceSummaryStats]:
         """Performs one pass through the data."""
-        losses = []
+        losses, recon_losses, kl_losses = [], [], []
         for batch in data.split(self.batch_size, merge_last=True):
             self.optimizer.zero_grad()
-            loss = self._get_loss(batch.obs)
+            loss, recon_loss, kl_loss = self._get_loss(batch.obs)
             loss.backward()
             self.optimizer.step()
-            losses.append(loss.item())
 
-        # TODO probably a good idea to have more granularity for these losses
-        return SequenceSummaryStats.from_sequence(losses)
+            losses.append(loss.item())
+            recon_losses.append(recon_loss.item())
+            kl_losses.append(kl_loss.item())
+
+        losses_summary = SequenceSummaryStats.from_sequence(losses)
+        recon_losses_summary = SequenceSummaryStats.from_sequence(recon_losses)
+        kl_losses_summary = SequenceSummaryStats.from_sequence(kl_losses)
+        return losses_summary, recon_losses_summary, kl_losses_summary
 
     def _get_loss(self, inputs: Dict[str, np.ndarray]) -> torch.Tensor:
         """Computes the VAE loss."""
@@ -109,4 +116,4 @@ class NetHackVAETrainer:
         kl_loss = kl.kl_divergence(dist, std_normal).mean()
 
         total_loss = recon_loss + kl_weight * kl_loss
-        return total_loss
+        return total_loss, recon_loss, kl_loss

@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
 from tianshou.data import SequenceSummaryStats
@@ -38,7 +38,12 @@ class MDNRNNTrainer:
         self.batch_size = batch_size
         self.device = device
 
-    def train(self, data: GoalBatchProtocol | GoalReplayBufferProtocol):
+    def train(self, data: GoalBatchProtocol | GoalReplayBufferProtocol) -> Tuple[
+        SequenceSummaryStats,
+        SequenceSummaryStats,
+        SequenceSummaryStats,
+        SequenceSummaryStats,
+    ]:
         """Trains the MDNRNN model for one epoch."""
         # train for one epoch only because we expect to accumulate plenty of data over the agent's lifetime
         losses_summary, gmm_losses_summary, bce_losses_summary, mse_losses_summary = (
@@ -56,7 +61,12 @@ class MDNRNNTrainer:
     def _data_pass(
         self,
         data: GoalBatchProtocol | GoalReplayBufferProtocol,
-    ) -> float:
+    ) -> Tuple[
+        SequenceSummaryStats,
+        SequenceSummaryStats,
+        SequenceSummaryStats,
+        SequenceSummaryStats,
+    ]:
         """Performs one pass through the data."""
         losses, gmm_losses, bce_losses, mse_losses = [], [], [], []
         for batch in data.split(self.batch_size, merge_last=True):
@@ -69,6 +79,8 @@ class MDNRNNTrainer:
                 latent_obs, batch.act, batch.rew, batch.done, latent_obs_next
             )
             loss_dict["loss"].backward()
+            self.optimizer.step()
+
             losses.append(loss_dict["loss"].item())
             gmm_losses.append(loss_dict["gmm"].item())
             bce_losses.append(loss_dict["bce"].item())

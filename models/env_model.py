@@ -16,6 +16,9 @@ from torch import nn
 @dataclass(kw_only=True)
 class EnvModelStats(TrainingStats):
     vae_loss: SequenceSummaryStats
+    vae_recon_loss: SequenceSummaryStats
+    vae_kl_loss: SequenceSummaryStats
+
     mdnrnn_loss: SequenceSummaryStats
     mdnrnn_gmm_loss: SequenceSummaryStats
     mdnrnn_bce_loss: SequenceSummaryStats
@@ -40,13 +43,17 @@ class EnvModel:
     def learn(
         self, data: GoalBatchProtocol | GoalReplayBufferProtocol, **kwargs: Any
     ) -> TrainingStats:
-        vae_losses_summary = self.vae_trainer.train(data)
+        vae_losses_summary, vae_recon_losses_summary, vae_kl_losses_summary = (
+            self.vae_trainer.train(data)
+        )
         losses_summary, gmm_losses_summary, bce_losses_summary, mse_losses_summary = (
             self.mdnrnn_trainer.train(data)
         )
 
         return EnvModelStats(
             vae_loss=vae_losses_summary,
+            vae_recon_loss=vae_recon_losses_summary,
+            vae_kl_loss=vae_kl_losses_summary,
             mdnrnn_loss=losses_summary,
             mdnrnn_gmm_loss=gmm_losses_summary,
             mdnrnn_bce_loss=bce_losses_summary,

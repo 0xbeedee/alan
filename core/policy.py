@@ -154,6 +154,30 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         batch.rew = batch.original_rew
         del batch.original_rew
 
+    @torch.no_grad()
+    def plan(
+        self,
+        initial_latent_obs: torch.Tensor,
+        initial_hidden_state: torch.Tensor,
+        initial_action: np.ndarray,
+        plan_horizon: int = 3,
+    ) -> torch.Tensor:
+        """Plans using the EnvModel."""
+        z_t, a_t = initial_latent_obs, initial_action
+        h_t = self._split_state(initial_hidden_state)
+        for _ in range(plan_horizon):
+            a_t = torch.as_tensor(a_t, device=self.env_model.device).unsqueeze(1)
+            mus, sigmas, logpi, _, _, h_t = self.env_model.mdnrnn(a_t, z_t, hidden=h_t)
+            _, z_t = sample_mdn(mus, sigmas, logpi)
+            obs = self.env_model.vae.decode(z_t)
+
+            result = self.forward(
+                Batch(obs=obs, info={}), state=self._cat_state(h_t), latent_obs=z_t
+            )
+            a_t = result.act
+
+        return z_t
+
     def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
         """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value, in place.
 

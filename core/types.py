@@ -139,10 +139,6 @@ class CorePolicyProtocol(Protocol[BP]):
     lr_scheduler: Optional[TLearningRateScheduler] = None
     beta: float = 0.314
 
-    def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None: ...
-
-    def combine_slow_reward_(self, indices: np.ndarray) -> None: ...
-
     def forward(
         self,
         batch: ObsBatchProtocol,
@@ -170,6 +166,10 @@ class CorePolicyProtocol(Protocol[BP]):
         buffer: GoalReplayBufferProtocol,
         indices: np.ndarray,
     ) -> None: ...
+
+    def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None: ...
+
+    def combine_slow_reward_(self, indices: np.ndarray) -> None: ...
 
 
 class GoalCollectorProtocol(Protocol):

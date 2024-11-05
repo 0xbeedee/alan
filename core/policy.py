@@ -1,5 +1,4 @@
-from typing import Literal, Any
-
+from typing import Literal, Any, Tuple
 from .types import (
     GoalReplayBufferProtocol,
     SelfModelProtocol,
@@ -12,6 +11,9 @@ from tianshou.data.types import (
     ActBatchProtocol,
 )
 
+from abc import abstractmethod
+
+from tianshou.data import Batch
 from tianshou.data.batch import BatchProtocol
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import TLearningRateScheduler
@@ -20,9 +22,11 @@ from tianshou.utils.torch_utils import torch_train_mode
 from torch import nn
 import gymnasium as gym
 import numpy as np
+import torch
 import time
 
 from .stats import CoreTrainingStats
+from models.utils import sample_mdn
 
 
 class CorePolicy(BasePolicy[CoreTrainingStats]):
@@ -56,25 +60,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.obs_net = obs_net
         self.beta = beta
 
-    def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
-        """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value, in place.
-
-        By "fast intrinsic reward" we mean the reward as computed by SelfModel's fast_compute_reward() method.
-
-        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In our case, we modify the batch (and, specifically, the "rew" entry), and we add an additional entry to keep track of the original reward.
-        """
-        batch.original_rew = batch.rew.copy()
-        batch.rew += self.beta * batch.int_rew
-
-    def combine_slow_reward_(self, indices: np.ndarray) -> np.ndarray:
-        """Combines the slow intrinsic reward and the extrinsic reward into a single scalar value, in place.
-
-        By "slow intrinsic reward" we mean the reward as computed by SelfModel's slow_compute_reward() method.
-
-        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In our case, we modify the buffer (and, specifically, the "rew" entry).
-        """
-        self.self_model.slow_intrinsic_reward_(indices)
-
     def forward(
         self,
         batch: ObsBatchProtocol,
@@ -83,16 +68,25 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> ActBatchProtocol | ActStateBatchProtocol:
         """Computes the action given a batch of data.
 
-        The default implementation simply selects the latent goal. It must be overridden.
-
-        (Note that this method could easily function with torch.no_grad(), but there is no need for us to specify it here: this method is called by the Collector, and the collection process is already decorated with no_grad().)
+        Note this is just a template method, the actual computation happens in _forward().
         """
         assert "latent_obs" in kwargs
-        # we must compute the latent_goals here because
-        # 1) it makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
-        # 2) it centralises goal selection
-        latent_goal = self.self_model.select_goal(kwargs["latent_obs"])
-        return latent_goal
+        # deciding on the goal here:
+        # 1) makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
+        # 2) centralises goal selection
+        self.latent_goal = self.self_model.select_goal(kwargs["latent_obs"])
+        result = self._forward(batch, state, **kwargs)
+        self._handle_state_(result, state, **kwargs)
+        return result
+
+    @abstractmethod
+    def _forward(
+        self,
+        batch: ObsBatchProtocol,
+        state: dict | BatchProtocol | np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> ActBatchProtocol | ActStateBatchProtocol:
+        """Carries out the actual computation of the policy's forward() method That is, it computes an action given the current observation and the current hidden state."""
 
     def process_fn(
         self,
@@ -104,6 +98,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         It is meant to be overwritten by the policy. The current implementation simply adds the fast intrinsic reward.
         """
+        # TODO the docstring is wrong
         self.combine_fast_reward_(batch)
         batch.latent_obs = self.obs_net(batch.obs)
         batch.latent_obs_next = self.obs_net(batch.obs_next)
@@ -158,3 +153,54 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # original_rew is guaranteed to exist because process_fn() always gets called before post_process_fn()
         batch.rew = batch.original_rew
         del batch.original_rew
+
+    def combine_fast_reward_(self, batch: GoalBatchProtocol) -> None:
+        """Combines the fast intrinsic reward (int_rew) and the extrinsic reward (rew) into a single scalar value, in place.
+
+        By "fast intrinsic reward" we mean the reward as computed by SelfModel's fast_compute_reward() method.
+
+        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In this case, we modify the batch.
+        """
+        batch.original_rew = batch.rew.copy()
+        batch.rew += self.beta * batch.int_rew
+
+    def combine_slow_reward_(self, indices: np.ndarray) -> np.ndarray:
+        """Combines the slow intrinsic reward and the extrinsic reward into a single scalar value, in place.
+
+        By "slow intrinsic reward" we mean the reward as computed by SelfModel's slow_compute_reward() method.
+
+        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In this case, we modify the buffer.
+        """
+        self.self_model.slow_intrinsic_reward_(indices)
+
+    def _handle_state_(
+        self,
+        result: ActBatchProtocol | ActStateBatchProtocol,
+        state: torch.Tensor,
+        **kwargs: Any,
+    ):
+        """Handles the hidden state.
+
+        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In this case, we modify the result object.
+        """
+        assert "latent_obs" in kwargs
+        latent = kwargs["latent_obs"]
+        state = self._split_state(state)
+        action = result.act.unsqueeze(1)
+
+        outs = self.env_model.mdnrnn.pass_through_rnn(action, latent, hidden=state)
+
+        result.state = self._cat_state(outs)
+
+    def _split_state(
+        self, state: torch.Tensor | None = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Splits the tensor representing the hidden state into an (h, c) tuple, as expected by the RNN."""
+        if state is not None:
+            # the RNN expects an (h, c) tuple as the hidden state
+            state = torch.split(state, state.shape[1] // 2, dim=1)
+        return state
+
+    def _cat_state(self, rnn_outs: Tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
+        """Concats the (h, c) tensors returned by the RNN to obtain a state compatible with the rest of the Tianshou pipeline."""
+        return torch.cat(rnn_outs, dim=1)

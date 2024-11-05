@@ -22,10 +22,7 @@ from core import CorePolicy
 
 
 class PPOBasedPolicy(CorePolicy):
-    """A policy combining a Tianshou PPOPolicy and the CorePolicy.
-
-    It is mostly meant as a blueprint/example for future integration of my code with Tianshou.
-    """
+    """A policy based on Tianshou's PPOPolicy."""
 
     # TODO no lifelong learning yet!
 
@@ -77,31 +74,18 @@ class PPOBasedPolicy(CorePolicy):
     ) -> TPPOTrainingStats:
         return self.ppo_policy.learn(batch, batch_size, repeat, *args, **kwargs)
 
-    def forward(
+    def _forward(
         self,
         batch: ObsBatchProtocol,
         state: torch.Tensor = None,
         **kwargs: Any,
     ) -> GoalBatchProtocol:
-        latent_goal = super().forward(batch, state, **kwargs)
-        # this is somewhat hacky, but it provides a cleaner interface with Tianshou
-        batch.obs["latent_goal"] = latent_goal
+        # somewhat hacky, but it provides a cleaner interface with Tianshou
+        batch.obs["latent_goal"] = self.latent_goal
 
         result = self.ppo_policy.forward(batch, state, **kwargs)
-        result.latent_goal = latent_goal
-
-        if state is not None:
-            # the RNN expects an (h, c) tuple as the hidden state
-            state = torch.split(state, state.shape[1] // 2, dim=1)
-        action = result.act.unsqueeze(1)
-        latent = kwargs["latent_obs"]  # we are guaranteed that this exists
-        outs, hidden = self.env_model.mdnrnn.pass_through_rnn(
-            action, latent, hidden=state
-        )
-        # we need to concat because both need to be passed to the RNN
-        result.state = torch.cat((outs, hidden), dim=1)
-
-        return cast(GoalBatchProtocol, result)
+        result.latent_goal = self.latent_goal
+        return result
 
     def process_fn(
         self,

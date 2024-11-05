@@ -14,11 +14,12 @@ class GoalStatsPlotter(BasePlotter):
             (self._plot_returns, ("int_returns",)),
             (self._plot_losses, ("policy_stats",)),
             (self._plot_losses, ("self_model_stats",)),
+            (self._plot_losses, ("env_model_stats",)),
             (self._plot_intra_episodic_returns, ("train",)),
             (self._plot_intra_episodic_returns, ("test",)),
         ]
 
-    def _plot_losses(self, ax, loss_type: str):
+    def _plot_losses(self, ax: plt.Axes, loss_type: str) -> None:
         losses = self._extract_losses(loss_type)
         colors = plt.cm.rainbow(np.linspace(0, 1, len(losses)))
 

@@ -1,7 +1,8 @@
 from typing import List, Sequence, Tuple, Any, Optional, Callable, TypeVar
+from math import ceil, sqrt
 
 from tianshou.data import EpochStats
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,7 +15,7 @@ PlotFunction = Callable[[plt.Axes, PlotArgs], None]
 PlotFunctionTuple = Tuple[PlotFunction, Tuple[Any, ...]]
 
 
-class BasePlotter:
+class BasePlotter(ABC):
     def __init__(self, epoch_stats: List[EpochStats]) -> None:
         self.epoch_stats = epoch_stats
         self.epochs = [stats.epoch for stats in epoch_stats]
@@ -24,14 +25,25 @@ class BasePlotter:
         figsize: Tuple[int, int] = (15, 18),
         save_pdf: bool = False,
         pdf_path: Optional[str] = None,
+        ncols: Optional[int] = None,
     ) -> None:
         self._set_plot_style()
-        fig, axs = plt.subplots(3, 2, figsize=figsize)
-
         plot_functions = self._get_plot_functions()
+        num_plots = len(plot_functions)
 
-        for (i, j), (func, args) in zip(np.ndindex(3, 2), plot_functions):
-            func(axs[i, j], *args)
+        if ncols is None:
+            # determine number of columns for a nearly square layout
+            ncols = ceil(sqrt(num_plots))
+        ncols = max(1, ncols)  # ncols must be >= 1
+        nrows = ceil(num_plots / ncols)
+
+        fig, axs = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+        axs_flat = axs.flatten()
+        for ax, (func, args) in zip(axs_flat, plot_functions):
+            func(ax, *args)
+        # hide any remaining axes if there are more subplots than plots
+        for ax in axs_flat[num_plots:]:
+            ax.axis("off")
 
         self._finalize_plot(fig, axs, save_pdf, pdf_path)
         if not save_pdf:
@@ -101,7 +113,7 @@ class BasePlotter:
         self,
         ax: plt.Axes,
         x: Sequence[int],
-        y: Sequence[int],
+        y: Sequence[float],
         yerr: Sequence[float],
         label: str,
         color: Any,
@@ -126,18 +138,19 @@ class BasePlotter:
         ax.grid(True, axis="x")
 
     def _extract_data(self, key_path: List[str]) -> Tuple[List[float], List[float]]:
-        means, stds = [], []
+        means = []
+        stds = []
         for stats in self.epoch_stats:
-            data = self._get_nested_attr(stats, key_path)
+            data: Any = self._get_nested_attr(stats, key_path)
             if isinstance(data, dict):
-                means.append(data.get("mean", 0))
-                stds.append(data.get("std", 0))
+                means.append(data.get("mean", 0.0))
+                stds.append(data.get("std", 0.0))
             elif hasattr(data, "mean") and hasattr(data, "std"):
                 means.append(data.mean)
                 stds.append(data.std)
             else:
-                means.append(data)
-                stds.append(0)
+                means.append(float(data))
+                stds.append(0.0)
         return means, stds
 
     def _get_nested_attr(self, obj: Any, attr_path: List[str]) -> Any:
@@ -151,15 +164,14 @@ class BasePlotter:
         return obj
 
     def _finalize_plot(
-        self, fig: plt.Figure, axs: plt.Axes, save_pdf: bool, pdf_path: Optional[str]
+        self,
+        fig: plt.Figure,
+        axs: np.ndarray,
+        save_pdf: bool,
+        pdf_path: Optional[str],
     ) -> None:
-        for ax in axs[2, :]:
-            ax.set_xlabel("Epoch")
-        for ax in axs[:-1, :].flatten():
-            ax.tick_params(labelbottom=False)
-
         plt.tight_layout()
-        fig.subplots_adjust(top=1, hspace=0.2, wspace=0.25)
+        fig.subplots_adjust(top=1, hspace=0.3, wspace=0.3)
 
         if save_pdf:
             if pdf_path is None:

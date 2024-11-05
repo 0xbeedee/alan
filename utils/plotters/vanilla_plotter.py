@@ -19,7 +19,7 @@ class VanillaStatsPlotter(BasePlotter):
             (self._plot_intra_episodic_returns, ("test",)),
         ]
 
-    def _plot_losses(self, ax):
+    def _plot_losses(self, ax: plt.Axes) -> None:
         losses = self._extract_vanilla_losses()
         colors = plt.cm.rainbow(np.linspace(0, 1, len(losses)))
 

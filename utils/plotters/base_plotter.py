@@ -15,7 +15,7 @@ PlotFunctionTuple = Tuple[PlotFunction, Tuple[Any, ...]]
 
 
 class BasePlotter:
-    def __init__(self, epoch_stats: List[EpochStats]):
+    def __init__(self, epoch_stats: List[EpochStats]) -> None:
         self.epoch_stats = epoch_stats
         self.epochs = [stats.epoch for stats in epoch_stats]
 
@@ -41,7 +41,7 @@ class BasePlotter:
     def _get_plot_functions(self) -> Sequence[PlotFunctionTuple]:
         """Returns the plot functions to use, i.e., which plots the figure should contain."""
 
-    def _set_plot_style(self):
+    def _set_plot_style(self) -> None:
         plt.style.use("seaborn-v0_8-whitegrid")
         plt.rcParams.update(
             {
@@ -54,7 +54,7 @@ class BasePlotter:
             }
         )
 
-    def _plot_returns(self, ax, returns_type: str):
+    def _plot_returns(self, ax: plt.Axes, returns_type: str) -> None:
         ax2 = ax.twinx()
         colours = sns.color_palette("colorblind")
 
@@ -84,7 +84,7 @@ class BasePlotter:
         ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
         self._set_consistent_x_axis(ax)
 
-    def _plot_intra_episodic_returns(self, ax, data_type: str):
+    def _plot_intra_episodic_returns(self, ax: plt.Axes, data_type: str) -> None:
         """Plots the returns achieved within an episode using boxplots."""
         intra_returns = [
             self._get_nested_attr(stats, [f"{data_type}_collect_stat", "returns"])
@@ -97,7 +97,15 @@ class BasePlotter:
         ax.set_ylabel("Returns")
         self._set_consistent_x_axis(ax)
 
-    def _plot_with_ci(self, ax, x, y, yerr, label, color):
+    def _plot_with_ci(
+        self,
+        ax: plt.Axes,
+        x: Sequence[int],
+        y: Sequence[int],
+        yerr: Sequence[float],
+        label: str,
+        color: Any,
+    ) -> None:
         """Adds confidence intervals to the provided data."""
         ax.plot(x, y, label=label, color=color, linewidth=2)
         ax.fill_between(
@@ -108,11 +116,11 @@ class BasePlotter:
             alpha=0.3,
         )
 
-    def _plot_empty(self, ax, title):
+    def _plot_empty(self, ax: plt.Axes, title: str) -> None:
         ax.text(0.5, 0.5, title, ha="center", va="center", transform=ax.transAxes)
         ax.axis("off")
 
-    def _set_consistent_x_axis(self, ax):
+    def _set_consistent_x_axis(self, ax: plt.Axes) -> None:
         ax.set_xticks(self.epochs)
         ax.set_xlim(min(self.epochs) - 1, max(self.epochs) + 1)
         ax.grid(True, axis="x")
@@ -142,7 +150,9 @@ class BasePlotter:
                 return None
         return obj
 
-    def _finalize_plot(self, fig, axs, save_pdf: bool, pdf_path: Optional[str]):
+    def _finalize_plot(
+        self, fig: plt.Figure, axs: plt.Axes, save_pdf: bool, pdf_path: Optional[str]
+    ) -> None:
         for ax in axs[2, :]:
             ax.set_xlabel("Epoch")
         for ax in axs[:-1, :].flatten():

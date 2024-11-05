@@ -6,6 +6,8 @@ import numpy as np
 
 import torch
 
+from models.utils import sample_mdn
+
 
 class DreamEnv(gym.Env):
     """
@@ -64,7 +66,7 @@ class DreamEnv(gym.Env):
             # sample random latent vector from standard normal distribution
             latent_dim = self.mdnrnn.latent_dim
             self.z = torch.randn(1, latent_dim, device=self.device)
-        obs = self._decode(self.z)
+        obs = self.vae.decode(self.z, is_dream=True)
         # TODO how can I use info?
         info = {}
 
@@ -75,14 +77,13 @@ class DreamEnv(gym.Env):
         self.t += 1
 
         action = torch.tensor([[action]], device=self.device)  # (1, action_dim)
-        z_t = self.z  # (1, latent_dim)
         mus, sigmas, logpi, r, d, self.hidden_state = self.mdnrnn(
-            action, z_t, hidden=self.hidden_state
+            action, self.z, hidden=self.hidden_state
         )
         reward = r.item()
 
-        self.z = self._sample_mdn(mus, sigmas, logpi)
-        obs = self._decode(self.z)
+        _, self.z = sample_mdn(mus, sigmas, logpi)
+        obs = self.vae.decode(self.z, is_dream=True)
         info = {}
 
         terminated = torch.sigmoid(d).item() > 0.5
@@ -99,38 +100,3 @@ class DreamEnv(gym.Env):
 
     def close(self):
         pass
-
-    def _decode(self, z: torch.Tensor):
-        """Decodes the reconstruction returned by the VAE decoder into an observation compatible with the ones provided by the real environment."""
-        recons = self.vae.decoder(z)
-
-        observation = {}
-        for key, recon in recons.items():
-            observation[key] = (
-                torch.argmax(recon, dim=1).squeeze()
-                if key in self.vae.categorical_keys
-                else recon.squeeze()
-            )
-        return observation
-
-    def _sample_mdn(
-        self, mus: torch.Tensor, sigmas: torch.testing, logpi: torch.Tensor
-    ):
-        """Samples from the MDN output to get the next latent state."""
-        # remove batch dimensions
-        mus = mus.squeeze(0)  # (n_gaussian_comps, latent_dim)
-        sigmas = sigmas.squeeze(0)  # (n_gaussian_comps, latent_dim)
-        logpi = logpi.squeeze(0)  # (n_gaussian_comps,)
-
-        # convert logpi to probabilities
-        pi = torch.exp(logpi).cpu().numpy()
-        pi = pi / np.sum(pi)
-
-        component = np.random.choice(len(pi), p=pi)
-        mu_c = mus[component]  # (latent_dim,)
-        sigma_c = sigmas[component]  # (latent_dim,)
-
-        z = mu_c + sigma_c * torch.randn_like(mu_c).to(self.device)
-        # add batch dimension
-        z = z.unsqueeze(0)  # (1, latent_dim)
-        return z

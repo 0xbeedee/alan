@@ -1,7 +1,21 @@
 from typing import Dict, Any
 
 import torch
-from torch.distributions import Categorical, Normal, MixtureSameFamily, Independent
+from torch.distributions import Normal, Categorical, MixtureSameFamily, Independent
+
+
+def sample_mdn(mus: torch.Tensor, sigmas: torch.Tensor, logpi: torch.Tensor):
+    """Samples from the MDN output to get the next latent state using PyTorch distributions."""
+    # categorical for mixture weights
+    mixture_dist = Categorical(logits=logpi)
+    # multivariate normal mixture components
+    component_dist = Independent(Normal(loc=mus, scale=sigmas), 1)
+    mixture_model = MixtureSameFamily(
+        mixture_distribution=mixture_dist, component_distribution=component_dist
+    )
+
+    z = mixture_model.sample()  # (batch_size, latent_dim)
+    return mixture_model, z
 
 
 def gmm_loss(
@@ -15,11 +29,7 @@ def gmm_loss(
 
     More precisely, it computes minus the log probability of the batch under the GMM model described by mus, sigmas and pi.
     """
-    # categorical for mixture weights
-    mix = Categorical(logits=logpi)
-    # multivariate normal mixture components
-    comp = Independent(Normal(loc=mus, scale=sigmas), 1)
-    gmm = MixtureSameFamily(mix, comp)
+    gmm, _ = sample_mdn(mus, sigmas, logpi)
 
     # log probability of the batch under the GMM
     log_prob = gmm.log_prob(batch)

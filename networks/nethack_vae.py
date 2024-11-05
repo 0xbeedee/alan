@@ -343,3 +343,19 @@ class NetHackVAE(nn.Module):
         z, dist = self.encoder(inputs)
         reconstructions = self.decoder(z)
         return reconstructions, z, dist
+
+    def decode(self, z: torch.Tensor, is_dream: bool = False):
+        """Decodes the latent vector into an observation compatible with the ones provided by the NetHack environment."""
+        recons = self.decoder(z)
+
+        observation = {}
+        for key, recon in recons.items():
+            if key in self.categorical_keys:
+                # the second dim is only useful for internal purposes
+                recon = torch.argmax(recon, dim=1)
+            if is_dream:
+                # the first dimension is always 1 when dreaming
+                recon = recon.squeeze()
+            observation[key] = recon
+
+        return observation

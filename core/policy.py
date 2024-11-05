@@ -70,11 +70,15 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         Note this is just a template method, the actual computation happens in _forward().
         """
-        assert "latent_obs" in kwargs
+        if "latent_obs" not in kwargs:
+            # we're recording a rollout of our agent (no latent_obs in kwargs because we're not using the Collector)
+            kwargs["latent_obs"] = self.obs_net(batch.obs)
+
         # deciding on the goal here:
         # 1) makes the actor goal-aware (which is desirable, seeing as we'd like the agent to learn to use goals)
         # 2) centralises goal selection
         self.latent_goal = self.self_model.select_goal(kwargs["latent_obs"])
+
         result = self._forward(batch, state, **kwargs)
         self._handle_state_(result, state, **kwargs)
         return result

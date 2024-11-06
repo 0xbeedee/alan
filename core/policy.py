@@ -100,9 +100,8 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> GoalBatchProtocol:
         """Pre-processes the data from the provided replay buffer.
 
-        It is meant to be overwritten by the policy. The current implementation simply adds the fast intrinsic reward.
+        It is meant to be overwritten by the policy.
         """
-        # TODO the docstring is wrong
         self.combine_fast_reward_(batch)
         batch.latent_obs = self.obs_net(batch.obs)
         batch.latent_obs_next = self.obs_net(batch.obs_next)

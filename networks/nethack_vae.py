@@ -6,11 +6,82 @@ from collections import namedtuple, OrderedDict
 
 import torch
 from torch import nn
-import torch.nn.functional as F
-from torch.distributions import MultivariateNormal
 
 from .nethack_encoders_decoders import *
-from .utils import Crop
+from .utils import Crop, reparameterise
+
+
+class NetHackVAE(nn.Module):
+    """A variational autoencoder for the NetHack Learning Environment."""
+
+    def __init__(
+        self,
+        *,
+        observation_space: gym.Space,
+        latent_dim: int,
+        hidden_dim: int = 512,
+        device: torch.device = torch.device("cpu"),
+    ) -> None:
+        super().__init__()
+        self.device = device
+
+        self.encoder = NetHackEncoder(
+            observation_space,
+            latent_dim,
+            hidden_dim=hidden_dim,
+            device=device,
+        )
+        self.decoder = NetHackDecoder(
+            observation_space,
+            latent_dim,
+            self.encoder.o_dim,
+            hidden_dim=hidden_dim,
+            device=device,
+        )
+
+        # it's convenient to keep these here to centralise key handling
+        self.categorical_keys = [
+            "glyphs",
+            # "chars",
+            # "colors",
+            # "specials",
+            # "tty_chars",
+            # "tty_colors",
+            "egocentric_view",
+            # "inv_glyphs",
+            # "inv_letters",
+            # "inv_oclasses",
+            # "inv_strs",
+            # "message",
+            # "screen_descriptions",
+        ]
+        self.continuous_keys = [
+            "blstats",
+            # "tty_cursor",
+        ]
+
+    def forward(
+        self, inputs: Batch
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        z, dist = self.encoder(inputs)
+        reconstructions = self.decoder(z)
+        return reconstructions, z, dist
+
+    def decode(self, z: torch.Tensor, is_dream: bool = False):
+        """Decodes the latent vector into an observation compatible with the ones provided by the NetHack environment."""
+        recons = self.decoder(z)
+
+        observation = {}
+        for key, recon in recons.items():
+            if key in self.categorical_keys:
+                # the second dim is only useful for internal purposes
+                recon = torch.argmax(recon, dim=1)
+            if is_dream:
+                # the first dimension is always 1 when dreaming
+                recon = recon.squeeze()
+            observation[key] = recon
+
+        return observation
 
 
 class NetHackEncoder(nn.Module):
@@ -132,7 +203,7 @@ class NetHackEncoder(nn.Module):
         mu = self.fc_mu(combined)  # (B, latent_dim)
         logsigma = self.fc_logsigma(combined)  # (B, latent_dim)
         # it's convenient to have the encoder return z as well
-        z, dist = self._reparameterise(mu, logsigma)  # (B, latent_dim)
+        z, dist = reparameterise(mu, logsigma)  # (B, latent_dim)
         return z, dist
 
     def _observation_data(self, key: str) -> Tuple[int, Tuple[int, ...]]:
@@ -144,17 +215,6 @@ class NetHackEncoder(nn.Module):
             shape=self.observation_space[key].shape,
         )
         return data
-
-    def _reparameterise(
-        self, mu: torch.Tensor, logsigma: torch.Tensor, eps: float = 1e-8
-    ) -> torch.Tensor:
-        """Uses the reparameterisatin trick to obtain an observation in latent space, given the means and logsigmas."""
-        # from https://hunterheidenreich.com/posts/modern-variational-autoencoder-in-pytorch/
-        sigma = F.softplus(logsigma) + eps
-        scale_tril = torch.diag_embed(sigma)
-        dist = MultivariateNormal(mu, scale_tril=scale_tril)
-        # we'll need the dist for training the VAE
-        return dist.rsample(), dist
 
 
 class NetHackDecoder(nn.Module):
@@ -288,74 +348,3 @@ class NetHackDecoder(nn.Module):
             shape=self.observation_space[key].shape,
         )
         return data
-
-
-class NetHackVAE(nn.Module):
-    def __init__(
-        self,
-        *,
-        observation_space: gym.Space,
-        latent_dim: int,
-        hidden_dim: int = 512,
-        device: torch.device = torch.device("cpu"),
-    ) -> None:
-        super().__init__()
-        self.device = device
-
-        self.encoder = NetHackEncoder(
-            observation_space,
-            latent_dim,
-            hidden_dim=hidden_dim,
-            device=device,
-        )
-        self.decoder = NetHackDecoder(
-            observation_space,
-            latent_dim,
-            self.encoder.o_dim,
-            hidden_dim=hidden_dim,
-            device=device,
-        )
-
-        # it's convenient to keep these here to centralise key handling
-        self.categorical_keys = [
-            "glyphs",
-            # "chars",
-            # "colors",
-            # "specials",
-            # "tty_chars",
-            # "tty_colors",
-            "egocentric_view",
-            # "inv_glyphs",
-            # "inv_letters",
-            # "inv_oclasses",
-            # "inv_strs",
-            # "message",
-            # "screen_descriptions",
-        ]
-        self.continuous_keys = [
-            "blstats",
-            # "tty_cursor",
-        ]
-
-    def forward(
-        self, inputs: Batch
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-        z, dist = self.encoder(inputs)
-        reconstructions = self.decoder(z)
-        return reconstructions, z, dist
-
-    def decode(self, z: torch.Tensor, is_dream: bool = False):
-        """Decodes the latent vector into an observation compatible with the ones provided by the NetHack environment."""
-        recons = self.decoder(z)
-
-        observation = {}
-        for key, recon in recons.items():
-            if key in self.categorical_keys:
-                # the second dim is only useful for internal purposes
-                recon = torch.argmax(recon, dim=1)
-            if is_dream:
-                # the first dimension is always 1 when dreaming
-                recon = recon.squeeze()
-            observation[key] = recon
-
-        return observation

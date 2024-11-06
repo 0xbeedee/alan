@@ -1,6 +1,19 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.distributions import MultivariateNormal
+
+
+def reparameterise(
+    mu: torch.Tensor, logsigma: torch.Tensor, eps: float = 1e-8
+) -> torch.Tensor:
+    """Uses the reparameterisation trick to obtain an observation in latent space, given the means and logsigmas."""
+    # from https://hunterheidenreich.com/posts/modern-variational-autoencoder-in-pytorch/
+    sigma = F.softplus(logsigma) + eps
+    scale_tril = torch.diag_embed(sigma)
+    dist = MultivariateNormal(mu, scale_tril=scale_tril)
+    # we'll need the dist for training the VAE
+    return dist.rsample(), dist
 
 
 class Crop(nn.Module):
@@ -12,10 +25,10 @@ class Crop(nn.Module):
         self.height = height
         self.width_target = width_target
         self.height_target = height_target
-        width_grid = _step_to_range(2 / (self.width - 1), self.width_target)[
+        width_grid = self._step_to_range(2 / (self.width - 1), self.width_target)[
             None, :
         ].expand(self.height_target, -1)
-        height_grid = _step_to_range(2 / (self.height - 1), height_target)[
+        height_grid = self._step_to_range(2 / (self.height - 1), height_target)[
             :, None
         ].expand(-1, self.width_target)
 
@@ -51,7 +64,6 @@ class Crop(nn.Module):
             .long()
         )
 
-
-def _step_to_range(delta, num_steps):
-    """Range of `num_steps` integers with distance `delta` centered around zero."""
-    return delta * torch.arange(-num_steps // 2, num_steps // 2)
+    def _step_to_range(self, delta, num_steps):
+        """Range of `num_steps` integers with distance `delta` centered around zero."""
+        return delta * torch.arange(-num_steps // 2, num_steps // 2)

@@ -7,6 +7,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import numpy as np
 
 from models.utils import gmm_loss
 
@@ -70,7 +71,6 @@ class MDNRNNTrainer:
         """Performs one pass through the data."""
         losses, gmm_losses, bce_losses, mse_losses = [], [], [], []
         for batch in data.split(self.batch_size, merge_last=True):
-            batch = batch.to_torch(device=self.device)
             latent_obs, *_ = self.vae.encoder(batch.obs)
             latent_obs_next, *_ = self.vae.encoder(batch.obs_next)
 
@@ -101,16 +101,19 @@ class MDNRNNTrainer:
         self,
         latent_obs: torch.Tensor,
         action: torch.Tensor,
-        reward: torch.Tensor,
-        terminal: torch.Tensor,
+        reward: np.ndarray,
+        terminal: np.ndarray,
         latent_obs_next: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
         """Computes the losses for the MDNRNN model."""
         action = action.unsqueeze(1)
+        terminal = torch.as_tensor(terminal, device=self.device).float()
+        reward = torch.as_tensor(reward, device=self.device)
+
         mus, sigmas, logpi, rs, ds, _ = self.mdnrnn(action, latent_obs)
 
         gmm = gmm_loss(latent_obs_next, mus, sigmas, logpi)
-        bce = F.binary_cross_entropy_with_logits(ds, terminal.float())
+        bce = F.binary_cross_entropy_with_logits(ds, terminal)
 
         latent_size = latent_obs.shape[1]
         mse = F.mse_loss(rs, reward)

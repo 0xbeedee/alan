@@ -8,7 +8,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from .utils import gmm_loss
+from models.utils import gmm_loss
 
 
 class MDNRNNTrainer:

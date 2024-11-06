@@ -20,7 +20,7 @@ from networks import (
     MDNRNN,
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, HER, ZeroHER
-from models import NetHackVAETrainer, MDNRNNTrainer
+from models.trainers import NetHackVAETrainer, MDNRNNTrainer
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (

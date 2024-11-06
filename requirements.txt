@@ -52,6 +52,7 @@ psutil==6.1.0
 ptyprocess==0.7.0
 pure_eval==0.2.3
 pybind11==2.13.6
+pygame==2.6.1
 Pygments==2.18.0
 pyparsing==3.2.0
 python-dateutil==2.9.0.post0

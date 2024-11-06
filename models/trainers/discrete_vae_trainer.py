@@ -16,9 +16,8 @@ class DiscreteVAETrainer(VAETrainer):
         """Computes the VAE loss components."""
         reconstructions, z, dist = self.vae(inputs)
 
-        recon_loss = nn.functional.mse_loss(
-            reconstructions, inputs.view(-1, 1), reduction="mean"
-        )
+        obs = torch.as_tensor(inputs.obs, device=self.vae.device, dtype=torch.float32)
+        recon_loss = nn.functional.mse_loss(reconstructions, obs.unsqueeze(1))
         kl_loss = self._compute_kl_loss(dist, z)
         total_loss = recon_loss + self.kl_weight * kl_loss
         return total_loss, recon_loss, kl_loss

@@ -1,3 +1,14 @@
 name: "discrete"
-hidden_sizes: [16]
-o_dim: 10
+
+common: &common
+  latent_dim: 128
+
+vae:
+  <<: *common
+  hidden_sizes: [16]
+  output_dim: 1
+
+mdnrnn:
+  <<: *common
+  action_dim: 1
+  n_gaussian_comps: 3

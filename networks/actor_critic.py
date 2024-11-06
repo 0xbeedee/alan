@@ -36,7 +36,7 @@ class SimpleNetHackActor(nn.Module):
         if state is None:
             # the first policy.forward() call has a None state
             state = torch.zeros(obs_out.shape[0], self.state_dim, device=self.device)
-        logits = self.final_layer(torch.cat(obs_out, state.to(self.device)), dim=1)
+        logits = self.final_layer(torch.cat((obs_out, state.to(self.device)), dim=1))
         return logits, state
 
     def to(self, device: torch.device) -> Self:

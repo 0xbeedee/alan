@@ -34,9 +34,9 @@ class DiscreteVAE(nn.Module):
     # TODO needs a decode() method if you want to use the dream
     def forward(self, inputs):
         mu, logsigma = self.encoder(inputs)
-        z, _ = reparameterise(mu, logsigma)
-        recon_x = self.decoder(z)
-        return recon_x, mu, logsigma
+        z, dist = reparameterise(mu, logsigma)
+        recon = self.decoder(z)
+        return recon, z, dist
 
 
 class DiscreteEncoder(nn.Module):
@@ -96,5 +96,5 @@ class DiscreteDecoder(nn.Module):
         self.decoder = nn.Sequential(*layers).to(device)
 
     def forward(self, z):
-        recon_x = self.decoder(z)
-        return recon_x
+        recon = self.decoder(z)
+        return recon

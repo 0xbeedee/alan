@@ -2,7 +2,12 @@ base:
   name: "FrozenLake-v1"
   render_mode: "rgb_array"
 
+dream:
+  min_nsteps: 1000
+  max_nsteps: 10000
 
 vec:
   num_train_envs: 5
   num_test_envs: 5
+
+  dream_num_train_envs: 4

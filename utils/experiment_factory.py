@@ -17,10 +17,11 @@ from networks import (
     GoalNetHackCritic,
     SimpleNetHackCritic,
     NetHackVAE,
+    DiscreteVAE,
     MDNRNN,
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, HER, ZeroHER
-from models.trainers import NetHackVAETrainer, MDNRNNTrainer
+from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
 from policies import PPOBasedPolicy
 from config import ConfigManager
 from core import (
@@ -62,12 +63,18 @@ class ExperimentFactory:
         return buf_class(buf_size, env_num)
 
     def create_vae_mdnrnn(self, observation_space: gym.Space, device: torch.device):
-        # TODO add DiscreteVAE and MDNRNN (? => the MDNRNN could probably always be the same, as long as the shapes match)
-        vae = NetHackVAE(
+        vae_map = {
+            "nethack": NetHackVAE,
+            "discrete": DiscreteVAE,
+        }
+
+        vae_class = vae_map[self.config.get("obsnet.name")]
+        vae = vae_class(
             **self.config.get("obsnet.vae"),
             observation_space=observation_space,
             device=device,
         )
+        # TODO the MDNRNN should remain the same regardless of the VAE
         mdnrnn = MDNRNN(
             **self.config.get("obsnet.mdnrnn"),
             device=device,
@@ -75,7 +82,7 @@ class ExperimentFactory:
         return vae, mdnrnn
 
     def create_obsnet(self, vae_encoder: nn.Module, device: torch.device) -> nn.Module:
-        # the vae_encoder is the part that adapts to the environment
+        # because ObsNet is just a wrapper for the VAE encoder, we need only act on the latter as we switch environments
         return ObsNet(vae_encoder=vae_encoder, device=device)
 
     def create_actor_critic(
@@ -140,9 +147,16 @@ class ExperimentFactory:
         learning_rate: float,
         device: torch.device,
     ) -> Tuple[nn.Module, nn.Module]:
-        vae_trainer = NetHackVAETrainer(
+        vae_trainer_map = {
+            "nethack": NetHackVAETrainer,
+            "discrete": DiscreteVAETrainer,
+        }
+
+        vae_trainer_class = vae_trainer_map[self.config.get("obsnet.name")]
+        vae_trainer = vae_trainer_class(
             vae, batch_size, learning_rate=learning_rate, device=device
         )
+
         mdnrnn_trainer = MDNRNNTrainer(
             mdnrnn,
             vae,

@@ -1,8 +1,8 @@
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from core.types import EnvModelProtocol
 
 import gymnasium as gym
-import numpy as np
+from tianshou.data import Batch
 
 import torch
 
@@ -42,12 +42,10 @@ class DreamEnv(gym.Env):
         self.z = None
         self.t = 0
 
-    # TODO i don't correctly set this initial_obs!
     def reset(
         self,
         seed: Optional[int] = None,
         options: Optional[Any] = None,
-        initial_obs: Optional[Dict[str, np.ndarray | torch.Tensor]] = None,
     ):
         super().reset(seed=seed)
         self.t = 0
@@ -58,12 +56,10 @@ class DreamEnv(gym.Env):
             torch.zeros(1, hidden_dim, device=self.device),  # c_0
         )
 
-        if initial_obs is not None:
-            self.z, *_ = self.obs_net(initial_obs)
-        else:
-            # sample random latent vector from standard normal distribution
-            latent_dim = self.mdnrnn.latent_dim
-            self.z = torch.randn(1, latent_dim, device=self.device)
+        # this initial observation serves to "anchor" the dream
+        initial_obs = self._get_initial_obs()
+        _, self.z, _ = self.vae(initial_obs)
+
         obs = self.vae.decode(self.z, is_dream=True)
         # TODO how can I use info?
         info = {}
@@ -97,3 +93,12 @@ class DreamEnv(gym.Env):
 
     def close(self):
         pass
+
+    def _get_initial_obs(self) -> Batch:
+        """Samples an initial observation from the observation space and adapts it to the VAE."""
+        initial_obs = self.observation_space.sample()
+        if isinstance(self.observation_space, gym.spaces.Dict):
+            # add a batch dimension to each value in the observation dictionary
+            initial_obs = Batch.stack([initial_obs])
+
+        return initial_obs

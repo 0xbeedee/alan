@@ -1,5 +1,9 @@
+from typing import Dict
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 import gymnasium as gym
 
 from .utils import reparameterise
@@ -13,7 +17,6 @@ class DiscreteVAE(nn.Module):
         observation_space: gym.Space,
         hidden_sizes: list[int],
         latent_dim: int,
-        output_dim: int,
         device: torch.device = torch.device("cpu"),
     ):
         super().__init__()
@@ -27,12 +30,18 @@ class DiscreteVAE(nn.Module):
         self.decoder = DiscreteDecoder(
             latent_dim=latent_dim,
             hidden_sizes=hidden_sizes,
-            output_dim=output_dim,
+            output_dim=observation_space["obs"].n,
             device=device,
         )
 
-    # TODO needs a decode() method if you want to use the dream
-    def forward(self, inputs):
+    def decode(self, z: torch.Tensor, is_dream: bool = False):
+        """Decodes the latent vector into an observation compatible with the ones provided by Discrete environments wrapped with DictObservation."""
+        recon_logits = self.decoder(z)
+        probs = F.softmax(recon_logits, dim=-1)
+        obs = torch.argmax(probs, dim=-1).item()
+        return {"obs": obs}
+
+    def forward(self, inputs: Dict[str, np.ndarray]):
         mu, logsigma = self.encoder(inputs)
         z, dist = reparameterise(mu, logsigma)
         recon = self.decoder(z)
@@ -62,7 +71,7 @@ class DiscreteEncoder(nn.Module):
         self.fc_mu = nn.Linear(in_size, self.latent_dim).to(device)
         self.fc_logsigma = nn.Linear(in_size, self.latent_dim).to(device)
 
-    def forward(self, inputs):
+    def forward(self, inputs: Dict[str, np.ndarray]):
         x = inputs["obs"]
         x = torch.as_tensor(x, dtype=torch.float32, device=self.device)
         if x.dim() == 0:
@@ -95,6 +104,6 @@ class DiscreteDecoder(nn.Module):
         layers.append(nn.Linear(in_size, output_dim))
         self.decoder = nn.Sequential(*layers).to(device)
 
-    def forward(self, z):
+    def forward(self, z: torch.Tensor):
         recon = self.decoder(z)
         return recon

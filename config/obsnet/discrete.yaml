@@ -6,7 +6,6 @@ common: &common
 vae:
   <<: *common
   hidden_sizes: [16]
-  output_dim: 1
 
 mdnrnn:
   <<: *common

@@ -16,8 +16,6 @@ class DreamEnv(gym.Env):
     The idea is the same as the one used for the VizDoom experiment in the World Models paper (https://arxiv.org/abs/1803.10122).
     """
 
-    # TODO only works for NetHack at present
-
     def __init__(
         self,
         env_model: EnvModelProtocol,
@@ -95,7 +93,6 @@ class DreamEnv(gym.Env):
         return obs, reward, terminated, truncated, info
 
     def render(self, mode: str = "human"):
-        # TODO try rendering the latent space?
         pass
 
     def close(self):

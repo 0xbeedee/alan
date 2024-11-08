@@ -1,8 +1,7 @@
-from typing import Any, Tuple
-from core.types import GoalBatchProtocol
+from typing import Tuple
 from abc import abstractmethod
 
-from tianshou.data import SequenceSummaryStats
+from tianshou.data import SequenceSummaryStats, Batch
 
 import torch
 from torch import nn
@@ -32,11 +31,13 @@ class VAETrainer:
         )
 
     @abstractmethod
-    def _get_loss(self, inputs: Any) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _get_loss(
+        self, inputs: Batch
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Computes the total loss, reconstruction loss, and KL divergence loss."""
 
     def train(
-        self, data: GoalBatchProtocol
+        self, data: Batch
     ) -> Tuple[SequenceSummaryStats, SequenceSummaryStats, SequenceSummaryStats]:
         """Trains the VAE for one epoch."""
         losses_summary, recon_losses_summary, kl_losses_summary = self._data_pass(data)
@@ -45,7 +46,7 @@ class VAETrainer:
 
     def _data_pass(
         self,
-        data: GoalBatchProtocol,
+        data: Batch,
     ) -> Tuple[SequenceSummaryStats, SequenceSummaryStats, SequenceSummaryStats]:
         """Performs one pass through the data."""
         losses, recon_losses, kl_losses = [], [], []

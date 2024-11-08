@@ -1,7 +1,6 @@
 from typing import Dict, Tuple
-from core.types import GoalBatchProtocol, GoalReplayBufferProtocol
 
-from tianshou.data import SequenceSummaryStats
+from tianshou.data import SequenceSummaryStats, Batch, ReplayBuffer
 
 import torch
 from torch import nn
@@ -39,7 +38,7 @@ class MDNRNNTrainer:
         self.batch_size = batch_size
         self.device = device
 
-    def train(self, data: GoalBatchProtocol | GoalReplayBufferProtocol) -> Tuple[
+    def train(self, data: Batch | ReplayBuffer) -> Tuple[
         SequenceSummaryStats,
         SequenceSummaryStats,
         SequenceSummaryStats,
@@ -61,7 +60,7 @@ class MDNRNNTrainer:
 
     def _data_pass(
         self,
-        data: GoalBatchProtocol | GoalReplayBufferProtocol,
+        data: Batch | ReplayBuffer,
     ) -> Tuple[
         SequenceSummaryStats,
         SequenceSummaryStats,

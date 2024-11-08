@@ -133,6 +133,7 @@ class BasePlotter(ABC):
         ax.axis("off")
 
     def _set_consistent_x_axis(self, ax: plt.Axes) -> None:
+        ax.set_xlabel("Epochs")
         ax.set_xticks(self.epochs)
         ax.set_xlim(min(self.epochs) - 1, max(self.epochs) + 1)
         ax.grid(True, axis="x")

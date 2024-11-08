@@ -1,3 +1,4 @@
+from typing import Generator
 from contextlib import contextmanager
 from datetime import datetime
 import os
@@ -5,6 +6,7 @@ import os
 import torch
 import gymnasium as gym
 import tianshou as ts
+from tianshou.data import EpochStats
 from tianshou.utils import TensorboardLogger
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
@@ -32,7 +34,7 @@ class ExperimentRunner:
         intrinsic_config: str,
         model_config: str,
         device: torch.device,
-    ):
+    ) -> None:
         self.base_config_path = base_config_path
         self.env_config = env_config
         self.policy_config = policy_config
@@ -60,7 +62,7 @@ class ExperimentRunner:
         self.factory = ExperimentFactory(self.config)
         self.is_goal_aware = self.factory.is_goal_aware
 
-    def setup(self):
+    def setup(self) -> None:
         print("[+] Setting up the environments...")
         self._setup_environment()
         self._setup_vector_envs(self.env, is_dream=False)
@@ -82,17 +84,15 @@ class ExperimentRunner:
         print("[+] Weaving the dream...")
         self._setup_dream()
 
-    def run(self, save_pdf_plot: bool = True):
+    def run(self, save_pdf_plot: bool = True) -> None:
         """Runs the experiment and collects epoch statistics."""
         print("\n[+] Running the experiment...")
         self.epoch_stats, self.dream_epoch_stats = [], []
         for epoch_stat in self.trainer:
             self.epoch_stats.append(epoch_stat)
-
-            # TODO this is possibly the simplest approach we could take (making it more complex is mostly a triviality, though)
-            with self._enter_dream() as _:
-                for dream_epoch_stat in self.dream_trainer:
-                    self.dream_epoch_stats.append(dream_epoch_stat)
+            if self._envmodel_is_good(epoch_stat):
+                # only run the dream if we have a good enough model of the environment
+                self._run_dream()
 
         print("\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot...")
         self._plot(save_pdf=save_pdf_plot)
@@ -102,7 +102,7 @@ class ExperimentRunner:
 
         print("[+] All done!")
 
-    def _setup_config(self):
+    def _setup_config(self) -> None:
         """Sets up the configuration."""
         self.config = ConfigManager(self.base_config_path)
         self.config.create_config(
@@ -115,7 +115,7 @@ class ExperimentRunner:
             }
         )
 
-    def _setup_environment(self):
+    def _setup_environment(self) -> None:
         """Sets up the gym environment."""
         try:
             self.env = gym.make(
@@ -134,7 +134,7 @@ class ExperimentRunner:
         except gym.error.Error as e:
             raise RuntimeError(f"Failed to create environment {self.env_name}: {e}")
 
-    def _setup_vector_envs(self, environment: gym.Env, is_dream: bool = False):
+    def _setup_vector_envs(self, environment: gym.Env, is_dream: bool = False) -> None:
         """Sets up the vector environments for training and testing."""
         if is_dream:
             self.dream_train_envs = ts.env.DummyVectorEnv(
@@ -149,7 +149,7 @@ class ExperimentRunner:
                 [lambda: environment for _ in range(self.num_test_envs)]
             )
 
-    def _setup_buffers(self, is_dream: bool = False):
+    def _setup_buffers(self, is_dream: bool = False) -> None:
         """Sets up the replay buffers for training and testing."""
         if is_dream:
             self.dream_train_buf = self.factory.create_buffer(
@@ -164,7 +164,7 @@ class ExperimentRunner:
                 self.test_buf_size, self.num_test_envs
             )
 
-    def _setup_networks(self):
+    def _setup_networks(self) -> None:
         """Sets up the observation, actor, and critic networks."""
         self.vae, self.mdnrnn = self.factory.create_vae_mdnrnn(
             self.env.observation_space, self.device
@@ -175,7 +175,7 @@ class ExperimentRunner:
             self.obs_net, self.mdnrnn.hidden_dim * 2, self.env.action_space, self.device
         )
 
-    def _setup_models(self):
+    def _setup_models(self) -> None:
         """Sets up the environment model and the self model."""
         self.vae_trainer, self.mdnrnn_trainer = self.factory.create_envmodel_trainers(
             self.vae, self.mdnrnn, self.batch_size, self.learning_rate, self.device
@@ -203,7 +203,7 @@ class ExperimentRunner:
             slow_intrinsic_module,
         )
 
-    def _setup_policy(self):
+    def _setup_policy(self) -> None:
         """Sets up the policy."""
         assert self.actor_net.obs_net is self.critic_net.obs_net
         obs_net_params = set(self.actor_net.obs_net.parameters())
@@ -230,7 +230,7 @@ class ExperimentRunner:
             False,  # no action scaling
         )
 
-    def _setup_collectors(self, is_dream: bool = False):
+    def _setup_collectors(self, is_dream: bool = False) -> None:
         """Sets up the collectors for training and testing."""
         if is_dream:
             self.dream_train_collector = self.factory.create_collector(
@@ -246,7 +246,7 @@ class ExperimentRunner:
                 self.policy, self.test_envs, self.test_buf
             )
 
-    def _setup_logger(self):
+    def _setup_logger(self) -> None:
         """Sets up the TensorboardLogger."""
         self.log_path = self._make_save_path(
             LOG_DIR,
@@ -259,7 +259,7 @@ class ExperimentRunner:
         self.writer = SummaryWriter(os.path.split(self.log_path)[0])
         self.logger = TensorboardLogger(self.writer)
 
-    def _setup_trainer(self, is_dream: bool = False):
+    def _setup_trainer(self, is_dream: bool = False) -> None:
         """Sets up the trainer."""
         train_collector = (
             self.dream_train_collector if is_dream else self.train_collector
@@ -277,7 +277,7 @@ class ExperimentRunner:
         attr_name = "dream_trainer" if is_dream else "trainer"
         setattr(self, attr_name, trainer)
 
-    def _setup_dream(self):
+    def _setup_dream(self) -> None:
         """Sets up the dream environment and associated components."""
         self.dream_env = DreamEnv(
             self.env_model,
@@ -291,7 +291,7 @@ class ExperimentRunner:
         self._setup_trainer(is_dream=True)
 
     @contextmanager
-    def _enter_dream(self):
+    def _enter_dream(self) -> Generator[None, None, None]:
         """Modifies the execution context to enable the agent to act within its dream, restoring the old execution context once dreaming is over."""
         try:
             # __enter__()
@@ -316,7 +316,62 @@ class ExperimentRunner:
             self.self_model.slow_intrinsic_module = old_slow
             print()
 
-    def _plot(self, save_pdf: bool = True):
+    def _run_dream(self) -> None:
+        """Runs the dream and updated the correponding epoch stats."""
+        with self._enter_dream() as _:
+            for dream_epoch_stat in self.dream_trainer:
+                self.dream_epoch_stats.append(dream_epoch_stat)
+
+    def _envmodel_is_good(
+        self,
+        epoch_stat: EpochStats,
+        initial_loss_threshold: float = 10.0,
+        alpha: float = 0.98,
+    ) -> bool:
+        """Checks if the environment model is "good", i.e., if it provides an accurate model of the environment.
+
+        Performing this chesk is important because the agent uses the same policy in the dream and the real environment. This means that, if the dream is inaccurate, the agent will act in an inaccurate representation of reality, which might make it quite a bit worse, defeating the whole purpose of dreaming.
+        """
+        if not hasattr(self, "n_epochs"):
+            # keep track of the number of epochs seen
+            self.n_epochs = 0
+        self.n_epochs += 1
+
+        vae_loss = epoch_stat.training_stat.env_model_stats.vae_loss
+        mdnrnn_loss = epoch_stat.training_stat.env_model_stats.mdnrnn_loss
+
+        if not hasattr(self, "vae_loss_ema"):
+            self.vae_loss_ema = None
+        if not hasattr(self, "mdnrnn_loss_ema"):
+            self.mdnrnn_loss_ema = None
+        if not hasattr(self, "vae_loss_std_ema"):
+            self.vae_loss_std_ema = None
+        if not hasattr(self, "mdnrnn_loss_std_ema"):
+            self.mdnrnn_loss_std_ema = None
+        self.vae_loss_ema = self._update_ema(self.vae_loss_ema, vae_loss.mean)
+        self.mdnrnn_loss_ema = self._update_ema(self.mdnrnn_loss_ema, mdnrnn_loss.mean)
+        self.vae_loss_std_ema = self._update_ema(self.vae_loss_std_ema, vae_loss.std)
+        self.mdnrnn_loss_std_ema = self._update_ema(
+            self.mdnrnn_loss_std_ema, mdnrnn_loss.std
+        )
+
+        mean_loss = (self.vae_loss_ema + self.mdnrnn_loss_ema) / 2
+        mean_std = (self.vae_loss_std_ema + self.mdnrnn_loss_std_ema) / 2
+
+        # adaptive threshold based on moving averages
+        loss_threshold = initial_loss_threshold * alpha**self.n_epochs
+        if mean_loss > loss_threshold or mean_std > 0.05 * mean_loss:
+            return False
+
+        return True
+
+    def _update_ema(self, ema_value, new_value, alpha=0.1):
+        """Updates the exponential moving average."""
+        if ema_value is None:
+            return new_value
+        return alpha * new_value + (1 - alpha) * ema_value
+
+    def _plot(self, save_pdf: bool = True) -> None:
         """Plots the data.
 
         Its default behaviour is to save the plot to a PDF file to not block execution.
@@ -334,7 +389,7 @@ class ExperimentRunner:
         # if save_pdf is False, the path will be ignored
         plotter.plot(figsize=(12, 8), save_pdf=save_pdf, pdf_path=plot_path)
 
-    def _record_rollout(self):
+    def _record_rollout(self) -> None:
         """Records a rollout lasting one episode."""
         obs, info = self.env.reset()
         done = False
@@ -357,7 +412,7 @@ class ExperimentRunner:
         intrinsic_config: str,
         is_goal_aware: bool,
         ext: str | None = None,
-    ):
+    ) -> str:
         """Creates a path to save the artefacts (plots, recordings, and logs)."""
         timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
         save_path = os.path.join(

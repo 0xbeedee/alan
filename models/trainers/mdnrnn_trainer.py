@@ -49,7 +49,6 @@ class MDNRNNTrainer:
         losses_summary, gmm_losses_summary, bce_losses_summary, mse_losses_summary = (
             self._data_pass(data)
         )
-        # TODO if I want to control latent imagination by checking loss threshold, it's probably a good idea to get the loss on some evaluation set
         self.scheduler.step(losses_summary.mean)
         return (
             losses_summary,

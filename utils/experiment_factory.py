@@ -74,7 +74,6 @@ class ExperimentFactory:
             observation_space=observation_space,
             device=device,
         )
-        # TODO the MDNRNN should remain the same regardless of the VAE
         mdnrnn = MDNRNN(
             **self.config.get("obsnet.mdnrnn"),
             device=device,

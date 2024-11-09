@@ -212,7 +212,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         assert "latent_obs" in kwargs
         latent = kwargs["latent_obs"]
-        state = self._split_state(state)
+        state = self._split_state(state=state)
         action = result.act.unsqueeze(1)
 
         outs = self.env_model.mdnrnn.pass_through_rnn(action, latent, hidden=state)
@@ -224,7 +224,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Splits the tensor representing the hidden state into an (h, c) tuple, as expected by the RNN."""
         if state is not None:
-            # the RNN expects an (h, c) tuple as the hidden state
             state = torch.split(state, state.shape[1] // 2, dim=1)
         return state
 

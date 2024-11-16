@@ -20,7 +20,7 @@ from tianshou.data import (
     ReplayBuffer,
     EpochStats,
 )
-from tianshou.data.batch import BatchProtocol
+from tianshou.data.batch import BatchProtocol, TArr
 from tianshou.policy import BasePolicy
 from tianshou.policy.base import (
     TLearningRateScheduler,
@@ -68,6 +68,16 @@ class GoalBatchProtocol(IntrinsicBatchProtocol, Protocol):
 
     latent_goal: np.ndarray
     latent_goal_next: np.ndarray
+
+
+class KBBatchProtocol(BatchProtocol, Protocol):
+    """A BatchProtocol containing an observation, an action and additional entries needed by the knowledge base."""
+
+    obs: TArr | BatchProtocol
+    act: TArr
+    rew: np.ndarray
+    init_obs: TArr | BatchProtocol
+    traj_id: int
 
 
 RB = TypeVar("RB", bound=ReplayBuffer)

@@ -29,47 +29,6 @@ class KnowledgeBase(ReplayBuffer):
             size, stack_num, ignore_obs_next, save_only_last_obs, sample_avail, **kwargs
         )
 
-    def add(
-        self,
-        batch: KBBatchProtocol,
-        buffer_ids: np.ndarray | list[int] | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Adds a batch of data into replay buffer."""
-        # preprocess batch
-        new_batch = Batch()
-        for key in batch.get_keys():
-            new_batch.__dict__[key] = batch[key]
-        batch = new_batch
-
-        assert {"obs", "act", "rew", "init_obs", "traj_id"}.issubset(
-            batch.get_keys(),
-        )
-
-        stacked_batch = buffer_ids is not None
-        if stacked_batch:
-            assert len(batch) == 1
-        if self._save_only_last_obs:
-            batch.obs = batch.obs[:, -1] if stacked_batch else batch.obs[-1]
-
-        # get ptr
-        rew = batch.rew[0] if stacked_batch else batch.rew
-        ptr, ep_rew, ep_len, ep_idx = (
-            np.array([x]) for x in self._add_index(rew, done=False)
-        )
-        try:
-            self._meta[ptr] = batch
-        except ValueError:
-            stack = not stacked_batch
-            batch.rew = batch.rew.astype(np.float32)
-            batch.init_obs = batch.init_obs
-            batch.traj_id = batch.traj_id.astype(int)
-            if len(self._meta.get_keys()) == 0:
-                self._meta = create_value(batch, self.maxsize, stack)  # type: ignore
-            else:  # dynamic key pops up in batch
-                alloc_by_keys_diff(self._meta, batch, self.maxsize, stack)
-            self._meta[ptr] = batch
-        return ptr, ep_rew, ep_len, ep_idx
-
     def __getitem__(
         self, index: slice | int | list[int] | np.ndarray
     ) -> KBBatchProtocol:
@@ -105,6 +64,59 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
 
     def __init__(self, buffer_list: list[KnowledgeBase]) -> None:
         ReplayBufferManager.__init__(self, buffer_list)  # type: ignore
+
+    def add(
+        self,
+        batch: KBBatchProtocol,
+        buffer_ids: np.ndarray | list[int] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Adds a batch of data into replay buffer."""
+        # preprocess batch
+        new_batch = Batch()
+        for key in self._reserved_keys:
+            new_batch.__dict__[key] = batch[key]
+        batch = new_batch
+
+        assert {"obs", "act", "rew", "init_obs", "traj_id"}.issubset(
+            batch.get_keys(),
+        )
+
+        # get index
+        if buffer_ids is None:
+            buffer_ids = np.arange(self.buffer_num)
+
+        ptrs, ep_lens, ep_rews, ep_int_rews, ep_idxs = [], [], [], [], []
+        for batch_idx, buffer_id in enumerate(buffer_ids):
+            ptr, ep_rew, ep_len, ep_idx = self.buffers[buffer_id]._add_index(
+                batch.rew[batch_idx],
+                done=False,
+            )
+            ptrs.append(ptr + self._offset[buffer_id])
+            ep_lens.append(ep_len)
+            ep_rews.append(ep_rew.astype(np.float32))
+            ep_idxs.append(ep_idx + self._offset[buffer_id])
+            self.last_index[buffer_id] = ptr + self._offset[buffer_id]
+            self._lengths[buffer_id] = len(self.buffers[buffer_id])
+        ptrs = np.array(ptrs)
+        try:
+            self._meta[ptrs] = batch
+        except ValueError:
+            batch.rew = batch.rew.astype(np.float32)
+            batch.init_obs = batch.init_obs
+            batch.traj_id = batch.traj_id
+            if len(self._meta.get_keys()) == 0:
+                self._meta = create_value(batch, self.maxsize, stack=False)  # type: ignore
+            else:  # dynamic key pops up in batch
+                alloc_by_keys_diff(self._meta, batch, self.maxsize, False)
+            self._set_batch_for_children()
+            self._meta[ptrs] = batch
+        return (
+            ptrs,
+            np.array(ep_rews),
+            np.array(ep_int_rews),
+            np.array(ep_lens),
+            np.array(ep_idxs),
+        )
 
 
 class VectorKnowledgeBase(KnowledgeBaseManager):

@@ -6,7 +6,5 @@ dream:
   max_nsteps: 1000
 
 vec:
-  num_train_envs: 1
-  num_test_envs: 1
-
-  dream_num_train_envs: 2
+  num_envs: 1
+  num_dream_envs: 2

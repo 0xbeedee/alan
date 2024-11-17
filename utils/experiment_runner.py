@@ -45,11 +45,8 @@ class ExperimentRunner:
 
         self._setup_config()
         self.env_name = self.config.get("environment.base.name")
-        self.num_train_envs = self.config.get("environment.vec.num_train_envs")
-        self.dream_num_train_envs = self.config.get(
-            "environment.vec.dream_num_train_envs"
-        )
-        self.num_test_envs = self.config.get("environment.vec.num_test_envs")
+        self.num_envs = self.config.get("environment.vec.num_envs")
+        self.num_dream_envs = self.config.get("environment.vec.num_dream_envs")
 
         self.train_buf_size = self.config.get("buffers.train_buf_size")
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
@@ -138,30 +135,30 @@ class ExperimentRunner:
         """Sets up the vector environments for training and testing."""
         if is_dream:
             self.dream_train_envs = ts.env.DummyVectorEnv(
-                [lambda: environment for _ in range(self.dream_num_train_envs)]
+                [lambda: environment for _ in range(self.num_dream_envs)]
             )
             # only test in the real environment, no need to create test_envs
         else:
             self.train_envs = ts.env.DummyVectorEnv(
-                [lambda: environment for _ in range(self.num_train_envs)]
+                [lambda: environment for _ in range(self.num_envs)]
             )
             self.test_envs = ts.env.DummyVectorEnv(
-                [lambda: environment for _ in range(self.num_test_envs)]
+                [lambda: environment for _ in range(self.num_envs)]
             )
 
     def _setup_buffers(self, is_dream: bool = False) -> None:
         """Sets up the replay buffers for training and testing."""
         if is_dream:
             self.dream_train_buf = self.factory.create_buffer(
-                self.dream_train_buf_size, self.dream_num_train_envs
+                self.dream_train_buf_size, self.num_dream_envs
             )
             # only test in the real environment, no need to create test_buf
         else:
             self.train_buf = self.factory.create_buffer(
-                self.train_buf_size, self.num_train_envs
+                self.train_buf_size, self.num_envs
             )
             self.test_buf = self.factory.create_buffer(
-                self.test_buf_size, self.num_test_envs
+                self.test_buf_size, self.num_envs
             )
 
     def _setup_networks(self) -> None:
@@ -240,7 +237,9 @@ class ExperimentRunner:
             self.dream_test_collector = None
         else:
             self.train_collector = self.factory.create_collector(
-                self.policy, self.train_envs, self.train_buf
+                self.policy,
+                self.train_envs,
+                self.train_buf,
             )
             self.test_collector = self.factory.create_collector(
                 self.policy, self.test_envs, self.test_buf

@@ -64,8 +64,7 @@ class ExperimentRunner:
 
     def setup(self) -> None:
         print("[+] Setting up the environments...")
-        self._setup_environment()
-        self._setup_vector_envs(self.env, is_dream=False)
+        self._setup_vector_envs(is_dream=False)
         print("[+] Setting up the buffers...")
         self._setup_buffers(is_dream=False)
         print("[+] Setting up the networks...")
@@ -115,39 +114,31 @@ class ExperimentRunner:
             }
         )
 
-    def _setup_environment(self) -> None:
-        """Sets up the gym environment."""
-        try:
-            self.env = gym.make(
-                self.env_name, **self.config.get_except("environment.base", "name")
-            )
-            self.rec_path = self._make_save_path(
-                REC_DIR,
+    def _setup_vector_envs(self, is_dream: bool = False) -> None:
+        """Sets up the vector environments for training and testing."""
+        env_config = self.config.get_except("environment.base", "name")
+        env_funs = [
+            make_env(
                 self.env_name,
+                env_config,
+                REC_DIR,
                 self.policy_config,
                 self.obsnet_config,
                 self.intrinsic_config,
                 self.is_goal_aware,
-                ext="mp4" if self.env.render_mode == "rgb_array" else "ttyrec",
+                self.factory,
             )
-            self.env = self.factory.wrap_env(self.env, self.rec_path)
-        except gym.error.Error as e:
-            raise RuntimeError(f"Failed to create environment {self.env_name}: {e}")
+            for _ in range(self.num_envs)
+        ]
 
-    def _setup_vector_envs(self, environment: gym.Env, is_dream: bool = False) -> None:
-        """Sets up the vector environments for training and testing."""
         if is_dream:
-            self.dream_train_envs = ts.env.DummyVectorEnv(
-                [lambda: environment for _ in range(self.num_dream_envs)]
-            )
-            # only test in the real environment, no need to create test_envs
+            self.dream_train_envs = ts.env.SubprocVectorEnv(env_funs)
+            # no need to create test_envs for dream environment
         else:
-            self.train_envs = ts.env.DummyVectorEnv(
-                [lambda: environment for _ in range(self.num_envs)]
-            )
-            self.test_envs = ts.env.DummyVectorEnv(
-                [lambda: environment for _ in range(self.num_envs)]
-            )
+            # all the envs created by env_funs() are the same
+            self.env = env_funs[0]()
+            self.train_envs = ts.env.SubprocVectorEnv(env_funs)
+            self.test_envs = ts.env.SubprocVectorEnv(env_funs)
 
     def _setup_buffers(self, is_dream: bool = False) -> None:
         """Sets up the replay buffers for training and testing."""
@@ -258,7 +249,7 @@ class ExperimentRunner:
 
     def _setup_logger(self) -> None:
         """Sets up the TensorboardLogger."""
-        self.log_path = self._make_save_path(
+        self.log_path = _make_save_path(
             LOG_DIR,
             self.env_name,
             self.policy_config,
@@ -295,7 +286,7 @@ class ExperimentRunner:
             self.env.action_space,
             **self.config.get("environment.dream"),
         )
-        self._setup_vector_envs(self.dream_env, is_dream=True)
+        self._setup_vector_envs(is_dream=True)
         self._setup_buffers(is_dream=True)
         self._setup_collectors(is_dream=True)
         self._setup_trainer(is_dream=True)
@@ -386,7 +377,7 @@ class ExperimentRunner:
 
         Its default behaviour is to save the plot to a PDF file to not block execution.
         """
-        plot_path = self._make_save_path(
+        plot_path = _make_save_path(
             PLOT_DIR,
             self.env_name,
             self.policy_config,
@@ -413,27 +404,59 @@ class ExperimentRunner:
 
         self.env.close()
 
-    def _make_save_path(
-        self,
-        base_path: str,
-        env_config: str,
-        policy_config: str,
-        obsnet_config: str,
-        intrinsic_config: str,
-        is_goal_aware: bool,
-        ext: str | None = None,
-    ) -> str:
-        """Creates a path to save the artefacts (plots, recordings, and logs)."""
-        timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
-        save_path = os.path.join(
-            base_path,
-            env_config.lower(),
-            policy_config.lower(),
-            obsnet_config.lower(),
-            intrinsic_config.lower(),
-            "goal" if is_goal_aware else "vanilla",
-            f"{timestamp}.{ext}" if ext else timestamp,
+
+def make_env(
+    env_name: str,
+    env_config: str,
+    rec_dir: str,
+    policy_config: str,
+    obsnet_config: str,
+    intrinsic_config: str,
+    is_goal_aware: bool,
+    factory: ExperimentFactory,
+):
+    """Creates a single environment.
+
+    We need to create envs this way to ensure picklability, which is necessary for Tianshou's SubprocVectorEnv.
+    """
+
+    def _thunk():
+        env = gym.make(env_name, **env_config)
+        rec_path = _make_save_path(
+            rec_dir,
+            env_name,
+            policy_config,
+            obsnet_config,
+            intrinsic_config,
+            is_goal_aware,
+            ext="mp4" if env.render_mode == "rgb_array" else "ttyrec",
         )
-        # create the directory if it doesn't exist
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        return save_path
+        env = factory.wrap_env(env, rec_path)
+        return env
+
+    return _thunk
+
+
+def _make_save_path(
+    base_path: str,
+    env_config: str,
+    policy_config: str,
+    obsnet_config: str,
+    intrinsic_config: str,
+    is_goal_aware: bool,
+    ext: str | None = None,
+) -> str:
+    """Creates a path to save the artefacts (plots, recordings, and logs)."""
+    timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
+    save_path = os.path.join(
+        base_path,
+        env_config.lower(),
+        policy_config.lower(),
+        obsnet_config.lower(),
+        intrinsic_config.lower(),
+        "goal" if is_goal_aware else "vanilla",
+        f"{timestamp}.{ext}" if ext else timestamp,
+    )
+    # create the directory if it doesn't exist
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    return save_path

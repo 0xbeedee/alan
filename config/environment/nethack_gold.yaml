@@ -7,4 +7,5 @@ dream:
 
 vec:
   num_envs: 1
-  num_dream_envs: 2
+  # TODO making these two values different creates problems with SubprocVectorEnv
+  num_dream_envs: 1

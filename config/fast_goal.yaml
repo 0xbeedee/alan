@@ -3,6 +3,7 @@ is_goal_aware: true
 buffers:
   train_buf_size: 20
   test_buf_size: 20
+  kb_size: 100
 
   dream_train_buf_size: 50
 

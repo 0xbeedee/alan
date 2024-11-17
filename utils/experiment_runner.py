@@ -33,6 +33,7 @@ class ExperimentRunner:
         obsnet_config: str,
         intrinsic_config: str,
         model_config: str,
+        use_kb: bool,
         device: torch.device,
     ) -> None:
         self.base_config_path = base_config_path
@@ -41,6 +42,7 @@ class ExperimentRunner:
         self.obsnet_config = obsnet_config
         self.intrinsic_config = intrinsic_config
         self.model_config = model_config
+        self.use_kb = use_kb
         self.device = device
 
         self._setup_config()
@@ -51,6 +53,7 @@ class ExperimentRunner:
         self.train_buf_size = self.config.get("buffers.train_buf_size")
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
         self.test_buf_size = self.config.get("buffers.test_buf_size")
+        self.kb_size = self.config.get("buffers.kb_size")
 
         # use the real batch size by default
         self.batch_size = self.config.get("training.real.batch_size")
@@ -160,6 +163,10 @@ class ExperimentRunner:
             self.test_buf = self.factory.create_buffer(
                 self.test_buf_size, self.num_envs
             )
+            if self.use_kb:
+                self.knowledge_base = self.factory.create_knowledge_base(
+                    self.kb_size, self.num_envs
+                )
 
     def _setup_networks(self) -> None:
         """Sets up the observation, actor, and critic networks."""
@@ -231,7 +238,10 @@ class ExperimentRunner:
         """Sets up the collectors for training and testing."""
         if is_dream:
             self.dream_train_collector = self.factory.create_collector(
-                self.policy, self.dream_train_envs, self.dream_train_buf
+                self.policy,
+                self.dream_train_envs,
+                self.dream_train_buf,
+                knowledge_base=None,  # the KB only collects from the real env
             )
             # only test in the real environment, need set test_collector to None to skip the Trainer's test_step()
             self.dream_test_collector = None
@@ -240,9 +250,10 @@ class ExperimentRunner:
                 self.policy,
                 self.train_envs,
                 self.train_buf,
+                self.knowledge_base,
             )
             self.test_collector = self.factory.create_collector(
-                self.policy, self.test_envs, self.test_buf
+                self.policy, self.test_envs, self.test_buf, self.knowledge_base
             )
 
     def _setup_logger(self) -> None:

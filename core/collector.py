@@ -11,12 +11,14 @@ from tianshou.data import (
     to_numpy,
     Collector,
     AsyncCollector,
+    VectorReplayBuffer,
 )
 from tianshou.data.types import ObsBatchProtocol
 from tianshou.env import BaseVectorEnv
 
 from .types import (
     GoalBatchProtocol,
+    KBBatchProtocol,
     GoalReplayBufferProtocol,
     CorePolicyProtocol,
     TArrLike,
@@ -34,9 +36,11 @@ class GoalCollector(Collector):
         policy: CorePolicyProtocol,
         env: gym.Env | BaseVectorEnv,
         buffer: GoalReplayBufferProtocol | None = None,
+        knowledge_base: VectorReplayBuffer | None = None,
         exploration_noise: bool = False,
     ) -> None:
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
+        self.knowledge_base = knowledge_base
 
         if self.env.is_async:
             raise ValueError(
@@ -94,6 +98,10 @@ class GoalCollector(Collector):
             self._pre_collect_hidden_state_RH,
             ready_env_ids_R,
         )
+
+        # knowledge base-related variables
+        cur_traj_id = 0
+        cur_init_obs = last_obs_RO
 
         while True:
             (
@@ -163,6 +171,25 @@ class GoalCollector(Collector):
                 current_iteration_batch,
                 buffer_ids=ready_env_ids_R,
             )
+
+            if self.knowledge_base is not None:
+                # add data into the knowledge base
+                kb_batch = cast(
+                    KBBatchProtocol,
+                    Batch(
+                        obs=last_obs_RO,
+                        act=act_RA,
+                        rew=rew_R,
+                        init_obs=cur_init_obs,
+                        traj_id=np.array([cur_traj_id]),
+                    ),
+                )
+
+                self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
+                if all(rew_R > 0):
+                    # obtained a positive reward, so we need to start a new trajectory
+                    cur_traj_id += 1
+                    cur_init_obs = last_obs_RO
 
             # collect statistics
             num_episodes_done_this_iter = np.sum(done_R)

@@ -1,4 +1,5 @@
 from typing import Tuple, Union
+from core.types import SelfModelProtocol, EnvModelProtocol
 
 import gymnasium as gym
 import torch
@@ -32,7 +33,7 @@ from core import (
     GoalOfflineTrainer,
     CorePolicy,
 )
-from core.types import SelfModelProtocol, EnvModelProtocol
+from knowledge_base import VectorKnowledgeBase
 from utils.plotters import GoalStatsPlotter, VanillaStatsPlotter
 
 
@@ -61,6 +62,9 @@ class ExperimentFactory:
     ) -> Union[GoalVectorReplayBuffer, VectorReplayBuffer]:
         buf_class = GoalVectorReplayBuffer if self.is_goal_aware else VectorReplayBuffer
         return buf_class(buf_size, env_num)
+
+    def create_knowledge_base(self, kb_size: int, env_num: int) -> VectorKnowledgeBase:
+        return VectorKnowledgeBase(kb_size, env_num)
 
     def create_vae_mdnrnn(self, observation_space: gym.Space, device: torch.device):
         vae_map = {
@@ -213,9 +217,10 @@ class ExperimentFactory:
         policy: Union[CorePolicy, BasePolicy],
         envs: BaseVectorEnv,
         buffer: Union[GoalVectorReplayBuffer, VectorReplayBuffer],
+        knowledge_base: VectorReplayBuffer,
     ) -> Union[Collector, GoalCollector]:
         collector_class = GoalCollector if self.is_goal_aware else Collector
-        return collector_class(policy, envs, buffer)
+        return collector_class(policy, envs, buffer, knowledge_base)
 
     def create_trainer(
         self,

@@ -100,7 +100,7 @@ class GoalCollector(Collector):
         )
 
         # knowledge base-related variables
-        cur_traj_id = 0
+        cur_traj_id = np.zeros(self.env_num)
         cur_init_obs = last_obs_RO
 
         while True:
@@ -172,24 +172,26 @@ class GoalCollector(Collector):
                 buffer_ids=ready_env_ids_R,
             )
 
+            # update the knowledge base, if one is specified
             if self.knowledge_base is not None:
-                # add data into the knowledge base
                 kb_batch = cast(
                     KBBatchProtocol,
                     Batch(
                         obs=last_obs_RO,
                         act=act_RA,
                         rew=rew_R,
-                        init_obs=cur_init_obs,
-                        traj_id=np.array([cur_traj_id]),
+                        init_obs=cur_init_obs[ready_env_ids_R],
+                        traj_id=cur_traj_id[ready_env_ids_R],
                     ),
                 )
 
                 self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
-                if all(rew_R > 0):
-                    # obtained a positive reward, so we need to start a new trajectory
-                    cur_traj_id += 1
-                    cur_init_obs = last_obs_RO
+                if any(rew_R > 0):
+                    # start a new trajectory when the agent gets a positive reward
+                    pos_rew_idxs = rew_R > 0
+                    to_update_idxs = ready_env_ids_R[pos_rew_idxs]
+                    cur_traj_id[to_update_idxs] += 1
+                    cur_init_obs[to_update_idxs] = last_obs_RO[pos_rew_idxs]
 
             # collect statistics
             num_episodes_done_this_iter = np.sum(done_R)
@@ -207,8 +209,8 @@ class GoalCollector(Collector):
             if num_episodes_done_this_iter > 0:
                 # D - number of envs that reached done in the rollout above
                 env_ind_local_D = np.where(done_R)[0]
-
                 env_ind_global_D = ready_env_ids_R[env_ind_local_D]
+
                 episode_lens.extend(ep_len_R[env_ind_local_D])
                 episode_returns.extend(ep_rew_R[env_ind_local_D])
                 episode_intrinsic_returns.extend(ep_int_rew_R[env_ind_local_D])

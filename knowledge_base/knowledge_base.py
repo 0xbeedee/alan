@@ -12,9 +12,9 @@ class KnowledgeBase(ReplayBuffer):
     It stores transitions and aggregates them into trajectories.
     """
 
-    # store the an (o_t, a_t, r_t) tuple with an additional initial_obs entry to keep track of the beginning of a trajectory, and a final_obs entry to keep track of the end of said trajectory
-    _reserved_keys = ("obs", "act", "rew", "init_obs", "traj_id")
-    _input_keys = ("obs", "act", "rew", "init_obs", "traj_id")
+    # store the an (o_t, a_t, r_t) tuple with an additional entry for keeping track of the trajectory identifier
+    _reserved_keys = ("obs", "act", "rew", "traj_id")
+    _input_keys = ("obs", "act", "rew", "traj_id")
 
     def __init__(
         self,
@@ -49,7 +49,6 @@ class KnowledgeBase(ReplayBuffer):
             "obs": obs,
             "act": self.act[indices],
             "rew": self.rew[indices],
-            "init_obs": self.init_obs[indices],
             "traj_id": self.traj_id[indices],
         }
 
@@ -77,7 +76,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             new_batch.__dict__[key] = batch[key]
         batch = new_batch
 
-        assert {"obs", "act", "rew", "init_obs", "traj_id"}.issubset(
+        assert {"obs", "act", "rew", "traj_id"}.issubset(
             batch.get_keys(),
         )
 
@@ -102,7 +101,6 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             self._meta[ptrs] = batch
         except ValueError:
             batch.rew = batch.rew.astype(np.float32)
-            batch.init_obs = batch.init_obs
             batch.traj_id = batch.traj_id
             if len(self._meta.get_keys()) == 0:
                 self._meta = create_value(batch, self.maxsize, stack=False)  # type: ignore

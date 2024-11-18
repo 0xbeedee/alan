@@ -101,7 +101,6 @@ class GoalCollector(Collector):
 
         # knowledge base-related variables
         cur_traj_id = np.zeros(self.env_num)
-        cur_init_obs = last_obs_RO
 
         while True:
             (
@@ -180,7 +179,6 @@ class GoalCollector(Collector):
                         obs=last_obs_RO,
                         act=act_RA,
                         rew=rew_R,
-                        init_obs=cur_init_obs[ready_env_ids_R],
                         traj_id=cur_traj_id[ready_env_ids_R],
                     ),
                 )
@@ -188,10 +186,8 @@ class GoalCollector(Collector):
                 self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
                 if any(rew_R > 0):
                     # start a new trajectory when the agent gets a positive reward
-                    pos_rew_idxs = rew_R > 0
-                    to_update_idxs = ready_env_ids_R[pos_rew_idxs]
-                    cur_traj_id[to_update_idxs] += 1
-                    cur_init_obs[to_update_idxs] = last_obs_RO[pos_rew_idxs]
+                    idx_to_update = ready_env_ids_R[rew_R > 0]
+                    cur_traj_id[idx_to_update] += 1
 
             # collect statistics
             num_episodes_done_this_iter = np.sum(done_R)

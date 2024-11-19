@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any, List, Optional, cast
 from core.types import KBBatchProtocol
 
 from tianshou.data import ReplayBuffer, ReplayBufferManager, Batch
@@ -23,7 +23,7 @@ class KnowledgeBase(ReplayBuffer):
         ignore_obs_next: bool = True,  # we do not need the obs_next
         save_only_last_obs: bool = True,  # we only need the last observation
         sample_avail: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             size, stack_num, ignore_obs_next, save_only_last_obs, sample_avail, **kwargs
@@ -63,6 +63,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
 
     def __init__(self, buffer_list: list[KnowledgeBase]) -> None:
         ReplayBufferManager.__init__(self, buffer_list)  # type: ignore
+        self.traj_meta = {}  # {traj_id: [(start_idx, end_idx), (..., ...)]}
 
     def add(
         self,
@@ -84,7 +85,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         if buffer_ids is None:
             buffer_ids = np.arange(self.buffer_num)
 
-        ptrs, ep_lens, ep_rews, ep_int_rews, ep_idxs = [], [], [], [], []
+        ptrs, ep_lens, ep_rews, ep_idxs = [], [], [], []
         for batch_idx, buffer_id in enumerate(buffer_ids):
             ptr, ep_rew, ep_len, ep_idx = self.buffers[buffer_id]._add_index(
                 batch.rew[batch_idx],
@@ -96,7 +97,25 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             ep_idxs.append(ep_idx + self._offset[buffer_id])
             self.last_index[buffer_id] = ptr + self._offset[buffer_id]
             self._lengths[buffer_id] = len(self.buffers[buffer_id])
+
+            traj_id = batch.traj_id[batch_idx]
+            if traj_id not in self.traj_meta:
+                # new trajectory, need to allocate space in traj_meta
+                self.traj_meta[traj_id] = [None] * self.buffer_num
+
+            if self.traj_meta[traj_id][buffer_id] is None:
+                # first occurence of this trajectory in this buffer
+                self.traj_meta[traj_id][buffer_id] = (
+                    self.last_index[buffer_id],
+                    self.last_index[buffer_id],
+                )
+            else:
+                self.traj_meta[traj_id][buffer_id] = (
+                    self.traj_meta[traj_id][buffer_id][0],
+                    self.last_index[buffer_id],
+                )
         ptrs = np.array(ptrs)
+
         try:
             self._meta[ptrs] = batch
         except ValueError:
@@ -108,13 +127,40 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
                 alloc_by_keys_diff(self._meta, batch, self.maxsize, False)
             self._set_batch_for_children()
             self._meta[ptrs] = batch
+
         return (
             ptrs,
             np.array(ep_rews),
-            np.array(ep_int_rews),
             np.array(ep_lens),
             np.array(ep_idxs),
         )
+
+    def get_trajectory(self, traj_id: int) -> List[Optional[KBBatchProtocol]]:
+        """
+        Retrieves the trajectory data for the given traj_id from each buffer.
+
+        Returns a list where each element corresponds to the trajectory data
+        from a specific buffer. If a buffer does not contain data for the
+        traj_id, its corresponding element in the list will be None.
+        """
+        trajectory_data_per_buffer = []
+        for buffer_id, buffer in enumerate(self.buffers):
+            traj_segment = self.traj_meta[traj_id][buffer_id]
+            if traj_segment is not None:
+                start_idx, end_idx = traj_segment
+                # adjust indices relative to the buffer
+                buffer_start_idx = start_idx - self._offset[buffer_id]
+                buffer_end_idx = (
+                    end_idx - self._offset[buffer_id] + 1
+                )  # Include end_idx
+
+                segment_data = buffer[buffer_start_idx:buffer_end_idx]
+                trajectory_data_per_buffer.append(segment_data)
+            else:
+                # no data for this traj_id in this buffer
+                trajectory_data_per_buffer.append(None)
+
+        return trajectory_data_per_buffer
 
 
 class VectorKnowledgeBase(KnowledgeBaseManager):

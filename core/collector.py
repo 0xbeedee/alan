@@ -100,7 +100,7 @@ class GoalCollector(Collector):
         )
 
         # knowledge base-related variables
-        cur_traj_id = np.zeros(self.env_num)
+        cur_traj_id = np.zeros(self.env_num, dtype=np.uint16)
 
         while True:
             (
@@ -184,10 +184,11 @@ class GoalCollector(Collector):
                 )
 
                 self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
-                if any(rew_R > 0):
-                    # start a new trajectory when the agent gets a positive reward
-                    idx_to_update = ready_env_ids_R[rew_R > 0]
-                    cur_traj_id[idx_to_update] += 1
+                # increment the trajectory ID if the agent got a positive reward OR the episode is over
+                combined_condition = (rew_R > 0) | done_R
+                idxs_to_update = ready_env_ids_R & combined_condition
+                if np.any(idxs_to_update):
+                    cur_traj_id[idxs_to_update] += 1
 
             # collect statistics
             num_episodes_done_this_iter = np.sum(done_R)

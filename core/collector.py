@@ -176,7 +176,7 @@ class GoalCollector(Collector):
                 kb_batch = cast(
                     KBBatchProtocol,
                     Batch(
-                        obs=last_obs_RO,
+                        latent_obs=latent_last_obs_RO,
                         act=act_RA,
                         rew=rew_R,
                         traj_id=cur_traj_id[ready_env_ids_R],

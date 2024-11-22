@@ -12,7 +12,7 @@ class KnowledgeBase(ReplayBuffer):
     It stores transitions and aggregates them into trajectories.
     """
 
-    # store the an (o_t, a_t, r_t) tuple with an additional entry for keeping track of the trajectory identifier
+    # (latent observation, action, reward, trajectory identifier)
     _reserved_keys = ("latent_obs", "act", "rew", "traj_id")
     _input_keys = ("latent_obs", "act", "rew", "traj_id")
 

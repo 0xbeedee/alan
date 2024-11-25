@@ -1,4 +1,4 @@
-from .utils import is_similar_state
+from .utils import is_similar
 
 
 class TrajectoryBandit:
@@ -13,7 +13,7 @@ class TrajectoryBandit:
         # find matching trajectories
         matching_indices = []
         for idx, traj in enumerate(trajectories):
-            if is_similar_state(state, traj[0].state):
+            if is_similar(state, traj[0].latent_obs):
                 matching_indices.append(idx)
         if not matching_indices:
             return None

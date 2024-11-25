@@ -1,4 +1,4 @@
-from .utils import is_similar_state
+from .utils import is_similar
 
 
 class Option:
@@ -10,7 +10,7 @@ class Option:
         self.termination_condition = termination_condition
 
     def can_initiate(self, state):
-        return is_similar_state(state, self.initiation_set)
+        return is_similar(state, self.initiation_set)
 
     def execute(self, state):
         # TODO follow the option's policy until termination

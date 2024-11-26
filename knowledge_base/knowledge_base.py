@@ -95,25 +95,20 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             ep_lens.append(ep_len)
             ep_rews.append(ep_rew.astype(np.float32))
             ep_idxs.append(ep_idx + self._offset[buffer_id])
+
             self.last_index[buffer_id] = ptr + self._offset[buffer_id]
             self._lengths[buffer_id] = len(self.buffers[buffer_id])
 
             traj_id = batch.traj_id[batch_idx]
             if traj_id not in self.traj_meta:
-                # new trajectory, need to allocate space in traj_meta
-                self.traj_meta[traj_id] = [None] * self.buffer_num
+                self.traj_meta[traj_id] = [[] for _ in range(self.buffer_num)]
 
-            if self.traj_meta[traj_id][buffer_id] is None:
-                # first occurence of this trajectory in this buffer
-                self.traj_meta[traj_id][buffer_id] = (
-                    self.last_index[buffer_id],
-                    self.last_index[buffer_id],
-                )
-            else:
-                self.traj_meta[traj_id][buffer_id] = (
-                    self.traj_meta[traj_id][buffer_id][0],
-                    self.last_index[buffer_id],
-                )
+            idx_list = self.traj_meta[traj_id][buffer_id]
+            # the indices in traj_meta are monotonically increasing, so if last_index[buffer_id] < idx_list[-1] we're overwriting data
+            if idx_list and self.last_index[buffer_id] < idx_list[-1]:
+                # clear the old index list to eliminate stale data
+                idx_list.clear()
+            idx_list.append(self.last_index[buffer_id])
         ptrs = np.array(ptrs)
 
         try:
@@ -134,7 +129,15 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             np.array(ep_idxs),
         )
 
-    def get_trajectory(self, traj_id: int) -> List[Optional[KBBatchProtocol]]:
+    def get_all_trajectories(self) -> List[List[Optional[KBBatchProtocol]]]:
+        """Returns all the trajectories stored in the knowledge base."""
+        num_trajectories = len(self.traj_meta)
+        trajectories = []
+        for traj_id in range(num_trajectories):
+            trajectories.append(self.get_trajectories_by_id(traj_id))
+        return trajectories
+
+    def get_trajectories_by_id(self, traj_id: int) -> List[Optional[KBBatchProtocol]]:
         """
         Retrieves the trajectory data for the given traj_id from each buffer.
 
@@ -144,21 +147,17 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         """
         trajectory_data_per_buffer = []
         for buffer_id, buffer in enumerate(self.buffers):
-            traj_segment = self.traj_meta[traj_id][buffer_id]
-            if traj_segment is not None:
-                start_idx, end_idx = traj_segment
+            indices = self.traj_meta[traj_id][buffer_id]
+            if indices:
                 # adjust indices relative to the buffer
-                buffer_start_idx = start_idx - self._offset[buffer_id]
-                buffer_end_idx = (
-                    end_idx - self._offset[buffer_id] + 1
-                )  # Include end_idx
-
-                segment_data = buffer[buffer_start_idx:buffer_end_idx]
-                trajectory_data_per_buffer.append(segment_data)
+                buffer_indices = [idx - self._offset[buffer_id] for idx in indices]
+                # retrieve data and ensure it belongs to the correct traj_id
+                data = buffer[buffer_indices]
+                data = data[data.traj_id == traj_id]
+                trajectory_data_per_buffer.append(data)
             else:
-                # no data for this traj_id in this buffer
+                # no matching trajectory in the buffer
                 trajectory_data_per_buffer.append(None)
-
         return trajectory_data_per_buffer
 
 

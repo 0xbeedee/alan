@@ -1,3 +1,9 @@
+from typing import List
+from core.types import KBBatchProtocol
+
+import torch
+
+from .knowledge_base import KnowledgeBase
 from .utils import is_similar
 
 
@@ -6,15 +12,20 @@ class TrajectoryBandit:
 
     # TODO
 
-    def __init__(self):
+    def __init__(self, knowledge_base: KnowledgeBase):
+        self.knowledge_base = knowledge_base
         self.arms = {}  # map trajectory indices to bandit values
 
-    def select_trajectory(self, state, trajectories):
+    def select_trajectory(self, init_latent_obs: torch.Tensor) -> List[KBBatchProtocol]:
+        """Extracts a subset of candidate trajectories from the knowledge base."""
+        trajectories = self.knowledge_base.get_all_trajectories()
         # find matching trajectories
         matching_indices = []
-        for idx, traj in enumerate(trajectories):
-            if is_similar(state, traj[0].latent_obs):
-                matching_indices.append(idx)
+        # TODO this n^2 nesting is not too pleasant...
+        for idx, traj_buffers in enumerate(trajectories):
+            for traj in traj_buffers:
+                if is_similar(init_latent_obs, traj[0].latent_obs):
+                    matching_indices.append(idx)
         if not matching_indices:
             return None
 

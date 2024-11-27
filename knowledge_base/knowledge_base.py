@@ -63,7 +63,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
 
     def __init__(self, buffer_list: list[KnowledgeBase]) -> None:
         ReplayBufferManager.__init__(self, buffer_list)  # type: ignore
-        self.traj_meta = {}  # {traj_id: [(start_idx, end_idx), (..., ...)]}
+        self._traj_meta = {}  # {traj_id: [(start_idx, end_idx), (..., ...)]}
 
     def add(
         self,
@@ -100,11 +100,11 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             self._lengths[buffer_id] = len(self.buffers[buffer_id])
 
             traj_id = batch.traj_id[batch_idx]
-            if traj_id not in self.traj_meta:
-                self.traj_meta[traj_id] = [[] for _ in range(self.buffer_num)]
+            if traj_id not in self._traj_meta:
+                self._traj_meta[traj_id] = [[] for _ in range(self.buffer_num)]
 
-            idx_list = self.traj_meta[traj_id][buffer_id]
-            # the indices in traj_meta are monotonically increasing, so if last_index[buffer_id] < idx_list[-1] we're overwriting data
+            idx_list = self._traj_meta[traj_id][buffer_id]
+            # the indices in _traj_meta are monotonically increasing, so if last_index[buffer_id] < idx_list[-1] we're overwriting data
             if idx_list and self.last_index[buffer_id] < idx_list[-1]:
                 # clear the old index list to eliminate stale data
                 idx_list.clear()
@@ -131,11 +131,19 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
 
     def get_all_trajectories(self) -> List[List[Optional[KBBatchProtocol]]]:
         """Returns all the trajectories stored in the knowledge base."""
-        num_trajectories = len(self.traj_meta)
         trajectories = []
-        for traj_id in range(num_trajectories):
+        for traj_id in range(len(self._traj_meta)):
             trajectories.append(self.get_trajectories_by_id(traj_id))
         return trajectories
+
+    def get_single_trajectory(
+        self, traj_id: int, buffer_id: int
+    ) -> Optional[KBBatchProtocol]:
+        """Extracts a single trajectory from the knowledge base, if it exists."""
+        traj_per_buffer = self.get_trajectories_by_id(traj_id)
+        if traj_per_buffer[buffer_id] is not None:
+            return traj_per_buffer[buffer_id]
+        return None
 
     def get_trajectories_by_id(self, traj_id: int) -> List[Optional[KBBatchProtocol]]:
         """
@@ -147,7 +155,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         """
         trajectory_data_per_buffer = []
         for buffer_id, buffer in enumerate(self.buffers):
-            indices = self.traj_meta[traj_id][buffer_id]
+            indices = self._traj_meta[traj_id][buffer_id]
             if indices:
                 # adjust indices relative to the buffer
                 buffer_indices = [idx - self._offset[buffer_id] for idx in indices]

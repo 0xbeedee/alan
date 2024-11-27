@@ -24,8 +24,6 @@ from core import CorePolicy
 class PPOBasedPolicy(CorePolicy):
     """A policy based on Tianshou's PPOPolicy."""
 
-    # TODO no lifelong learning yet!
-
     def __init__(
         self,
         *,

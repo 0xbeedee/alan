@@ -42,6 +42,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
         action_space: gym.Space,
+        trajectory_bandit: "TrajectoryBandit" | None,  # type:ignore
         observation_space: gym.Space | None,
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
@@ -60,12 +61,15 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.obs_net = obs_net
         self.beta = beta
 
+        self.bandit = trajectory_bandit
+        self.selected_trajectory = None
+
     def forward(
         self,
         batch: ObsBatchProtocol,
         state: dict | BatchProtocol | np.ndarray | None = None,
         **kwargs: Any,
-    ) -> ActBatchProtocol | ActStateBatchProtocol:
+    ) -> ActStateBatchProtocol:
         """Computes the action given a batch of data.
 
         Note this is just a template method, the actual computation happens in _forward().
@@ -79,7 +83,23 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         # 2) centralises goal selection
         self.latent_goal = self.self_model.select_goal(kwargs["latent_obs"])
 
-        result = self._forward(batch, state, **kwargs)
+        # TODO the code below needs thourough testing!
+        if self.bandit is None:
+            # no bandit specified, use the policy as usual
+            result = self._forward(batch, state, **kwargs)
+        else:
+            if self.selected_trajectory is None:
+                self.selected_trajectory = self.select_trajectory(kwargs["latent_obs"])
+                self.act_index = 0
+
+            if self.selected_trajectory is not None and self.act_index < len(
+                self.selected_trajectory
+            ):
+                # pick the correct action from the selected trajectory
+                action = self.selected_trajectory[self.act_index].act
+                self.act_index += 1
+                result = ActBatchProtocol(act=action)
+
         self._handle_state_(result, state, **kwargs)
         return result
 
@@ -202,11 +222,11 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
     def _handle_state_(
         self,
-        result: ActBatchProtocol | ActStateBatchProtocol,
+        result: ActBatchProtocol,
         state: torch.Tensor,
         **kwargs: Any,
     ):
-        """Handles the hidden state.
+        """Handles the hidden state and adds it to the result object received in input.
 
         The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In this case, we modify the result object.
         """

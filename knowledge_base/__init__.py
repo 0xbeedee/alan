@@ -1,1 +1,2 @@
-from .knowledge_base import KnowledgeBase, VectorKnowledgeBase
+from .knowledge_base import VectorKnowledgeBase
+from .trajectory_bandit import TrajectoryBandit

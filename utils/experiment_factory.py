@@ -33,7 +33,7 @@ from core import (
     GoalOfflineTrainer,
     CorePolicy,
 )
-from knowledge_base import VectorKnowledgeBase
+from knowledge_base import VectorKnowledgeBase, TrajectoryBandit
 from utils.plotters import GoalStatsPlotter, VanillaStatsPlotter
 
 
@@ -63,8 +63,12 @@ class ExperimentFactory:
         buf_class = GoalVectorReplayBuffer if self.is_goal_aware else VectorReplayBuffer
         return buf_class(buf_size, env_num)
 
-    def create_knowledge_base(self, kb_size: int, env_num: int) -> VectorKnowledgeBase:
-        return VectorKnowledgeBase(kb_size, env_num)
+    def create_knowledge_base_and_bandit(
+        self, kb_size: int, env_num: int
+    ) -> Tuple[VectorKnowledgeBase, TrajectoryBandit]:
+        vec_kb = VectorKnowledgeBase(kb_size, env_num)
+        bandit = TrajectoryBandit(vec_kb)
+        return vec_kb, bandit
 
     def create_vae_mdnrnn(self, observation_space: gym.Space, device: torch.device):
         vae_map = {
@@ -174,6 +178,7 @@ class ExperimentFactory:
         self,
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
+        bandit: TrajectoryBandit | None,
         obs_net: nn.Module,
         act_net: Union[GoalNetHackActor, SimpleNetHackActor],
         critic_net: Union[GoalNetHackCritic, SimpleNetHackCritic],
@@ -187,6 +192,7 @@ class ExperimentFactory:
             "ppo_based": lambda: PPOBasedPolicy(
                 self_model=self_model,
                 env_model=env_model,
+                bandit=bandit,
                 obs_net=obs_net,
                 act_net=act_net,
                 critic_net=critic_net,

@@ -154,10 +154,15 @@ class ExperimentRunner:
             self.test_buf = self.factory.create_buffer(
                 self.test_buf_size, self.num_envs
             )
+
             if self.use_kb:
-                self.knowledge_base = self.factory.create_knowledge_base(
-                    self.kb_size, self.num_envs
+                self.knowledge_base, self.bandit = (
+                    self.factory.create_knowledge_base_and_bandit(
+                        self.kb_size, self.num_envs
+                    )
                 )
+            else:
+                self.knowledge_base, self.bandit = None, None
 
     def _setup_networks(self) -> None:
         """Sets up the observation, actor, and critic networks."""
@@ -216,6 +221,7 @@ class ExperimentRunner:
         self.policy = self.factory.create_policy(
             self.self_model,
             self.env_model,
+            self.bandit,
             self.obs_net,
             self.actor_net,
             self.critic_net,

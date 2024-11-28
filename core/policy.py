@@ -1,4 +1,4 @@
-from typing import Literal, Any, Tuple
+from typing import Literal, Any, Tuple, Optional
 from .types import (
     GoalReplayBufferProtocol,
     SelfModelProtocol,
@@ -42,7 +42,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
         action_space: gym.Space,
-        trajectory_bandit: "TrajectoryBandit" | None,  # type:ignore
+        bandit: Optional["TrajectoryBandit"],  # type:ignore
         observation_space: gym.Space | None,
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
@@ -61,7 +61,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.obs_net = obs_net
         self.beta = beta
 
-        self.bandit = trajectory_bandit
+        self.bandit = bandit
         self.selected_trajectory = None
 
     def forward(

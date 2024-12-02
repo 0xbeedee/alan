@@ -65,6 +65,10 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         ReplayBufferManager.__init__(self, buffer_list)  # type: ignore
         self._traj_meta = {}  # {traj_id: [(start_idx, end_idx), (..., ...)]}
 
+    @property
+    def n_trajectories(self):
+        return len(self._traj_meta)
+
     def add(
         self,
         batch: KBBatchProtocol,
@@ -129,6 +133,37 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             np.array(ep_idxs),
         )
 
+    def get_trajectories_by_id(
+        self, traj_id: int, ensure_uniform: bool = False
+    ) -> Optional[Batch] | List[Optional[KBBatchProtocol]]:
+        """
+        Retrieves the trajectory data for the given traj_id from each buffer.
+
+        If ensure_uniform is True, it returns a Batch object containing the trajectory data, eliminating all the buffers with any None trajectories and truncating the trajectories to the same length.
+        If ensure_uniform is False, it returns a list of trajectory data, where each element in the list represents the trajectory data with the given traj_id from a given buffer (None if the buffer doesn't have any trajectory with the specified ID):
+        """
+        trajectory_data_per_buffer = []
+        for buffer_id, buffer in enumerate(self.buffers):
+            indices = self._traj_meta[traj_id][buffer_id]
+            if indices:
+                # adjust indices relative to the buffer
+                buffer_indices = [idx - self._offset[buffer_id] for idx in indices]
+                # retrieve data and ensure it belongs to the correct traj_id
+                data = buffer[buffer_indices]
+                data = data[data.traj_id == traj_id]
+                trajectory_data_per_buffer.append(data)
+            else:
+                # no matching trajectory in the buffer
+                trajectory_data_per_buffer.append(None)
+
+        if ensure_uniform:
+            if None in trajectory_data_per_buffer:
+                return None
+            min_length = min(len(traj) for traj in trajectory_data_per_buffer)
+            return Batch([traj[:min_length] for traj in trajectory_data_per_buffer])
+
+        return trajectory_data_per_buffer
+
     def get_all_trajectories(self) -> List[List[Optional[KBBatchProtocol]]]:
         """Returns all the trajectories stored in the knowledge base."""
         trajectories = []
@@ -144,29 +179,6 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         if traj_per_buffer[buffer_id] is not None:
             return traj_per_buffer[buffer_id]
         return None
-
-    def get_trajectories_by_id(self, traj_id: int) -> List[Optional[KBBatchProtocol]]:
-        """
-        Retrieves the trajectory data for the given traj_id from each buffer.
-
-        Returns a list where each element corresponds to the trajectory data
-        from a specific buffer. If a buffer does not contain data for the
-        traj_id, its corresponding element in the list will be None.
-        """
-        trajectory_data_per_buffer = []
-        for buffer_id, buffer in enumerate(self.buffers):
-            indices = self._traj_meta[traj_id][buffer_id]
-            if indices:
-                # adjust indices relative to the buffer
-                buffer_indices = [idx - self._offset[buffer_id] for idx in indices]
-                # retrieve data and ensure it belongs to the correct traj_id
-                data = buffer[buffer_indices]
-                data = data[data.traj_id == traj_id]
-                trajectory_data_per_buffer.append(data)
-            else:
-                # no matching trajectory in the buffer
-                trajectory_data_per_buffer.append(None)
-        return trajectory_data_per_buffer
 
 
 class VectorKnowledgeBase(KnowledgeBaseManager):

@@ -62,8 +62,8 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
     """A class for managing vectorised knowledge bases."""
 
     def __init__(self, buffer_list: list[KnowledgeBase]) -> None:
-        ReplayBufferManager.__init__(self, buffer_list)  # type: ignore
-        self._traj_meta = {}  # {traj_id: [(start_idx, end_idx), (..., ...)]}
+        ReplayBufferManager.__init__(self, buffer_list)
+        self._traj_meta = {}  # {traj_id: [[i_0, i_1, ..., i_n], [..., ...]]}
 
     @property
     def n_trajectories(self):

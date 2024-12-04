@@ -33,7 +33,7 @@ from core import (
     GoalOfflineTrainer,
     CorePolicy,
 )
-from knowledge_base import VectorKnowledgeBase, TrajectoryBandit
+from lifelong import VectorKnowledgeBase, TrajectoryBandit
 from utils.plotters import GoalStatsPlotter, VanillaStatsPlotter
 
 

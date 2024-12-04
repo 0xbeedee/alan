@@ -18,6 +18,13 @@ from .experiment_factory import ExperimentFactory
 
 from environments import DreamEnv
 
+import warnings
+
+# the version of pygame needed by Gymnasium still uses pkgdata, so we supress the deprecation warnings to avoid clutter
+warnings.filterwarnings(
+    "ignore", category=DeprecationWarning, module=r"pygame\.pkgdata"
+)
+
 ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
 PLOT_DIR = f"{ART_DIR}/plots"

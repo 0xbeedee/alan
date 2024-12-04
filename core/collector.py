@@ -45,6 +45,7 @@ class GoalCollector(Collector):
         self.knowledge_base = knowledge_base
         self.bandit = bandit
         self.selected_trajectories = None
+        self.trajectory_rewards = {}
 
         if self.env.is_async:
             raise ValueError(
@@ -129,6 +130,12 @@ class GoalCollector(Collector):
             # for MPS compatibility
             rew_R = rew_R.astype(np.float32)
             nstep_returns.extend(rew_R)
+
+            if self.selected_trajectories is not None:
+                for i, env_idx in enumerate(self.updated_envs):
+                    traj_id = self.selected_trajectories[i].traj_id[0]
+                    reward = rew_R[env_idx]
+                    self.trajectory_rewards[(env_idx, traj_id)] += reward
 
             # the obs_next MUST be passed through the obs_net only here
             latent_obs_next_RO = self.policy.obs_net(Batch(obs_next_RO))
@@ -398,26 +405,30 @@ class GoalCollector(Collector):
             )
             if self.selected_trajectories is not None:
                 self.act_index = np.zeros(len(self.selected_trajectories), dtype=int)
+                self.trajectory_rewards = {}
+                for i, trajectory in enumerate(self.selected_trajectories):
+                    buffer_id = self.updated_envs[i]
+                    traj_id = trajectory.traj_id[0]
+                    self.trajectory_rewards[(buffer_id, traj_id)] = 0.0
         else:
             for i, env_idx in enumerate(self.updated_envs):
                 trajectory = self.selected_trajectories[i]
                 traj_length = len(trajectory.act)
                 if self.act_index[i] < traj_length:
+                    # there are still transitions in the trajectory
                     action = trajectory.act[self.act_index[i]]
-                    # only update the action for the corresponding environment
                     act_batch_RA.act[env_idx] = action
                     self.act_index[i] += 1
-                else:
-                    # trajectory has finished for this environment
-                    pass
             if all(
                 self.act_index[i] >= len(self.selected_trajectories[i].act)
                 for i in range(len(self.selected_trajectories))
             ):
                 # all the trajectories have finished
+                self.bandit.update(self.trajectory_rewards)
                 self.selected_trajectories = None
                 self.act_index = None
                 self.updated_envs = None
+                self.trajectory_rewards = {}
 
 
 def _create_info_batch(info_array: np.ndarray) -> Batch:

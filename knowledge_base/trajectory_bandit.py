@@ -57,8 +57,6 @@ class TrajectoryBandit:
                     traj.latent_obs[0].unsqueeze(0),
                 ):
                     if traj_id not in buffer_arms:
-                        # if traj_id is new, create the entry; it traj_id is already present, overwrite the entry
-                        # TODO doing it this way is somewhat inefficient
                         buffer_arms[traj_id] = Arm(traj)
                     matching_arms.append(buffer_arms[traj_id])
             if matching_arms:
@@ -76,20 +74,19 @@ class TrajectoryBandit:
         ucb_values = []
         for arm in matching_arms:
             arm_pulls = arm.pulls
-            arm_estimated_value = arm.estimated_value
             if arm_pulls == 0:
                 bonus = float("inf")  # encourage exploration of untried arms
             else:
                 bonus = np.sqrt((2 * np.log(max(total_pulls, 1))) / arm_pulls)
-            ucb_value = arm_estimated_value + bonus
+            ucb_value = arm.estimated_value + bonus
             ucb_values.append(ucb_value)
         selected_arm = matching_arms[np.argmax(ucb_values)]
         return selected_arm
 
-    def update(self, traj_rewards: List[Dict[int, float]]) -> None:
-        for buffer_id, buffer_rewards in enumerate(traj_rewards):
+    def update(self, traj_rewards: Dict[Tuple[int, int], float]) -> None:
+        """Updates the data associated with each arm based on the chosen trajectories."""
+        for (buffer_id, traj_id), reward in traj_rewards.items():
             buffer_arms = self.arms[buffer_id]
-            for traj_id, reward in buffer_rewards.items():
-                arm = buffer_arms.get(traj_id)
-                if arm:
-                    arm.update_stats(reward)
+            arm = buffer_arms.get(traj_id)
+            if arm:
+                arm.update_stats(reward)

@@ -1,4 +1,4 @@
-from typing import Literal, Any, Tuple, Optional, cast
+from typing import Literal, Any, Tuple
 from .types import (
     GoalReplayBufferProtocol,
     SelfModelProtocol,
@@ -42,7 +42,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
         action_space: gym.Space,
-        bandit: Optional["TrajectoryBandit"],  # type:ignore
         observation_space: gym.Space | None,
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
@@ -60,9 +59,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.env_model = env_model
         self.obs_net = obs_net
         self.beta = beta
-
-        self.bandit = bandit
-        self.selected_trajectories = None
 
     def forward(
         self,
@@ -85,8 +81,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         # use the result computed through _forward() by default
         result = self._forward(batch, state, **kwargs)
-        if self.bandit is not None:
-            self._handle_bandit_(result, **kwargs)
         self._handle_state_(result, state, **kwargs)
         return result
 
@@ -225,38 +219,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         outs = self.env_model.mdnrnn.pass_through_rnn(action, latent, hidden=state)
 
         result.state = self._cat_state(outs)
-
-    def _handle_bandit_(self, result: ActBatchProtocol, **kwargs: Any) -> None:
-        """Uses the bandit to get the action to take, instead of relying on the vanilla policy.
-
-        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In this case, we modify the result object.
-        """
-        if self.selected_trajectories is None:
-            self.selected_trajectories, self.updated_envs = (
-                self.bandit.select_trajectories(kwargs["latent_obs"])
-            )
-            if self.selected_trajectories is not None:
-                self.act_index = np.zeros(len(self.selected_trajectories), dtype=int)
-        else:
-            for i, env_idx in enumerate(self.updated_envs):
-                trajectory = self.selected_trajectories[i]
-                traj_length = len(trajectory.act)
-                if self.act_index[i] < traj_length:
-                    action = trajectory.act[self.act_index[i]]
-                    # only update the action for the corresponding environment
-                    result.act[env_idx] = action
-                    self.act_index[i] += 1
-                else:
-                    # trajectory has finished for this environment
-                    pass
-            if all(
-                self.act_index[i] >= len(self.selected_trajectories[i].act)
-                for i in range(len(self.selected_trajectories))
-            ):
-                # all the trajectories have finished
-                self.selected_trajectories = None
-                self.act_index = None
-                self.updated_envs = None
 
     def _split_state(
         self, state: torch.Tensor | None = None

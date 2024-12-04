@@ -178,7 +178,6 @@ class ExperimentFactory:
         self,
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
-        bandit: TrajectoryBandit | None,
         obs_net: nn.Module,
         act_net: Union[GoalNetHackActor, SimpleNetHackActor],
         critic_net: Union[GoalNetHackCritic, SimpleNetHackCritic],
@@ -192,7 +191,6 @@ class ExperimentFactory:
             "ppo_based": lambda: PPOBasedPolicy(
                 self_model=self_model,
                 env_model=env_model,
-                bandit=bandit,
                 obs_net=obs_net,
                 act_net=act_net,
                 critic_net=critic_net,
@@ -223,10 +221,11 @@ class ExperimentFactory:
         policy: Union[CorePolicy, BasePolicy],
         envs: BaseVectorEnv,
         buffer: Union[GoalVectorReplayBuffer, VectorReplayBuffer],
-        knowledge_base: VectorReplayBuffer,
+        knowledge_base: VectorReplayBuffer | None,
+        bandit: TrajectoryBandit | None,
     ) -> Union[Collector, GoalCollector]:
         collector_class = GoalCollector if self.is_goal_aware else Collector
-        return collector_class(policy, envs, buffer, knowledge_base)
+        return collector_class(policy, envs, buffer, knowledge_base, bandit)
 
     def create_trainer(
         self,

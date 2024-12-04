@@ -221,14 +221,13 @@ class ExperimentRunner:
         self.policy = self.factory.create_policy(
             self.self_model,
             self.env_model,
-            self.bandit,
             self.obs_net,
             self.actor_net,
             self.critic_net,
             self.optimizer,
             self.env.action_space,
             self.env.observation_space,
-            False,  # no action scaling
+            action_scaling=False,
         )
 
     def _setup_collectors(self, is_dream: bool = False) -> None:
@@ -239,6 +238,7 @@ class ExperimentRunner:
                 self.dream_train_envs,
                 self.dream_train_buf,
                 knowledge_base=None,  # the KB only collects from the real env
+                bandit=None,
             )
             # only test in the real environment, need set test_collector to None to skip the Trainer's test_step()
             self.dream_test_collector = None
@@ -248,9 +248,14 @@ class ExperimentRunner:
                 self.train_envs,
                 self.train_buf,
                 self.knowledge_base,
+                self.bandit,
             )
             self.test_collector = self.factory.create_collector(
-                self.policy, self.test_envs, self.test_buf, self.knowledge_base
+                self.policy,
+                self.test_envs,
+                self.test_buf,
+                self.knowledge_base,
+                bandit=None,  # do not use the bandit while testing
             )
 
     def _setup_logger(self) -> None:

@@ -1,6 +1,6 @@
+from typing import Any, cast, Union
 import time
 from copy import copy
-from typing import Any, cast
 
 import gymnasium as gym
 import numpy as np
@@ -13,7 +13,7 @@ from tianshou.data import (
     AsyncCollector,
     VectorReplayBuffer,
 )
-from tianshou.data.types import ObsBatchProtocol
+from tianshou.data.types import ObsBatchProtocol, ActBatchProtocol
 from tianshou.env import BaseVectorEnv
 
 from .types import (
@@ -37,10 +37,14 @@ class GoalCollector(Collector):
         env: gym.Env | BaseVectorEnv,
         buffer: GoalReplayBufferProtocol | None = None,
         knowledge_base: VectorReplayBuffer | None = None,
+        bandit: Union["TrajectoryBandit", None] = None,  # type:ignore
         exploration_noise: bool = False,
     ) -> None:
         super().__init__(policy, env, buffer, exploration_noise=exploration_noise)
+
         self.knowledge_base = knowledge_base
+        self.bandit = bandit
+        self.selected_trajectories = None
 
         if self.env.is_async:
             raise ValueError(
@@ -342,6 +346,12 @@ class GoalCollector(Collector):
                 obs_batch_R, last_hidden_state_RH, latent_obs=latent_last_obs_RO
             )
 
+            # pass the actions through th bandit, if one is specified
+            if self.bandit is not None:
+                self._pass_through_bandit_(
+                    act_batch_RA, ready_env_ids_R, latent_last_obs_RO
+                )
+
             act_RA = to_numpy(act_batch_RA.act)
             if self.exploration_noise:
                 act_RA = self.policy.exploration_noise(act_RA, obs_batch_R)
@@ -371,6 +381,43 @@ class GoalCollector(Collector):
             policy_R,
             hidden_state_RH,
         )
+
+    def _pass_through_bandit_(
+        self,
+        act_batch_RA: ActBatchProtocol,
+        ready_env_ids_R: np.ndarray,
+        latent_obs: torch.Tensor,
+    ) -> None:
+        """Uses the bandit to obtain the action, overwriting the one chosen by the policy if necessary.
+
+        The underscore at the end of the name indicates that this function modifies an object it uses for computation (i.e., it isn't pure). In this case, we modify the act_batch_RA object.
+        """
+        if self.selected_trajectories is None:
+            self.selected_trajectories, self.updated_envs = (
+                self.bandit.select_trajectories(latent_obs, ready_env_ids_R)
+            )
+            if self.selected_trajectories is not None:
+                self.act_index = np.zeros(len(self.selected_trajectories), dtype=int)
+        else:
+            for i, env_idx in enumerate(self.updated_envs):
+                trajectory = self.selected_trajectories[i]
+                traj_length = len(trajectory.act)
+                if self.act_index[i] < traj_length:
+                    action = trajectory.act[self.act_index[i]]
+                    # only update the action for the corresponding environment
+                    act_batch_RA.act[env_idx] = action
+                    self.act_index[i] += 1
+                else:
+                    # trajectory has finished for this environment
+                    pass
+            if all(
+                self.act_index[i] >= len(self.selected_trajectories[i].act)
+                for i in range(len(self.selected_trajectories))
+            ):
+                # all the trajectories have finished
+                self.selected_trajectories = None
+                self.act_index = None
+                self.updated_envs = None
 
 
 def _create_info_batch(info_array: np.ndarray) -> Batch:

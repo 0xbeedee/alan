@@ -29,7 +29,6 @@ class PPOBasedPolicy(CorePolicy):
         *,
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
-        bandit: Optional["TrajectoryBandit"],  # type:ignore
         obs_net: nn.Module,
         act_net: GoalNetHackActor,
         critic_net: GoalNetHackCritic,
@@ -43,7 +42,6 @@ class PPOBasedPolicy(CorePolicy):
         super().__init__(
             self_model=self_model,
             env_model=env_model,
-            bandit=bandit,
             obs_net=obs_net,
             action_space=action_space,
             observation_space=observation_space,

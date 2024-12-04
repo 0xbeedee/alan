@@ -32,21 +32,26 @@ class TrajectoryBandit:
         self.arms = [{} for _ in range(self.knowledge_base.buffer_num)]
 
     def select_trajectories(
-        self, init_latent_obs: torch.Tensor
+        self, init_latent_obs: torch.Tensor, ready_env_ids: np.ndarray
     ) -> Tuple[List[Optional[KBBatchProtocol]], List[int]]:
+        """Extracts a subset of candidate trajectories from the knowledge base.
+
+        It returns a list of said trajectories, and a list of containing the buffer_id of the buffer from which these trajectories have been extracted.
+        """
         selected_trajectories = []
-        # we need to keep track of the buffers from which we extracted the trajectories
+        # keep track of the buffers from which we extracted the trajectories
         selected_buffer_ids = []
         # TODO this assumes that the traj_id always correspond to the same trajectories over time, but that is only possible with an infinitely sized buffer!
         # (could i maybe cache the currently saved arms somehow?)
-        for buffer_id in range(self.knowledge_base.buffer_num):
+        # only update the data for the ready environments (note that env_id and buffer_id are in a bijective correspondance)
+        for buffer_id in ready_env_ids:
             matching_arms = []
             buffer_arms = self.arms[buffer_id]
             for traj_id in range(self.knowledge_base.n_trajectories):
                 traj = self.knowledge_base.get_single_trajectory(traj_id, buffer_id)
-                if traj is None:
+                if traj is None or len(traj) == 0:
+                    # skip over the trajectory if it is None OR if it has no transitions
                     continue
-                # TODO sometimes init_latent_obs does not have correct batch dims (num_ready_envs in the Collector might be the issue)
                 if is_similar(
                     init_latent_obs[buffer_id].unsqueeze(0),
                     traj.latent_obs[0].unsqueeze(0),
@@ -66,13 +71,16 @@ class TrajectoryBandit:
         return selected_trajectories, selected_buffer_ids
 
     def _UCB1(self, matching_arms: List[Arm]) -> Arm:
+        """Implements the UCB1 algorithm (https://link.springer.com/article/10.1023/A:1013689704352)."""
         total_pulls = sum(arm.pulls for arm in matching_arms)
         ucb_values = []
         for arm in matching_arms:
             arm_pulls = arm.pulls
             arm_estimated_value = arm.estimated_value
-            # add an epsilon to avoid division by 0
-            bonus = np.sqrt((2 * np.log(total_pulls + 1e-5)) / (arm_pulls + 1e-7))
+            if arm_pulls == 0:
+                bonus = float("inf")  # encourage exploration of untried arms
+            else:
+                bonus = np.sqrt((2 * np.log(max(total_pulls, 1))) / arm_pulls)
             ucb_value = arm_estimated_value + bonus
             ucb_values.append(ucb_value)
         selected_arm = matching_arms[np.argmax(ucb_values)]

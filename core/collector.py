@@ -187,7 +187,7 @@ class GoalCollector(Collector):
                 kb_batch = cast(
                     KBBatchProtocol,
                     Batch(
-                        latent_obs=latent_last_obs_RO,
+                        obs=last_obs_RO,
                         act=act_RA,
                         rew=rew_R,
                         traj_id=cur_traj_id[ready_env_ids_R],
@@ -346,7 +346,7 @@ class GoalCollector(Collector):
             )
 
             # the last_obs MUST be passed through the obs_net only here
-            latent_last_obs_RO = self.policy.obs_net(Batch(last_obs_RO))
+            latent_last_obs_RO = self.policy.obs_net(obs_batch_R.obs)
 
             # call the policy's forward() method
             act_batch_RA = self.policy(
@@ -355,8 +355,9 @@ class GoalCollector(Collector):
 
             # pass the actions through th bandit, if one is specified
             if self.bandit is not None:
+                # cannot use obs_batch_R.obs because a latent_goal is added after the pass through the policy
                 self._pass_through_bandit_(
-                    act_batch_RA, ready_env_ids_R, latent_last_obs_RO
+                    Batch(last_obs_RO), act_batch_RA, ready_env_ids_R
                 )
 
             act_RA = to_numpy(act_batch_RA.act)
@@ -391,9 +392,9 @@ class GoalCollector(Collector):
 
     def _pass_through_bandit_(
         self,
+        last_obs_RO: Batch,
         act_batch_RA: ActBatchProtocol,
         ready_env_ids_R: np.ndarray,
-        latent_obs: torch.Tensor,
     ) -> None:
         """Uses the bandit to obtain the action, overwriting the one chosen by the policy if necessary.
 
@@ -401,7 +402,9 @@ class GoalCollector(Collector):
         """
         if self.selected_trajectories is None:
             self.selected_trajectories, self.updated_envs = (
-                self.bandit.select_trajectories(latent_obs, ready_env_ids_R)
+                self.bandit.select_trajectories(
+                    last_obs_RO, ready_env_ids_R, self.policy.obs_net
+                )
             )
             if self.selected_trajectories is not None:
                 self.act_index = np.zeros(len(self.selected_trajectories), dtype=int)

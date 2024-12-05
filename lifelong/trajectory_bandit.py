@@ -3,6 +3,8 @@ from core.types import KBBatchProtocol
 
 import torch
 import numpy as np
+from torch import nn
+from tianshou.data import Batch
 
 from .utils import is_similar
 
@@ -32,7 +34,7 @@ class TrajectoryBandit:
         self.arms = [{} for _ in range(self.knowledge_base.buffer_num)]
 
     def select_trajectories(
-        self, init_latent_obs: torch.Tensor, ready_env_ids: np.ndarray
+        self, init_obs: Batch, ready_env_ids: np.ndarray, obs_net: nn.Module
     ) -> Tuple[List[Optional[KBBatchProtocol]], List[int]]:
         """Extracts a subset of candidate trajectories from the knowledge base.
 
@@ -52,10 +54,7 @@ class TrajectoryBandit:
                 if traj is None or len(traj) == 0:
                     # trajectory is None OR it has no transitions
                     continue
-                if is_similar(
-                    init_latent_obs[buffer_id].unsqueeze(0),
-                    traj.latent_obs[0].unsqueeze(0),
-                ):
+                if is_similar(obs_net, init_obs[buffer_id], traj.obs[0]):
                     if traj_id not in buffer_arms:
                         buffer_arms[traj_id] = Arm(traj)
                     matching_arms.append(buffer_arms[traj_id])

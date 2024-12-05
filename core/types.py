@@ -73,7 +73,7 @@ class GoalBatchProtocol(IntrinsicBatchProtocol, Protocol):
 class KBBatchProtocol(BatchProtocol, Protocol):
     """A BatchProtocol containing an observation, an action and additional entries needed by the knowledge base."""
 
-    latent_obs: torch.Tensor
+    obs: TArr | BatchProtocol
     act: TArr
     rew: np.ndarray
     traj_id: int

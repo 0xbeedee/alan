@@ -12,9 +12,9 @@ class KnowledgeBase(ReplayBuffer):
     It stores transitions and aggregates them into trajectories.
     """
 
-    # (latent observation, action, reward, trajectory identifier)
-    _reserved_keys = ("latent_obs", "act", "rew", "traj_id")
-    _input_keys = ("latent_obs", "act", "rew", "traj_id")
+    # (observation, action, reward, trajectory identifier)
+    _reserved_keys = ("obs", "act", "rew", "traj_id")
+    _input_keys = ("obs", "act", "rew", "traj_id")
 
     def __init__(
         self,
@@ -43,10 +43,10 @@ class KnowledgeBase(ReplayBuffer):
 
         # raise KeyError first instead of AttributeError,
         # to support np.array([ReplayBuffer()])
-        latent_obs = self.get(indices, "latent_obs")
+        obs = self.get(indices, "obs")
 
         batch_dict = {
-            "latent_obs": latent_obs,
+            "obs": obs,
             "act": self.act[indices],
             "rew": self.rew[indices],
             "traj_id": self.traj_id[indices],
@@ -81,7 +81,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             new_batch.__dict__[key] = batch[key]
         batch = new_batch
 
-        assert {"latent_obs", "act", "rew", "traj_id"}.issubset(
+        assert {"obs", "act", "rew", "traj_id"}.issubset(
             batch.get_keys(),
         )
 

@@ -43,14 +43,14 @@ class TrajectoryBandit:
         selected_buffer_ids = []
         # TODO this assumes that the traj_id always correspond to the same trajectories over time, but that is only possible with an infinitely sized buffer!
         # (could i maybe cache the currently saved arms somehow?)
-        # only update the data for the ready environments (note that env_id and buffer_id are in a bijective correspondance)
         for buffer_id in ready_env_ids:
+            # only update the data for the ready environments (env_id and buffer_id are one-to-one)
             matching_arms = []
             buffer_arms = self.arms[buffer_id]
             for traj_id in range(self.knowledge_base.n_trajectories):
                 traj = self.knowledge_base.get_single_trajectory(traj_id, buffer_id)
                 if traj is None or len(traj) == 0:
-                    # skip over the trajectory if it is None OR if it has no transitions
+                    # trajectory is None OR it has no transitions
                     continue
                 if is_similar(
                     init_latent_obs[buffer_id].unsqueeze(0),
@@ -62,7 +62,6 @@ class TrajectoryBandit:
             if matching_arms:
                 # select one arm from each buffer
                 selected_arm = self._UCB1(matching_arms)
-                # TODO technically, we could only save the actions in this array, they are the only ones we need in policy.forward()
                 selected_trajectories.append(selected_arm.trajectory)
                 selected_buffer_ids.append(buffer_id)
 

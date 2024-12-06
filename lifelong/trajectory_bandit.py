@@ -34,7 +34,7 @@ class TrajectoryBandit:
         self.arms = [{} for _ in range(self.knowledge_base.buffer_num)]
 
     def select_trajectories(
-        self, init_obs: Batch, ready_env_ids: np.ndarray, obs_net: nn.Module
+        self, init_env_obs: Batch, ready_env_ids: np.ndarray, obs_net: nn.Module
     ) -> Tuple[List[Optional[KBBatchProtocol]], List[int]]:
         """Extracts a subset of candidate trajectories from the knowledge base.
 
@@ -43,8 +43,6 @@ class TrajectoryBandit:
         selected_trajectories = []
         # keep track of the buffers from which we extracted the trajectories
         selected_buffer_ids = []
-        # TODO this assumes that the traj_id always correspond to the same trajectories over time, but that is only possible with an infinitely sized buffer!
-        # (could i maybe cache the currently saved arms somehow?)
         for buffer_id in ready_env_ids:
             # only update the data for the ready environments (env_id and buffer_id are one-to-one)
             matching_arms = []
@@ -52,11 +50,16 @@ class TrajectoryBandit:
             for traj_id in range(self.knowledge_base.n_trajectories):
                 traj = self.knowledge_base.get_single_trajectory(traj_id, buffer_id)
                 if traj is None or len(traj) == 0:
-                    # trajectory is None OR it has no transitions
                     continue
-                if is_similar(obs_net, init_obs[buffer_id], traj.obs[0]):
-                    if traj_id not in buffer_arms:
-                        buffer_arms[traj_id] = Arm(traj)
+                if is_similar(obs_net, init_env_obs[buffer_id], traj.obs[0]):
+                    arm = Arm(traj)
+                    if (
+                        traj_id in buffer_arms
+                        and arm.trajectory == buffer_arms[traj_id].trajectory
+                    ):
+                        continue
+                    # the trajectory is new/different, so overwrite the old data
+                    buffer_arms[traj_id] = arm
                     matching_arms.append(buffer_arms[traj_id])
             if matching_arms:
                 # select one arm from each buffer

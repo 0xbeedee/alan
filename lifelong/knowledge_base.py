@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, cast
+from typing import Any, List, Tuple, Optional, cast
 from core.types import KBBatchProtocol
 
 from tianshou.data import ReplayBuffer, ReplayBufferManager, Batch
@@ -73,7 +73,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         self,
         batch: KBBatchProtocol,
         buffer_ids: np.ndarray | list[int] | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Adds a batch of data into replay buffer."""
         # preprocess batch
         new_batch = Batch()

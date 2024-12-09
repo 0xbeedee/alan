@@ -2,7 +2,9 @@ from typing import Any, List, Tuple, Optional, cast
 from core.types import KBBatchProtocol
 
 from tianshou.data import ReplayBuffer, ReplayBufferManager, Batch
+from tianshou.data.utils.converter import to_hdf5, from_hdf5
 from tianshou.data.batch import alloc_by_keys_diff, create_value
+import h5py
 import numpy as np
 
 
@@ -179,6 +181,61 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         if traj_per_buffer[buffer_id] is not None:
             return traj_per_buffer[buffer_id]
         return None
+
+    def save_hdf5(self, path: str, compression: str | None = None) -> None:
+        """Saves all the data within the knowledge base to an HDF5 file."""
+        with h5py.File(path, "w") as f:
+            f.attrs["buffer_num"] = self.buffer_num
+            f.attrs["total_size"] = self.maxsize
+
+            buf_grp = f.create_group("buffers")
+            for i, buf in enumerate(self.buffers):
+                grp = buf_grp.create_group(str(i))
+                to_hdf5(buf.__dict__, grp, compression=compression)
+
+            traj_grp = f.create_group("traj_meta")
+            for tid, traj_lists in self._traj_meta.items():
+                tgrp = traj_grp.create_group(str(tid))
+                for j, indices in enumerate(traj_lists):
+                    tgrp.create_dataset(str(j), data=np.array(indices, dtype=np.int64))
+
+            f.create_dataset("offset", data=self._offset)
+            f.create_dataset("last_index", data=self.last_index)
+            f.create_dataset("lengths", data=self._lengths)
+
+    @classmethod
+    def load_hdf5(cls, path: str, device: str | None = None):
+        """Loads all the data within the knowledge base from an HDF5 file."""
+        with h5py.File(path, "r") as f:
+            buffer_num = f.attrs["buffer_num"]
+            total_size = f.attrs["total_size"]
+
+            buffers = []
+            buf_grp = f["buffers"]
+            for i in range(buffer_num):
+                state = from_hdf5(buf_grp[str(i)], device=device)
+                kb = KnowledgeBase(state["maxsize"], **state["options"])
+                kb.__setstate__(state)
+                buffers.append(kb)
+
+            # cls should be a VectorKnowledgeBase
+            kbm = cls(total_size, buffer_num)
+            kbm.buffers = buffers
+
+            kbm._traj_meta = {}
+            traj_grp = f["traj_meta"]
+            for tid_str in traj_grp.keys():
+                tid = int(tid_str)
+                traj_lists = []
+                for j_str in traj_grp[tid_str].keys():
+                    traj_lists.append(list(traj_grp[tid_str][j_str][...]))
+                kbm._traj_meta[tid] = traj_lists
+
+            kbm._offset = f["offset"][...]
+            kbm.last_index = f["last_index"][...]
+            kbm._lengths = f["lengths"][...]
+
+            return kbm
 
 
 class VectorKnowledgeBase(KnowledgeBaseManager):

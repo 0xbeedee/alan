@@ -29,6 +29,7 @@ ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
 PLOT_DIR = f"{ART_DIR}/plots"
 REC_DIR = f"{ART_DIR}/recs"
+KB_DIR = f"{ART_DIR}/kbs"
 
 
 class ExperimentRunner:
@@ -41,6 +42,7 @@ class ExperimentRunner:
         intrinsic_config: str,
         model_config: str,
         use_kb: bool,
+        persist_kb: bool,
         device: torch.device,
     ) -> None:
         self.base_config_path = base_config_path
@@ -50,6 +52,7 @@ class ExperimentRunner:
         self.intrinsic_config = intrinsic_config
         self.model_config = model_config
         self.use_kb = use_kb
+        self.persist_kb = persist_kb
         self.device = device
 
         self._setup_config()
@@ -106,6 +109,10 @@ class ExperimentRunner:
         print("[+] Recording a rollout...")
         self._record_rollout()
 
+        if self.persist_kb:
+            print("[+] Saving the knowledge base...")
+            self._save_kb()
+
         print("[+] All done!")
 
     def _setup_config(self) -> None:
@@ -125,7 +132,7 @@ class ExperimentRunner:
         """Sets up the vector environments for training and testing."""
         env_config = self.config.get_except("environment.base", "name")
         env_funs = [
-            make_env(
+            _make_env(
                 self.env_name,
                 env_config,
                 REC_DIR,
@@ -163,13 +170,24 @@ class ExperimentRunner:
             )
 
             if self.use_kb:
-                self.knowledge_base, self.bandit = (
-                    self.factory.create_knowledge_base_and_bandit(
-                        self.kb_size, self.num_envs
-                    )
-                )
+                self._setup_kb_bandit()
             else:
                 self.knowledge_base, self.bandit = None, None
+
+    def _setup_kb_bandit(self) -> None:
+        kb_path = os.path.join(
+            KB_DIR,
+            self.env_name.lower(),
+            self.policy_config.lower(),
+            self.obsnet_config.lower(),
+            self.intrinsic_config.lower(),
+            "goal" if self.is_goal_aware else "vanilla",
+        )
+        self.knowledge_base, self.bandit = (
+            self.factory.create_knowledge_base_and_bandit(
+                self.kb_size, self.num_envs, kb_path
+            )
+        )
 
     def _setup_networks(self) -> None:
         """Sets up the observation, actor, and critic networks."""
@@ -422,8 +440,21 @@ class ExperimentRunner:
 
         self.env.close()
 
+    def _save_kb(self) -> None:
+        """Saves the Knowledge Base to the artefacts."""
+        kb_path = _make_save_path(
+            KB_DIR,
+            self.env_name,
+            self.policy_config,
+            self.obsnet_config,
+            self.intrinsic_config,
+            self.is_goal_aware,
+            ext="h5",
+        )
+        self.knowledge_base.save_hdf5(kb_path)
 
-def make_env(
+
+def _make_env(
     env_name: str,
     env_config: str,
     rec_dir: str,

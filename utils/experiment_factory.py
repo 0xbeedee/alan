@@ -10,6 +10,10 @@ from tianshou.trainer import OnpolicyTrainer, OffpolicyTrainer, OfflineTrainer
 from tianshou.env.venvs import BaseVectorEnv
 from tianshou.utils import TensorboardLogger
 
+from datetime import datetime
+import numpy as np
+import os
+
 from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
     ObsNet,
@@ -64,11 +68,22 @@ class ExperimentFactory:
         return buf_class(buf_size, env_num)
 
     def create_knowledge_base_and_bandit(
-        self, kb_size: int, env_num: int
+        self, kb_size: int, env_num: int, kb_path: str
     ) -> Tuple[VectorKnowledgeBase, TrajectoryBandit]:
-        vec_kb = VectorKnowledgeBase(kb_size, env_num)
-        bandit = TrajectoryBandit(vec_kb)
-        return vec_kb, bandit
+        if os.path.exists(kb_path):
+            # if the path exists, there must be at least one file in it
+            dt = "%d%m%Y-%H%M%S"
+            valid_kbs = [
+                (f, datetime.strptime(f[:-3], dt)) for f in os.listdir(kb_path)
+            ]
+            latest_kb = max(valid_kbs, key=lambda x: x[1])[0]
+            knowledge_base = VectorKnowledgeBase.load_hdf5(
+                os.path.join(kb_path, latest_kb)
+            )
+        else:
+            knowledge_base = VectorKnowledgeBase(kb_size, env_num)
+        bandit = TrajectoryBandit(knowledge_base)
+        return knowledge_base, bandit
 
     def create_vae_mdnrnn(self, observation_space: gym.Space, device: torch.device):
         vae_map = {

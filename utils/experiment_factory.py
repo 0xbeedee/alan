@@ -11,7 +11,6 @@ from tianshou.env.venvs import BaseVectorEnv
 from tianshou.utils import TensorboardLogger
 
 from datetime import datetime
-import numpy as np
 import os
 
 from environments import DictObservation, Resetting, RecordTTY, RecordRGB

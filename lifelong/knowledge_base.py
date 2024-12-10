@@ -210,13 +210,13 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             buffer_num = f.attrs["buffer_num"]
             total_size = f.attrs["total_size"]
 
-            buffers = []
+            buffers = np.empty(buffer_num, dtype=object)
             buf_grp = f["buffers"]
             for i in range(buffer_num):
                 state = from_hdf5(buf_grp[str(i)], device=device)
                 kb = KnowledgeBase(state["maxsize"], **state["options"])
                 kb.__setstate__(state)
-                buffers.append(kb)
+                buffers[i] = kb
 
             # cls should be a VectorKnowledgeBase
             kbm = cls(total_size, buffer_num)
@@ -234,6 +234,10 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
             kbm._offset = f["offset"][...]
             kbm.last_index = f["last_index"][...]
             kbm._lengths = f["lengths"][...]
+
+            kbm._meta = Batch.cat(buf._meta for buf in kbm.buffers)
+            # re-establish self._meta to get a correct __repr__
+            kbm._set_batch_for_children()
 
             return kbm
 

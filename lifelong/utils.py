@@ -14,7 +14,6 @@ def is_similar(
     # TODO cosine similarity (after normalisation) could also be used here
     # TODO we could use other methods to go from [0, inf) to [0, 1] (e.g., sigmoids, RBF kernels, exp decay)
     distance = torch.norm(latent1 - latent2, p=2, dim=1, keepdim=True)  # (B, 1)
-    # TODO very high similarity for some observations in the beginning, why?
     similarity = 1.0 / (1.0 + distance)
 
     return similarity > thresh

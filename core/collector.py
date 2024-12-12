@@ -44,8 +44,6 @@ class GoalCollector(Collector):
 
         self.knowledge_base = knowledge_base
         self.bandit = bandit
-        self.selected_trajectories = None
-        self.trajectory_rewards = {}
 
         if self.env.is_async:
             raise ValueError(
@@ -104,8 +102,9 @@ class GoalCollector(Collector):
             ready_env_ids_R,
         )
 
-        # knowledge base-related variables
         cur_traj_id = np.zeros(self.env_num, dtype=np.uint16)
+        # set as class attribute because we need it across methods
+        self.selected_trajectories = None
 
         while True:
             (
@@ -133,9 +132,12 @@ class GoalCollector(Collector):
 
             if self.selected_trajectories is not None:
                 for i, env_idx in enumerate(self.updated_envs):
-                    traj_id = self.selected_trajectories[i].traj_id[0]
-                    reward = rew_R[env_idx]
-                    self.trajectory_rewards[(env_idx, traj_id)] += reward
+                    traj = self.selected_trajectories[i]
+                    if traj is None:
+                        arm_id = self.bandit.null_arm_id
+                    else:
+                        arm_id = self.bandit.get_arm_id(env_idx, traj.traj_id[0])
+                    self.trajectory_rewards[arm_id] += rew_R[env_idx]
 
             # the obs_next MUST be passed through the obs_net only here
             latent_obs_next_RO = self.policy.obs_net(Batch(obs_next_RO))
@@ -406,18 +408,23 @@ class GoalCollector(Collector):
                     last_obs_RO, ready_env_ids_R, self.policy.obs_net
                 )
             )
-            if self.selected_trajectories is not None:
-                self.act_index = np.zeros(len(self.selected_trajectories), dtype=int)
-                self.trajectory_rewards = {}
-                for i, trajectory in enumerate(self.selected_trajectories):
-                    buffer_id = self.updated_envs[i]
-                    traj_id = trajectory.traj_id[0]
-                    self.trajectory_rewards[(buffer_id, traj_id)] = 0.0
+            # init all the necessary variables
+            self.act_index = np.zeros(len(self.selected_trajectories), dtype=int)
+            self.trajectory_rewards = {}
+            for i, trajectory in enumerate(self.selected_trajectories):
+                if trajectory is None:
+                    arm_id = self.bandit.null_arm_id
+                else:
+                    arm_id = self.bandit.get_arm_id(
+                        self.updated_envs[i], trajectory.traj_id[0]
+                    )
+                self.trajectory_rewards[arm_id] = 0.0
         else:
             for i, env_idx in enumerate(self.updated_envs):
                 trajectory = self.selected_trajectories[i]
-                traj_length = len(trajectory.act)
-                if self.act_index[i] < traj_length:
+                if trajectory is None:
+                    continue
+                if self.act_index[i] < len(trajectory.act):
                     # there are still transitions in the trajectory
                     action = trajectory.act[self.act_index[i]]
                     act_batch_RA.act[env_idx] = action
@@ -425,13 +432,12 @@ class GoalCollector(Collector):
             if all(
                 self.act_index[i] >= len(self.selected_trajectories[i].act)
                 for i in range(len(self.selected_trajectories))
+                if self.selected_trajectories[i] is not None
             ):
                 # all the trajectories have finished
                 self.bandit.update(self.trajectory_rewards)
+                # resetting selected_trajectories is enough because the rest of the variables depend on it
                 self.selected_trajectories = None
-                self.act_index = None
-                self.updated_envs = None
-                self.trajectory_rewards = {}
 
 
 def _create_info_batch(info_array: np.ndarray) -> Batch:

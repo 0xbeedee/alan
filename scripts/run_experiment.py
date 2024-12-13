@@ -11,8 +11,6 @@ def main(
     obsnet_config,
     intrinsic_config,
     model_config,
-    use_kb,
-    save_kb,
     device,
 ):
     runner = ExperimentRunner(
@@ -22,8 +20,6 @@ def main(
         obsnet_config,
         intrinsic_config,
         model_config,
-        use_kb,
-        save_kb,
         device,
     )
 
@@ -90,18 +86,6 @@ if __name__ == "__main__":
         metavar="MODEL_CONFIG",
     )
     parser.add_argument(
-        "-k",
-        "--use_kb",
-        action="store_true",
-        help="If set, use the knowledge base (and the associated machinery)",
-    )
-    parser.add_argument(
-        "-s",
-        "--save_kb",
-        action="store_true",
-        help="If set, save the knowledge base, persisting it for future runs",
-    )
-    parser.add_argument(
         "-d",
         "--device",
         type=str,
@@ -119,7 +103,5 @@ if __name__ == "__main__":
         args.obsnet,
         args.intrinsic,
         args.model,
-        args.use_kb,
-        args.save_kb,
         torch.device(args.device),
     )

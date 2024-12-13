@@ -1,3 +1,5 @@
+use_kb: true
+save_kb: true
 is_goal_aware: true
 
 buffers:

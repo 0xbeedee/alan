@@ -41,8 +41,6 @@ class ExperimentRunner:
         obsnet_config: str,
         intrinsic_config: str,
         model_config: str,
-        use_kb: bool,
-        persist_kb: bool,
         device: torch.device,
     ) -> None:
         self.base_config_path = base_config_path
@@ -51,8 +49,6 @@ class ExperimentRunner:
         self.obsnet_config = obsnet_config
         self.intrinsic_config = intrinsic_config
         self.model_config = model_config
-        self.use_kb = use_kb
-        self.persist_kb = persist_kb
         self.device = device
 
         self._setup_config()
@@ -63,6 +59,9 @@ class ExperimentRunner:
         self.train_buf_size = self.config.get("buffers.train_buf_size")
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
         self.test_buf_size = self.config.get("buffers.test_buf_size")
+
+        self.use_kb = self.config.get("use_kb")
+        self.persist_kb = self.config.get("save_kb")
         self.kb_size = self.config.get("buffers.kb_size")
 
         # use the real batch size by default

@@ -6,6 +6,6 @@ dream:
   max_nsteps: 1000
 
 vec:
+  # making these two values different creates problems with SubprocVectorEnv
   num_envs: 1
-  # TODO making these two values different creates problems with SubprocVectorEnv
   num_dream_envs: 1

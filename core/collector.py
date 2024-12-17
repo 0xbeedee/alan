@@ -196,12 +196,13 @@ class GoalCollector(Collector):
                     ),
                 )
 
-                self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
                 # increment the trajectory ID if the agent got a positive reward OR the episode is over
                 combined_condition = (rew_R > 0) | done_R
                 idxs_to_update = ready_env_ids_R & combined_condition
                 if np.any(idxs_to_update):
                     cur_traj_id[idxs_to_update] += 1
+
+                self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
 
             # collect statistics
             num_episodes_done_this_iter = np.sum(done_R)
@@ -355,7 +356,7 @@ class GoalCollector(Collector):
                 obs_batch_R, last_hidden_state_RH, latent_obs=latent_last_obs_RO
             )
 
-            # pass the actions through th bandit, if one is specified
+            # pass the actions through the bandit, if one is specified
             if self.bandit is not None:
                 # cannot use obs_batch_R.obs because a latent_goal is added after the pass through the policy
                 self._pass_through_bandit_(

@@ -18,6 +18,7 @@ class Arm:
             self.cumulative_reward = sum(trajectory.rew)
         else:
             self.cumulative_reward = 0.0
+        self.traj_length = len(trajectory)
         self.pulls = 0
 
     def update_stats(self, reward: float) -> None:
@@ -28,7 +29,11 @@ class Arm:
     @property
     def estimated_value(self) -> torch.Tensor:
         """Computes the estimated value of the arm."""
-        return self.cumulative_reward / self.pulls if self.pulls > 0 else 0.0
+        if self.pulls > 0:
+            # include traj_length to penalise longer trajectories
+            return self.cumulative_reward / (self.pulls * self.traj_length)
+        else:
+            return 0.0
 
 
 class TrajectoryBandit:
@@ -49,7 +54,7 @@ class TrajectoryBandit:
     ) -> Tuple[List[Optional[KBBatchProtocol]], List[int]]:
         """Extracts a subset of candidate trajectories from the knowledge base.
 
-        It returns a list of said trajectories, and a list of containing the buffer_id of the buffer from which these trajectories have been extracted.
+        It returns a list of said trajectories, and a list containing the buffer_ids of the buffers from which these trajectories have been extracted.
         """
         selected_trajectories = []
         # keep track of the buffers from which we extracted the trajectories
@@ -60,7 +65,7 @@ class TrajectoryBandit:
                 self.arm_ids_by_buffer[buffer_id] = {}
             arm_ids_by_traj = self.arm_ids_by_buffer[buffer_id]
 
-            # alwyas include the null arm
+            # always include the null arm
             matching_arms = [self.all_arms[self.null_arm_id]]
             for traj_id in range(self.knowledge_base.n_trajectories - 1):
                 # only consider complete trajectories

@@ -65,7 +65,7 @@ class TrajectoryBandit:
             for traj_id in range(self.knowledge_base.n_trajectories - 1):
                 # only consider complete trajectories
                 traj = self.knowledge_base.get_single_trajectory(traj_id, buffer_id)
-                if traj is None or len(traj) == 0:
+                if traj is None or len(traj) == 0 or sum(traj.rew) <= 0:
                     continue
                 if is_similar(obs_net, init_env_obs[buffer_id], traj.obs[0]):
                     # check if it's been assigned a global arm ID

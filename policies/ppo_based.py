@@ -1,4 +1,4 @@
-from typing import Any, Literal, cast, Optional
+from typing import Any, Literal, cast
 from core.buffer import GoalReplayBuffer
 from core.types import (
     GoalBatchProtocol,
@@ -55,9 +55,9 @@ class PPOBasedPolicy(CorePolicy):
             critic=critic_net,
             optim=optim,
             action_space=action_space,
-            # we can confidently hardcode these two because we intend to use NLE
+            # hardcode dist_fn because we only use discrete action spaces
             dist_fn=self._dist_fn,
-            action_scaling=False,
+            action_scaling=action_scaling,
         )
         # monkey patching is necessary for MPS compatibility
         self.ppo_policy._compute_returns = self._compute_returns

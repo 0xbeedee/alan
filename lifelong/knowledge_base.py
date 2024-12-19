@@ -76,7 +76,7 @@ class KnowledgeBaseManager(KnowledgeBase, ReplayBufferManager):
         batch: KBBatchProtocol,
         buffer_ids: np.ndarray | list[int] | None = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Adds a batch of data into replay buffer."""
+        """Adds a batch of data into the vectorised knowledge base."""
         # preprocess batch
         new_batch = Batch()
         for key in self._reserved_keys:

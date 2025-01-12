@@ -16,9 +16,10 @@ class Arm:
         # per-trajectory statistics
         if self.trajectory is not None:
             self.cumulative_reward = sum(trajectory.rew)
+            self.traj_length = len(trajectory)
         else:
             self.cumulative_reward = 0.0
-        self.traj_length = len(trajectory)
+            self.traj_length = 0
         self.pulls = 0
 
     def update_stats(self, reward: float) -> None:
@@ -29,7 +30,7 @@ class Arm:
     @property
     def estimated_value(self) -> torch.Tensor:
         """Computes the estimated value of the arm."""
-        if self.pulls > 0:
+        if self.pulls > 0 and self.traj_length > 0:
             # include traj_length to penalise longer trajectories
             return self.cumulative_reward / (self.pulls * self.traj_length)
         else:

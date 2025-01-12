@@ -3,19 +3,19 @@ save_kb: true
 is_goal_aware: true
 
 buffers:
-  train_buf_size: 500
+  train_buf_size: 50000
   test_buf_size: 1
-  kb_size: 1000
+  kb_size: 100000
 
-  dream_train_buf_size: 100
+  dream_train_buf_size: 1000
 
 training:
   real:
-    max_epoch: 20
-    step_per_epoch: 1000
-    step_per_collect: 100
+    max_epoch: 100
+    step_per_epoch: 10000
+    step_per_collect: 1000
     episode_per_test: 5
-    batch_size: 32
+    batch_size: 64
     repeat_per_collect: 1
   dream:
     max_epoch: 5
@@ -23,5 +23,5 @@ training:
     step_per_collect: 100
     # this needs to be defined to comply with Tianshou's API, even though we do not test in the dream
     episode_per_test: 1
-    batch_size: 31
+    batch_size: 32
     repeat_per_collect: 1

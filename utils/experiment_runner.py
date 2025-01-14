@@ -139,6 +139,7 @@ class ExperimentRunner:
                 self.obsnet_config,
                 self.intrinsic_config,
                 self.is_goal_aware,
+                self.use_kb,
                 self.factory,
             )
             for _ in range(self.num_envs)
@@ -291,6 +292,7 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_config,
             self.is_goal_aware,
+            self.use_kb,
         )
         self.writer = SummaryWriter(os.path.split(self.log_path)[0])
         self.logger = TensorboardLogger(self.writer)
@@ -419,6 +421,7 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_config,
             self.is_goal_aware,
+            self.use_kb,
         )
 
         plotter = self.factory.create_plotter(self.epoch_stats)
@@ -448,6 +451,7 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_config,
             self.is_goal_aware,
+            self.use_kb,
             ext="h5",
         )
         self.knowledge_base.save_hdf5(kb_path)
@@ -461,6 +465,7 @@ def _make_env(
     obsnet_config: str,
     intrinsic_config: str,
     is_goal_aware: bool,
+    use_kb: bool,
     factory: ExperimentFactory,
 ):
     """Creates a single environment.
@@ -477,6 +482,7 @@ def _make_env(
             obsnet_config,
             intrinsic_config,
             is_goal_aware,
+            use_kb,
             ext="mp4" if env.render_mode == "rgb_array" else "ttyrec",
         )
         env = factory.wrap_env(env, rec_path)
@@ -492,19 +498,25 @@ def _make_save_path(
     obsnet_config: str,
     intrinsic_config: str,
     is_goal_aware: bool,
+    use_kb: bool,
     ext: str | None = None,
 ) -> str:
     """Creates a path to save the artefacts (plots, recordings, and logs)."""
     timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
-    save_path = os.path.join(
+
+    sub_path = [
         base_path,
         env_config.lower(),
         policy_config.lower(),
         obsnet_config.lower(),
         intrinsic_config.lower(),
         "goal" if is_goal_aware else "vanilla",
-        f"{timestamp}.{ext}" if ext else timestamp,
-    )
+    ]
+    if use_kb:
+        # add an extra directory to the path
+        sub_path.append("kb")
+
+    save_path = os.path.join(*sub_path, f"{timestamp}.{ext}" if ext else timestamp)
     # create the directory if it doesn't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     return save_path

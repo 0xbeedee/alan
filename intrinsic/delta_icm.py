@@ -18,8 +18,8 @@ class DeltaICM(ICM):
 
     def __init__(
         self,
-        obs_net: nn.Module,
-        action_space: gym.Space,
+        feature_dim: int,
+        n_actions: int,
         batch_size: int,
         learning_rate: float = 1e-3,
         hidden_sizes: Sequence[int] = [256, 128, 64],
@@ -28,8 +28,8 @@ class DeltaICM(ICM):
         device: torch.device = torch.device("cpu"),
     ) -> None:
         super().__init__(
-            obs_net=obs_net,
-            action_space=action_space,
+            feature_dim=feature_dim,
+            n_actions=n_actions,
             batch_size=batch_size,
             learning_rate=learning_rate,
             hidden_sizes=hidden_sizes,

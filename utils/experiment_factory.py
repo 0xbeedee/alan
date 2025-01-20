@@ -24,7 +24,7 @@ from networks import (
     DiscreteVAE,
     MDNRNN,
 )
-from intrinsic import ICM, ZeroICM, DeltaICM, HER, ZeroHER
+from intrinsic import ICM, ZeroICM, DeltaICM, BBold, ZeroBBold, HER, ZeroHER
 from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
 from policies import PPOBasedPolicy
 from config import ConfigManager
@@ -134,7 +134,13 @@ class ExperimentFactory:
         learning_rate: float,
         device: torch.device,
     ):
-        fast_intrinsic_map = {"icm": ICM, "zero_icm": ZeroICM, "delta_icm": DeltaICM}
+        fast_intrinsic_map = {
+            "icm": ICM,
+            "zero_icm": ZeroICM,
+            "delta_icm": DeltaICM,
+            "bebold": BBold,
+            "zero_bebold": ZeroBBold,
+        }
         slow_intrinsic_map = {"her": HER, "zero_her": ZeroHER}
 
         fast_intrinsic_class = fast_intrinsic_map[

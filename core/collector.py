@@ -147,6 +147,8 @@ class GoalCollector(Collector):
                     latent_obs=latent_last_obs_RO,
                     act=act_RA,
                     latent_obs_next=latent_obs_next_RO,
+                    # we need obs_next for BeBold
+                    obs_next=obs_next_RO,
                 )
             )
             nstep_intrinsic_returns.extend(int_rew_R)

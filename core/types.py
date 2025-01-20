@@ -49,6 +49,7 @@ class LatentObsActNextBatchProtocol(BatchProtocol, Protocol):
     latent_obs: torch.Tensor
     act: np.ndarray
     latent_obs_next: torch.Tensor
+    obs_next: TArr | BatchProtocol
 
 
 class IntrinsicBatchProtocol(RolloutBatchProtocol, Protocol):

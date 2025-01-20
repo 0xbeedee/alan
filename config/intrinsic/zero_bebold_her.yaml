@@ -1,0 +1,9 @@
+fast:
+  name: 'zero_bebold'
+  hidden_sizes: [1]
+  beta: 0.0
+  eta: 0.0
+
+slow:
+  name: 'her'
+  horizon: 3

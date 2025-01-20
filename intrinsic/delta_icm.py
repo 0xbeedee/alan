@@ -2,9 +2,7 @@ from typing import Sequence
 from core.types import LatentObsActNextBatchProtocol
 
 import torch
-from torch import nn
 import numpy as np
-import gymnasium as gym
 
 from .icm import ICM
 

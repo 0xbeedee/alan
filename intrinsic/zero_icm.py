@@ -2,11 +2,9 @@ from typing import Any
 from core.types import GoalBatchProtocol, LatentObsActNextBatchProtocol
 
 from tianshou.data import SequenceSummaryStats
-
 import numpy as np
 
-from intrinsic.icm import ICMTrainingStats
-from .icm import ICM
+from .icm import ICM, ICMTrainingStats
 
 
 class ZeroICM(ICM):

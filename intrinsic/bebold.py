@@ -7,7 +7,6 @@ from core.types import (
 
 import torch
 import numpy as np
-from collections import defaultdict
 
 from tianshou.utils.net.common import MLP
 from tianshou.policy.base import TrainingStats
@@ -35,6 +34,7 @@ class BBold:
         learning_rate: float = 1e-3,
         hidden_sizes: Sequence[int] = [[256, 128, 128, 64], [256, 128, 64]],
         beta: float = 0.2,
+        # keep eta to avoid API changes (even though we don't use it)
         eta: float = 0.07,
         device: torch.device = torch.device("cpu"),
     ) -> None:
@@ -69,14 +69,13 @@ class BBold:
         self.ep_state_count = None
         self.batch_size = batch_size
         self.beta = beta
-        self.eta = eta
         self.device = device
 
     def get_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
         if self.ep_state_count is None:
             # need to initialise the episodic state counts
             # (do it here: batch is the only object with correct dims)
-            self.ep_state_count = [defaultdict(int) for _ in range(len(batch))]
+            self.ep_state_count = [{} for _ in range(len(batch))]
 
         # no need torch.no_grad() as SelfModel takes care of it
         random_emb, predicted_emb, random_emb_next, predicted_emb_next = self._forward(
@@ -89,7 +88,7 @@ class BBold:
                 # old observation, increment the counter
                 self.ep_state_count[i][obs_next] += 1
             else:
-                # new observation, initialise counter to 1...
+                # new observation, initialise the counter...
                 self.ep_state_count[i][obs_next] = 1
                 # ...and do not zero out the intrinsic reward
                 count_indicator[i] = 1.0

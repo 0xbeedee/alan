@@ -175,12 +175,13 @@ class ExperimentRunner:
                 self.knowledge_base, self.bandit = None, None
 
     def _setup_kb_bandit(self) -> None:
-        kb_path = os.path.join(
+        kb_path = _make_save_path(
             KB_DIR,
-            self.env_name.lower(),
-            self.policy_config.lower(),
-            self.obsnet_config.lower(),
-            self.intrinsic_config.lower(),
+            self.env_name,
+            self.policy_config,
+            self.obsnet_config,
+            self.intrinsic_config,
+            self.use_kb,
             "goal" if self.is_goal_aware else "vanilla",
         )
         self.knowledge_base, self.bandit = (
@@ -455,7 +456,8 @@ class ExperimentRunner:
             self.use_kb,
             ext="h5",
         )
-        self.knowledge_base.save_hdf5(kb_path)
+        if self.use_kb:
+            self.knowledge_base.save_hdf5(kb_path)
 
 
 def _make_env(

@@ -171,10 +171,10 @@ class NetHackEncoder(nn.Module):
 
     def forward(self, inputs: Batch) -> Tuple[torch.Tensor, torch.Tensor]:
         spatial_inputs = {key: inputs[key] for key in self.spatial_keys}
-        cropped_inputs = self.crop(
-            torch.as_tensor(inputs["glyphs"], device=self.device),
-            torch.as_tensor(inputs["blstats"][:, :2], device=self.device),
-        )
+
+        glyphs_tr = torch.as_tensor(inputs["glyphs"], device=self.device)
+        blstats_tr = torch.as_tensor(inputs["blstats"], device=self.device)
+        cropped_inputs = self.crop(glyphs_tr, blstats_tr[:, :2])
         # inventory_inputs = {key: inputs[key] for key in self.inv_keys}
 
         spatial_features = self.spatial_encoder(spatial_inputs)

@@ -7,10 +7,11 @@ from core.types import (
 
 import torch
 import numpy as np
+import hashlib
 
 from tianshou.utils.net.common import MLP
 from tianshou.policy.base import TrainingStats
-from tianshou.data import SequenceSummaryStats
+from tianshou.data import Batch, SequenceSummaryStats
 
 
 @dataclass(kw_only=True)
@@ -82,14 +83,16 @@ class BBold:
             batch
         )
 
-        count_indicator = np.zeros_like(batch.obs_next.obs, dtype=np.float32)
-        for i, obs_next in enumerate(batch.obs_next.obs):
-            if obs_next in self.ep_state_count[i]:
+        # as many actions as ready environments, and always be 1D numpy arrays
+        count_indicator = np.zeros_like(batch.act, dtype=np.float32)
+        for i, obs_next in enumerate(batch.obs_next):
+            hashed_obs_next = _hash_batch(obs_next)
+            if hashed_obs_next in self.ep_state_count[i]:
                 # old observation, increment the counter
-                self.ep_state_count[i][obs_next] += 1
+                self.ep_state_count[i][hashed_obs_next] += 1
             else:
                 # new observation, initialise the counter...
-                self.ep_state_count[i][obs_next] = 1
+                self.ep_state_count[i][hashed_obs_next] = 1
                 # ...and do not zero out the intrinsic reward
                 count_indicator[i] = 1.0
 
@@ -133,3 +136,21 @@ class BBold:
         predicted_emb_next = self.predictor_net(phi2)
 
         return random_emb, predicted_emb, random_emb_next, predicted_emb_next
+
+
+def _hash_batch(batch):
+    def serialize(obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tobytes()
+        elif isinstance(obj, dict):
+            # sorted for stability
+            return tuple(sorted((k, serialize(v)) for k, v in obj.items()))
+        elif isinstance(obj, Batch):
+            # recursively serialize inner dict
+            return serialize(obj.__dict__)
+        else:
+            # assume primitives are hashable
+            return obj
+
+    batch_serialized = str(serialize(batch)).encode()
+    return hashlib.sha256(batch_serialized).hexdigest()

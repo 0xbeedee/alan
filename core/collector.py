@@ -126,6 +126,7 @@ class GoalCollector(Collector):
                 act_normalized_RA,
                 ready_env_ids_R,
             )
+            done_R = np.logical_or(terminated_R, truncated_R)
             # for MPS compatibility
             rew_R = rew_R.astype(np.float32)
             nstep_returns.extend(rew_R)
@@ -147,18 +148,18 @@ class GoalCollector(Collector):
                     latent_obs=latent_last_obs_RO,
                     act=act_RA,
                     latent_obs_next=latent_obs_next_RO,
-                    # we need obs_next for BeBold
+                    # obs_next and done are for BeBold
                     obs_next=obs_next_RO,
+                    done=done_R,
                 )
             )
             nstep_intrinsic_returns.extend(int_rew_R)
 
             latent_goal_next_R = self.policy.self_model.select_goal(latent_obs_next_RO)
 
-            if isinstance(info_R, dict):  # type: ignore[unreachable]
+            if isinstance(info_R, dict):  # type: ignore
                 # This can happen if the env is an envpool env. Then the info returned by step is a dict
-                info_R = _dict_of_arr_to_arr_of_dicts(info_R)  # type: ignore[unreachable]
-            done_R = np.logical_or(terminated_R, truncated_R)
+                info_R = _dict_of_arr_to_arr_of_dicts(info_R)  # type: ignore
 
             # construct the goal-aware batch
             current_iteration_batch = cast(

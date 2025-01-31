@@ -66,7 +66,7 @@ class BBold:
         )
         self.optim = torch.optim.Adam(params, lr=learning_rate)
 
-        # a list of dicts to maintain episodic state counts across all the environments
+        # list of dicts to maintain episodic state counts across all envs
         self.ep_state_count = None
         self.batch_size = batch_size
         self.beta = beta
@@ -74,16 +74,18 @@ class BBold:
 
     def get_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
         if self.ep_state_count is None:
-            # need to initialise the episodic state counts
-            # (do it here: batch is the only object with correct dims)
+            # initialise the episodic state counts
             self.ep_state_count = [{} for _ in range(len(batch))]
+        if any(batch.done):
+            # reset the episodic state counts (episode is over)
+            for i in batch.done.nonzero()[0]:
+                self.ep_state_count[i] = {}
 
-        # no need torch.no_grad() as SelfModel takes care of it
         random_emb, predicted_emb, random_emb_next, predicted_emb_next = self._forward(
             batch
         )
 
-        # as many actions as ready environments, and always be 1D numpy arrays
+        # there as many actions as ready environments
         count_indicator = np.zeros_like(batch.act, dtype=np.float32)
         for i, obs_next in enumerate(batch.obs_next):
             hashed_obs_next = _hash_batch(obs_next)
@@ -100,7 +102,7 @@ class BBold:
         int_rew_next = torch.norm(predicted_emb_next - random_emb_next, p=2, dim=1)
         int_rew = torch.norm(predicted_emb - random_emb, p=2, dim=1)
 
-        # clip the reward so that it remain in the [0, 1] range
+        # clip the reward so that it remains in the [0, 1] range
         int_rew = torch.clamp(int_rew_next - self.beta * int_rew, min=0.0, max=1.0)
 
         # view it as a numpy float32 for consistency with Tianshou and MPS

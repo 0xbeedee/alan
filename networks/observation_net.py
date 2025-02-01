@@ -19,9 +19,11 @@ class ObsNet(nn.Module):
         super().__init__()
         self.device = device
         self.encoder = vae_encoder.to(self.device)
+
+        # o_dim is needed by the actor-critic pair
         self.o_dim = self.encoder.latent_dim
 
     @torch.no_grad()
     def forward(self, inputs: Batch) -> torch.Tensor:
-        z, *_ = self.encoder(inputs)
-        return z
+        latent_obs, *_ = self.encoder(inputs)
+        return latent_obs

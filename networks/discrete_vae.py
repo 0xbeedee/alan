@@ -42,8 +42,7 @@ class DiscreteVAE(nn.Module):
         return {"obs": obs}
 
     def forward(self, inputs: Dict[str, np.ndarray]):
-        mu, logsigma = self.encoder(inputs)
-        z, dist = reparameterise(mu, logsigma)
+        _, z, dist = self.encoder(inputs)
         recon = self.decoder(z)
         return recon, z, dist
 
@@ -68,6 +67,7 @@ class DiscreteEncoder(nn.Module):
             in_size = hidden_size
         self.encoder = nn.Sequential(*layers).to(device)
 
+        self.latent_out = nn.Linear(in_size, self.latent_dim).to(device)
         self.fc_mu = nn.Linear(in_size, self.latent_dim).to(device)
         self.fc_logsigma = nn.Linear(in_size, self.latent_dim).to(device)
 
@@ -78,10 +78,13 @@ class DiscreteEncoder(nn.Module):
             x = x.view(1, 1)
         elif x.dim() == 1:
             x = x.view(-1, 1)
+
         h = self.encoder(x)
+        latent_obs = self.latent_out(h)
         mu = self.fc_mu(h)
         logsigma = self.fc_logsigma(h)
-        return mu, logsigma
+        z, dist = reparameterise(mu, logsigma)
+        return latent_obs, z, dist
 
 
 class DiscreteDecoder(nn.Module):

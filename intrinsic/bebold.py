@@ -102,7 +102,7 @@ class BBold:
         int_rew_next = torch.norm(predicted_emb_next - random_emb_next, p=2, dim=1)
         int_rew = torch.norm(predicted_emb - random_emb, p=2, dim=1)
 
-        # clip the reward so that it remains in the [0, 1] range
+        # clip reward to be in [0, 1] range due to HER
         int_rew = torch.clamp(int_rew_next - self.beta * int_rew, min=0.0, max=1.0)
 
         # view it as a numpy float32 for consistency with Tianshou and MPS

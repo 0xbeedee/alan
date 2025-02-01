@@ -67,8 +67,7 @@ class ICM:
         # no need torch.no_grad() as SelfModel takes care of it
         forward_loss, _ = self._forward(batch)
 
-        # clip the reward to be in the [0, 1] range
-        # we do so to mainly to have the fast intrinsic reward play well with the slow intrinsic one
+        # clip reward to be in the [0, 1] range due to HER
         intrinsic_reward = torch.clamp(forward_loss * self.eta, min=0.0, max=1.0)
         return intrinsic_reward.cpu().numpy().astype(np.float32)
 

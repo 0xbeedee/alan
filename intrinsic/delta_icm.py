@@ -51,8 +51,11 @@ class DeltaICM(ICM):
         # let the runninng average increase in importance as we get more samples
         alpha = self._normalised_log(self.n_intrinsic)
         # using abs() here provides an interesting side effect: when the intrinsic reward diminishes, the delta will be kept higher than usual due to the large running average
-        delta = np.abs(vanilla_intrew - alpha * self.running_avg_intrinsic)
-        return delta.astype(np.float32)
+        delta_int_rew = np.abs(vanilla_intrew - alpha * self.running_avg_intrinsic)
+
+        # clip reward to be in [0, 1] range due to HER
+        intrinsic_reward = np.clip(delta_int_rew * self.eta, 0.0, 1.0, dtype=np.float32)
+        return intrinsic_reward
 
     def _normalised_log(self, n: int, max_n: int = 10_000) -> np.float32:
         """Computes a normalised log (with base e), i.e., a log that returns values in the range [0, 1]."""

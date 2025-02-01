@@ -5,7 +5,7 @@ common: &common
 
 vae:
   <<: *common
-  hidden_sizes: [16]
+  hidden_sizes: [16, 32, 32]
 
 mdnrnn:
   <<: *common

@@ -63,7 +63,7 @@ class NetHackVAE(nn.Module):
     def forward(
         self, inputs: Batch
     ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
-        z, dist = self.encoder(inputs)
+        _, z, dist = self.encoder(inputs)
         reconstructions = self.decoder(z)
         return reconstructions, z, dist
 
@@ -165,7 +165,7 @@ class NetHackEncoder(nn.Module):
 
         # just as in the original obs_net, we only consider the glyphs, the blstats and the egocentric view of the agent
         self.o_dim = self.h_dim * 3
-        # combine all features and output mu and logsigma
+        self.latent_out = nn.Linear(self.o_dim, self.latent_dim).to(device)
         self.fc_mu = nn.Linear(self.o_dim, self.latent_dim).to(device)
         self.fc_logsigma = nn.Linear(self.o_dim, self.latent_dim).to(device)
 
@@ -187,7 +187,7 @@ class NetHackEncoder(nn.Module):
         # )
         # tty_cursor_features = self.tty_cursor_encoder(inputs["tty_cursor"])
 
-        combined = torch.cat(
+        h_combined = torch.cat(
             [
                 spatial_features,
                 egocentric_features,
@@ -200,11 +200,12 @@ class NetHackEncoder(nn.Module):
             dim=1,
         )  # (B, o_dim)
 
-        mu = self.fc_mu(combined)  # (B, latent_dim)
-        logsigma = self.fc_logsigma(combined)  # (B, latent_dim)
+        latent_obs = self.latent_out(h_combined)
+        mu = self.fc_mu(h_combined)  # (B, latent_dim)
+        logsigma = self.fc_logsigma(h_combined)  # (B, latent_dim)
         # it's convenient to have the encoder return z as well
         z, dist = reparameterise(mu, logsigma)  # (B, latent_dim)
-        return z, dist
+        return latent_obs, z, dist
 
     def _observation_data(self, key: str) -> Tuple[int, Tuple[int, ...]]:
         """Extracts the observation data corresponding to a key."""

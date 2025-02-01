@@ -11,8 +11,8 @@ buffers:
 
 training:
   real:
-    max_epoch: 20
-    step_per_epoch: 8000
+    max_epoch: 10
+    step_per_epoch: 10000
     step_per_collect: 1000
     episode_per_test: 5
     batch_size: 64

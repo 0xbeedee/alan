@@ -22,7 +22,10 @@ from core import CorePolicy
 
 
 class PPOBasedPolicy(CorePolicy):
-    """A policy based on Tianshou's PPOPolicy."""
+    """A policy based on Tianshou's PPOPolicy.
+
+    (To use the vanilla PPOPolicy simply one must simply disable all the extra modules at experimentation time.)
+    """
 
     def __init__(
         self,

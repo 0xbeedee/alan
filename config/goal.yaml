@@ -23,5 +23,5 @@ training:
     step_per_collect: 50
     # this needs to be defined to comply with Tianshou's API, even though we do not test in the dream
     episode_per_test: 1
-    batch_size: 5
+    batch_size: 16
     repeat_per_collect: 1

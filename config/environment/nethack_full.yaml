@@ -1,0 +1,11 @@
+base:
+  name: "NetHack-v0"
+
+dream:
+  min_nsteps: 100
+  max_nsteps: 1000
+
+vec:
+  # making these two values different creates problems with SubprocVectorEnv
+  num_envs: 1
+  num_dream_envs: 1

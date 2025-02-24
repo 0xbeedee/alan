@@ -5,7 +5,7 @@ import gymnasium as gym
 import torch
 from torch import nn
 from tianshou.data import VectorReplayBuffer, Collector, EpochStats
-from tianshou.policy import BasePolicy, PPOPolicy
+from tianshou.policy import BasePolicy
 from tianshou.trainer import OnpolicyTrainer, OffpolicyTrainer, OfflineTrainer
 from tianshou.env.venvs import BaseVectorEnv
 from tianshou.utils import TensorboardLogger
@@ -219,15 +219,6 @@ class ExperimentFactory:
                 observation_space=observation_space,
                 action_scaling=action_scaling,
             ),
-            "ppo": lambda: PPOPolicy(
-                actor=act_net,
-                critic=critic_net,
-                optim=optim,
-                action_space=action_space,
-                action_scaling=action_scaling,
-                # continuous action spaces are out of scope for our work
-                dist_fn=_ppo_discrete_dist_fn,
-            ),
         }
 
         policy_name = self.config.get("policy.name")
@@ -300,7 +291,3 @@ class ExperimentFactory:
     ) -> GoalStatsPlotter | VanillaStatsPlotter:
         plt_class = GoalStatsPlotter if self.is_goal_aware else VanillaStatsPlotter
         return plt_class(epoch_stats)
-
-
-def _ppo_discrete_dist_fn(logits: torch.Tensor):
-    return torch.distributions.Categorical(logits=logits)

@@ -9,7 +9,8 @@ def main(
     env_config,
     policy_config,
     obsnet_config,
-    intrinsic_config,
+    intrinsic_fast_config,
+    intrinsic_slow_config,
     model_config,
     device,
 ):
@@ -18,7 +19,8 @@ def main(
         env_config,
         policy_config,
         obsnet_config,
-        intrinsic_config,
+        intrinsic_fast_config,
+        intrinsic_slow_config,
         model_config,
         device,
     )
@@ -70,11 +72,19 @@ if __name__ == "__main__":
         metavar="OBSNET_CONFIG",
     )
     parser.add_argument(
-        "-i",
-        "--intrinsic",
+        "-if",
+        "--intrinsic_fast",
         type=str,
         required=True,
-        help="Name of the intrinsic module config file (without .yaml extension)",
+        help="Name of the fast intrinsic module config file (without .yaml extension)",
+        metavar="INTRINSIC_CONFIG",
+    )
+    parser.add_argument(
+        "-is",
+        "--intrinsic_slow",
+        type=str,
+        required=True,
+        help="Name of the slow intrinsic module config file (without .yaml extension)",
         metavar="INTRINSIC_CONFIG",
     )
     parser.add_argument(
@@ -101,7 +111,8 @@ if __name__ == "__main__":
         args.env,
         args.policy,
         args.obsnet,
-        args.intrinsic,
+        args.intrinsic_fast,
+        args.intrinsic_slow,
         args.model,
         torch.device(args.device),
     )

@@ -144,10 +144,10 @@ class ExperimentFactory:
         slow_intrinsic_map = {"her": HER, "zero_her": ZeroHER}
 
         fast_intrinsic_class = fast_intrinsic_map[
-            self.config.get("intrinsic.fast.name")
+            self.config.get("intrinsic_fast.name")
         ]
         slow_intrinsic_class = slow_intrinsic_map[
-            self.config.get("intrinsic.slow.name")
+            self.config.get("intrinsic_slow.name")
         ]
 
         fast_intrinsic_module = fast_intrinsic_class(
@@ -155,13 +155,13 @@ class ExperimentFactory:
             action_space.n,
             batch_size,
             learning_rate,
-            **self.config.get_except("intrinsic.fast", exclude="name"),
+            **self.config.get_except("intrinsic_fast", exclude="name"),
             device=device,
         )
         slow_intrinsic_module = slow_intrinsic_class(
             obs_net,
             buf,
-            **self.config.get_except("intrinsic.slow", exclude="name"),
+            **self.config.get_except("intrinsic_slow", exclude="name"),
         )
 
         return fast_intrinsic_module, slow_intrinsic_module

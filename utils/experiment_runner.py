@@ -39,7 +39,8 @@ class ExperimentRunner:
         env_config: str,
         policy_config: str,
         obsnet_config: str,
-        intrinsic_config: str,
+        intrinsic_fast_config: str,
+        intrinsic_slow_config: str,
         model_config: str,
         device: torch.device,
     ) -> None:
@@ -47,7 +48,8 @@ class ExperimentRunner:
         self.env_config = env_config
         self.policy_config = policy_config
         self.obsnet_config = obsnet_config
-        self.intrinsic_config = intrinsic_config
+        self.intrinsic_fast_config = intrinsic_fast_config
+        self.intrinsic_slow_config = intrinsic_slow_config
         self.model_config = model_config
         self.device = device
 
@@ -122,7 +124,8 @@ class ExperimentRunner:
                 "environment": self.env_config,
                 "policy": self.policy_config,
                 "obsnet": self.obsnet_config,
-                "intrinsic": self.intrinsic_config,
+                "intrinsic_fast": self.intrinsic_fast_config,
+                "intrinsic_slow": self.intrinsic_slow_config,
                 "model": self.model_config,
             }
         )
@@ -137,7 +140,8 @@ class ExperimentRunner:
                 REC_DIR,
                 self.policy_config,
                 self.obsnet_config,
-                self.intrinsic_config,
+                self.intrinsic_fast_config,
+                self.intrinsic_slow_config,
                 self.is_goal_aware,
                 self.use_kb,
                 self.factory,
@@ -180,7 +184,8 @@ class ExperimentRunner:
             self.env_name,
             self.policy_config,
             self.obsnet_config,
-            self.intrinsic_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
             self.use_kb,
             "goal" if self.is_goal_aware else "vanilla",
         )
@@ -291,7 +296,8 @@ class ExperimentRunner:
             self.env_name,
             self.policy_config,
             self.obsnet_config,
-            self.intrinsic_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
             self.is_goal_aware,
             self.use_kb,
         )
@@ -421,7 +427,8 @@ class ExperimentRunner:
             self.env_name,
             self.policy_config,
             self.obsnet_config,
-            self.intrinsic_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
             self.is_goal_aware,
             self.use_kb,
         )
@@ -451,7 +458,8 @@ class ExperimentRunner:
             self.env_name,
             self.policy_config,
             self.obsnet_config,
-            self.intrinsic_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
             self.is_goal_aware,
             self.use_kb,
             ext="h5",
@@ -466,7 +474,8 @@ def _make_env(
     rec_dir: str,
     policy_config: str,
     obsnet_config: str,
-    intrinsic_config: str,
+    intrinsic_fast_config: str,
+    intrinsic_slow_config: str,
     is_goal_aware: bool,
     use_kb: bool,
     factory: ExperimentFactory,
@@ -483,7 +492,8 @@ def _make_env(
             env_name,
             policy_config,
             obsnet_config,
-            intrinsic_config,
+            intrinsic_fast_config,
+            intrinsic_slow_config,
             is_goal_aware,
             use_kb,
             ext="mp4" if env.render_mode == "rgb_array" else "ttyrec",
@@ -499,7 +509,8 @@ def _make_save_path(
     env_config: str,
     policy_config: str,
     obsnet_config: str,
-    intrinsic_config: str,
+    intrinsic_fast_config: str,
+    intrinsic_slow_config: str,
     is_goal_aware: bool,
     use_kb: bool,
     ext: str | None = None,
@@ -512,7 +523,8 @@ def _make_save_path(
         env_config.lower(),
         policy_config.lower(),
         obsnet_config.lower(),
-        intrinsic_config.lower(),
+        intrinsic_fast_config.lower(),
+        intrinsic_slow_config.lower(),
         "goal" if is_goal_aware else "vanilla",
     ]
     if use_kb:

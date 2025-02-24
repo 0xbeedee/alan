@@ -1,0 +1,4 @@
+name: 'zero_icm'
+hidden_sizes: [1]
+beta: 0.0
+eta: 0.0

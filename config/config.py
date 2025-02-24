@@ -91,5 +91,7 @@ class ConfigManager:
         """Creates a new configuration by merging subconfigs with the base config."""
         for section, subconfig_name in subconfigs.items():
             if subconfig_name:
-                subconfig = self.load_subconfig(subconfig_name, section)
+                subconfig = self.load_subconfig(
+                    subconfig_name, section.replace("_", "/")
+                )
                 self.config = self.merge_configs(self.config, {section: subconfig})

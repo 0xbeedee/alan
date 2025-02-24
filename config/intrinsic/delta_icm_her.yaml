@@ -1,9 +1,0 @@
-fast:
-  name: 'delta_icm'
-  hidden_sizes: [256, 128, 64]
-  beta: 0.2
-  eta: 0.07
-
-slow:
-  name: 'her'
-  horizon: 3

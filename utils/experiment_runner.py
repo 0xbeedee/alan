@@ -68,6 +68,7 @@ class ExperimentRunner:
 
         # use the real batch size by default
         self.batch_size = self.config.get("training.real.batch_size")
+        # use one learning rate for all the neural nets for simplicity
         self.learning_rate = self.config.get("policy.learning_rate")
 
         self.factory = ExperimentFactory(self.config)

@@ -370,54 +370,26 @@ class ExperimentRunner:
             for dream_epoch_stat in self.dream_trainer:
                 self.dream_epoch_stats.append(dream_epoch_stat)
 
-    def _envmodel_is_good(
-        self,
-        epoch_stat: EpochStats,
-        initial_loss_threshold: float = 10.0,
-        alpha: float = 0.98,
-    ) -> bool:
+    def _envmodel_is_good(self, epoch_stat: EpochStats) -> bool:
         """Checks if the environment model is "good", i.e., if it provides an accurate model of the environment.
 
-        Performing this chesk is important because the agent uses the same policy in the dream and the real environment. This means that, if the dream is inaccurate, the agent will act in an inaccurate representation of reality, which might make it quite a bit worse, defeating the whole purpose of dreaming.
+        This check is important because the agent uses the same policy in the dream and the real environments. Hence, if the dream is inaccurate, the agent will act in an inaccurate representation of reality, which will likely hurt performance.
         """
-        if not hasattr(self, "n_epochs"):
-            # keep track of the number of epochs seen
-            self.n_epochs = 0
-        self.n_epochs += 1
-
+        # TODO this check should also accomodate the use of pretrained models (in which case I either skip it, or use a more lenient threshold)
         vae_loss = epoch_stat.training_stat.env_model_stats.vae_loss
         mdnrnn_loss = epoch_stat.training_stat.env_model_stats.mdnrnn_loss
+        # the MDN-RNN loss could be negative due to the GMM component
+        mean_loss = (vae_loss.mean + abs(mdnrnn_loss.mean)) / 2
+        # mean_std = (vae_loss.std + mdnrnn_loss.std) / 2
 
-        if not hasattr(self, "vae_loss_ema"):
-            self.vae_loss_ema = None
-        if not hasattr(self, "mdnrnn_loss_ema"):
-            self.mdnrnn_loss_ema = None
-        if not hasattr(self, "vae_loss_std_ema"):
-            self.vae_loss_std_ema = None
-        if not hasattr(self, "mdnrnn_loss_std_ema"):
-            self.mdnrnn_loss_std_ema = None
-        self.vae_loss_ema = self._update_ema(self.vae_loss_ema, vae_loss.mean)
-        self.mdnrnn_loss_ema = self._update_ema(self.mdnrnn_loss_ema, mdnrnn_loss.mean)
-        self.vae_loss_std_ema = self._update_ema(self.vae_loss_std_ema, vae_loss.std)
-        self.mdnrnn_loss_std_ema = self._update_ema(
-            self.mdnrnn_loss_std_ema, mdnrnn_loss.std
-        )
+        if not hasattr(self, "init_mwm_loss"):
+            # keep track of the initial loss
+            self.init_mwm_loss = mean_loss
 
-        mean_loss = (self.vae_loss_ema + self.mdnrnn_loss_ema) / 2
-        mean_std = (self.vae_loss_std_ema + self.mdnrnn_loss_std_ema) / 2
-
-        # adaptive threshold based on moving averages
-        loss_threshold = initial_loss_threshold * alpha**self.n_epochs
-        if mean_loss > loss_threshold or mean_std > 0.05 * mean_loss:
+        if mean_loss > 0.1 * self.init_mwm_loss:
             return False
 
         return True
-
-    def _update_ema(self, ema_value, new_value, alpha=0.1):
-        """Updates the exponential moving average."""
-        if ema_value is None:
-            return new_value
-        return alpha * new_value + (1 - alpha) * ema_value
 
     def _plot(self, save_pdf: bool = True) -> None:
         """Plots the data.

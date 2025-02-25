@@ -60,6 +60,21 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         self.obs_net = obs_net
         self.beta = beta
 
+    @abstractmethod
+    def _forward(
+        self,
+        batch: ObsBatchProtocol,
+        state: dict | BatchProtocol | np.ndarray | None = None,
+        **kwargs: Any,
+    ) -> ActBatchProtocol | ActStateBatchProtocol:
+        """Carries out the actual computation of the policy's forward() method That is, it computes an action given the current observation and the current hidden state."""
+
+    @abstractmethod
+    def learn(
+        self, batch: GoalBatchProtocol, *args: Any, **kwargs: Any
+    ) -> CoreTrainingStats:
+        """Updates the policy with a given batch of data."""
+
     def forward(
         self,
         batch: ObsBatchProtocol,
@@ -83,15 +98,6 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         result = self._forward(batch, state, **kwargs)
         self._handle_state_(result, state, **kwargs)
         return result
-
-    @abstractmethod
-    def _forward(
-        self,
-        batch: ObsBatchProtocol,
-        state: dict | BatchProtocol | np.ndarray | None = None,
-        **kwargs: Any,
-    ) -> ActBatchProtocol | ActStateBatchProtocol:
-        """Carries out the actual computation of the policy's forward() method That is, it computes an action given the current observation and the current hidden state."""
 
     def process_fn(
         self,

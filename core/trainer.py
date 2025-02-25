@@ -3,7 +3,6 @@ from typing import Callable
 import logging
 from dataclasses import asdict
 
-import torch
 import numpy as np
 import tqdm
 
@@ -328,6 +327,10 @@ class GoalOnpolicyTrainer(OnpolicyTrainer, GoalTrainer):
         # this is also why we do not bother restoring the modified HER reward: reset_buffer() takes care of that for us!
         self.train_collector.reset_buffer(keep_statistics=True)
 
-        self._update_moving_avg_stats_and_log_update_data(training_stat.policy_stats)
+        if training_stat.policy_stats is not None:
+            # policy_stats is None if we're using the random policy
+            self._update_moving_avg_stats_and_log_update_data(
+                training_stat.policy_stats
+            )
 
         return training_stat

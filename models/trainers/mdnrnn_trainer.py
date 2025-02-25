@@ -104,7 +104,7 @@ class MDNRNNTrainer:
         latent_obs_next: torch.Tensor,
     ) -> Dict[str, torch.Tensor]:
         """Computes the losses for the MDNRNN model."""
-        action = action.unsqueeze(1)
+        action = torch.as_tensor(action, device=self.device).unsqueeze(1)
         terminal = torch.as_tensor(terminal, device=self.device).float()
         reward = torch.as_tensor(reward, device=self.device)
 

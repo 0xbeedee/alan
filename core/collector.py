@@ -383,9 +383,8 @@ class GoalCollector(Collector):
                     hidden_state_RH  # save state into buffer through policy attr
                 )
 
+            # the latent_goal will usually be None when using a random policy
             latent_goal_R = act_batch_RA.get("latent_goal", None)
-            if latent_goal_R is None:
-                raise RuntimeError("The latent goals should not be None!")
 
         return (
             latent_last_obs_RO,

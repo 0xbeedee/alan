@@ -40,6 +40,15 @@ from .stats import CoreTrainingStats, EpNStepCollectStats
 TArrLike = Union[np.ndarray, torch.Tensor, Batch, None]
 
 
+class RandomActBatchProtocol(BatchProtocol, Protocol):
+    """A BatchProtocol containing an action.
+
+    Obtained by using a random policy, and usually used for offline training (see the docs for RandomPolicy).
+    """
+
+    act: TArr
+
+
 class LatentObsActNextBatchProtocol(BatchProtocol, Protocol):
     """A BatchProtocol containing a latent observation, an action, and the latent observation after it.
 
@@ -47,7 +56,7 @@ class LatentObsActNextBatchProtocol(BatchProtocol, Protocol):
     """
 
     latent_obs: torch.Tensor
-    act: np.ndarray
+    act: TArr
     latent_obs_next: torch.Tensor
     obs_next: TArr | BatchProtocol
     done: np.ndarray

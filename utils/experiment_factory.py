@@ -26,7 +26,7 @@ from networks import (
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, BBold, ZeroBBold, HER, ZeroHER
 from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
-from policies import PPOBasedPolicy
+from policies import PPOBasedPolicy, RandomPolicy
 from config import ConfigManager
 from core import (
     GoalCollector,
@@ -215,6 +215,14 @@ class ExperimentFactory:
                 act_net=act_net,
                 critic_net=critic_net,
                 optim=optim,
+                action_space=action_space,
+                observation_space=observation_space,
+                action_scaling=action_scaling,
+            ),
+            "random": lambda: RandomPolicy(
+                self_model=self_model,
+                env_model=env_model,
+                obs_net=obs_net,
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,

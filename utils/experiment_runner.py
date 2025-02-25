@@ -174,7 +174,8 @@ class ExperimentRunner:
                 self.test_buf_size, self.num_envs
             )
 
-            if self.use_kb:
+            if self.use_kb and self.policy_config != "random":
+                # use KB if use_kb is True AND we're not using a random policy
                 self._setup_kb_bandit()
             else:
                 self.knowledge_base, self.bandit = None, None

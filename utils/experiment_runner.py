@@ -344,8 +344,8 @@ class ExperimentRunner:
             # __enter__()
             old_fast = self.self_model.fast_intrinsic_module
             old_slow = self.self_model.slow_intrinsic_module
-            # TODO this should also work for BeBold
-            # disable ICM and HER while dreaming
+            # disable the fast and slow intrinsic modules while dreaming
+            # (ZeroICM and ZeroHER work for ANY instrinsic module, because the API is kept constant!)
             self.self_model.fast_intrinsic_module = ZeroICM(
                 self.obs_net.o_dim, self.dream_env.action_space.n, 0
             )

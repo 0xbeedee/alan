@@ -128,8 +128,8 @@ class BasePlotter(ABC):
             alpha=0.3,
         )
 
-    def _plot_empty(self, ax: plt.Axes, title: str) -> None:
-        ax.text(0.5, 0.5, title, ha="center", va="center", transform=ax.transAxes)
+    def _plot_empty(self, ax: plt.Axes) -> None:
+        ax.text(0.5, 0.5, "", ha="center", va="center", transform=ax.transAxes)
         ax.axis("off")
 
     def _set_consistent_x_axis(self, ax: plt.Axes) -> None:

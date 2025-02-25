@@ -37,7 +37,7 @@ from core import (
     CorePolicy,
 )
 from lifelong import VectorKnowledgeBase, TrajectoryBandit
-from utils.plotters import GoalStatsPlotter, VanillaStatsPlotter
+from utils.plotters import GoalStatsPlotter
 
 
 class ExperimentFactory:
@@ -296,6 +296,5 @@ class ExperimentFactory:
     def create_plotter(
         self,
         epoch_stats: EpochStats,
-    ) -> GoalStatsPlotter | VanillaStatsPlotter:
-        plt_class = GoalStatsPlotter if self.is_goal_aware else VanillaStatsPlotter
-        return plt_class(epoch_stats)
+    ) -> GoalStatsPlotter:
+        return GoalStatsPlotter(epoch_stats)

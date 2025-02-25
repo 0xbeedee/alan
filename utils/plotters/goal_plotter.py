@@ -21,15 +21,18 @@ class GoalStatsPlotter(BasePlotter):
 
     def _plot_losses(self, ax: plt.Axes, loss_type: str) -> None:
         losses = self._extract_losses(loss_type)
-        colors = plt.cm.rainbow(np.linspace(0, 1, len(losses)))
+        if not losses:
+            # if the losses are not available, do not include the plot
+            self._plot_empty(ax)
+        else:
+            colors = plt.cm.rainbow(np.linspace(0, 1, len(losses)))
+            for (loss_name, loss_values), color in zip(losses.items(), colors):
+                stds = np.zeros_like(loss_values)  # for backwards compatibility
+                self._plot_with_ci(ax, self.epochs, loss_values, stds, loss_name, color)
 
-        for (loss_name, loss_values), color in zip(losses.items(), colors):
-            stds = np.zeros_like(loss_values)  # for backwards compatibility
-            self._plot_with_ci(ax, self.epochs, loss_values, stds, loss_name, color)
-
-        ax.set_title(f"{loss_type.replace('_', ' ').title()[:-6]} Losses")
-        ax.set_ylabel("Loss")
-        ax.legend()
+            ax.set_title(f"{loss_type.replace('_', ' ').title()[:-6]} Losses")
+            ax.set_ylabel("Loss")
+            ax.legend()
         self._set_consistent_x_axis(ax)
 
     def _extract_losses(self, loss_type: str) -> Dict[str, List[float]]:
@@ -37,7 +40,8 @@ class GoalStatsPlotter(BasePlotter):
         for stats in self.epoch_stats:
             training_stat = self._get_nested_attr(stats, ["training_stat"])
             loss_object = self._get_nested_attr(training_stat, [loss_type])
-            loss_dict = loss_object.get_loss_stats_dict()
-            for loss, value in loss_dict.items():
-                losses[loss].append(value)
+            if loss_object is not None:
+                loss_dict = loss_object.get_loss_stats_dict()
+                for loss, value in loss_dict.items():
+                    losses[loss].append(value)
         return losses

@@ -438,7 +438,7 @@ class ExperimentRunner:
             self.use_kb,
             ext="h5",
         )
-        if self.use_kb:
+        if self.use_kb and self.policy_config != "random":
             self.knowledge_base.save_hdf5(kb_path)
 
 

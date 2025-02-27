@@ -21,10 +21,10 @@ from networks import GoalNetHackActor, GoalNetHackCritic
 from core import CorePolicy
 
 
-class PPOBasedPolicy(CorePolicy):
-    """A policy based on Tianshou's PPOPolicy.
+class GoalPPO(CorePolicy):
+    """A policy based based Tianshou's PPO policy.
 
-    (To use the vanilla PPOPolicy simply one must simply disable all the extra modules at experimentation time.)
+    (To use vanilla PPO one must simply disable all the extra modules at experimentation time.)
     """
 
     def __init__(

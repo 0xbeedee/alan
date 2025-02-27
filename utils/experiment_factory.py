@@ -23,7 +23,7 @@ from networks import (
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, BBold, ZeroBBold, HER, ZeroHER
 from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
-from policies import PPOBasedPolicy, RandomPolicy
+from policies import GoalPPO, RandomPolicy
 from config import ConfigManager
 from core import (
     GoalCollector,
@@ -194,7 +194,7 @@ class ExperimentFactory:
     ) -> CorePolicy:
 
         policy_map = {
-            "ppo_based": lambda: PPOBasedPolicy(
+            "goal_ppo": lambda: GoalPPO(
                 self_model=self_model,
                 env_model=env_model,
                 obs_net=obs_net,

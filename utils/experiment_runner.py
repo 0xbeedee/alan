@@ -70,6 +70,8 @@ class ExperimentRunner:
         self.batch_size = self.config.get("training.real.batch_size")
         # use one learning rate for all the neural nets for simplicity
         self.learning_rate = self.config.get("policy.learning_rate")
+        # the Trainer type depends on the policy
+        self.trainer_type = self.config.get("policy.trainer_type")
 
         self.factory = ExperimentFactory(self.config)
         self.is_goal_aware = self.factory.is_goal_aware
@@ -204,7 +206,7 @@ class ExperimentRunner:
         )
         self.obs_net = self.factory.create_obsnet(self.vae.encoder, self.device)
         # hidden_dim * 2 because we concat (h, c) into a single tensor in the policy.forward()
-        self.actor_net, self.critic_net = self.factory.create_actor_critic(
+        self.policy_nets = self.factory.create_policy_nets(
             self.obs_net, self.mdnrnn.hidden_dim * 2, self.env.action_space, self.device
         )
 
@@ -238,16 +240,18 @@ class ExperimentRunner:
 
     def _setup_policy(self) -> None:
         """Sets up the policy."""
-        assert self.actor_net.obs_net is self.critic_net.obs_net
-        obs_net_params = set(self.actor_net.obs_net.parameters())
+        # (optional) sanity check
+        # assert self.policy_nets[0].obs_net is self.obs_net
+        obs_net_params = self.obs_net.parameters()
 
-        # exclude the obs_net parameters because the obs_net is trained separately
+        # exclude obs_net parameters because obs_net is trained separately
         actor_params = [
-            p for p in self.actor_net.parameters() if p not in obs_net_params
+            p for p in self.policy_nets[0].parameters() if p not in obs_net_params
         ]
         critic_params = [
-            p for p in self.critic_net.parameters() if p not in obs_net_params
+            p for p in self.policy_nets[1].parameters() if p not in obs_net_params
         ]
+        # TODO if I don't use the critic, this just gives me more parameters to train, slowing things down!
         combined_params = actor_params + critic_params
 
         self.optimizer = torch.optim.Adam(combined_params, lr=self.learning_rate)
@@ -255,8 +259,7 @@ class ExperimentRunner:
             self.self_model,
             self.env_model,
             self.obs_net,
-            self.actor_net,
-            self.critic_net,
+            self.policy_nets,
             self.optimizer,
             self.env.action_space,
             self.env.observation_space,
@@ -314,6 +317,7 @@ class ExperimentRunner:
         test_collector = self.dream_test_collector if is_dream else self.test_collector
 
         trainer = self.factory.create_trainer(
+            self.trainer_type,
             self.policy,
             train_collector,
             test_collector,

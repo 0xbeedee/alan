@@ -23,7 +23,7 @@ from networks import (
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, BBold, ZeroBBold, HER, ZeroHER
 from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
-from policies import GoalPPO, RandomPolicy
+from policies import GoalPPO, GoalRainbow, RandomPolicy
 from config import ConfigManager
 from core import (
     GoalCollector,
@@ -100,13 +100,14 @@ class ExperimentFactory:
         # ObsNet is just a wrapper for the VAE encoder
         return ObsNet(vae_encoder=vae_encoder, device=device)
 
-    def create_actor_critic(
+    def create_policy_nets(
         self,
         obs_net: nn.Module,
         state_dim: int,
         action_space: gym.Space,
         device: torch.device,
     ) -> Tuple[GoalNetHackActor, GoalNetHackCritic]:
+        # create both actor and critic for all policies to keep code cleaner
         return GoalNetHackActor(
             obs_net, state_dim, action_space, device=device
         ), GoalNetHackCritic(obs_net, device=device)
@@ -185,8 +186,7 @@ class ExperimentFactory:
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
-        act_net: GoalNetHackActor,
-        critic_net: GoalNetHackCritic,
+        networks: Tuple[nn.Module],
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
         observation_space: gym.Space,
@@ -198,8 +198,8 @@ class ExperimentFactory:
                 self_model=self_model,
                 env_model=env_model,
                 obs_net=obs_net,
-                act_net=act_net,
-                critic_net=critic_net,
+                act_net=networks[0],
+                critic_net=networks[1],
                 optim=optim,
                 action_space=action_space,
                 observation_space=observation_space,
@@ -233,11 +233,11 @@ class ExperimentFactory:
 
     def create_trainer(
         self,
+        trainer_type: str,
         policy: BasePolicy,
         train_collector: GoalCollector,
         test_collector: GoalCollector,
         logger: TensorboardLogger,
-        trainer_type: str = "onpolicy",
         is_dream: bool = False,
     ) -> Union[
         GoalOnpolicyTrainer,

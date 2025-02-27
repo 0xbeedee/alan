@@ -1,2 +1,3 @@
 name: "goal_ppo"
+trainer_type: "onpolicy"
 learning_rate: 3e-4

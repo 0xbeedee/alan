@@ -1,2 +1,3 @@
 name: "random"
+trainer_type: "offline" # TODO this needs testing
 learning_rate: 3e-4

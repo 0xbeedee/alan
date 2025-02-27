@@ -205,6 +205,16 @@ class ExperimentFactory:
                 observation_space=observation_space,
                 action_scaling=action_scaling,
             ),
+            "goal_dqn": lambda: GoalRainbow(
+                self_model=self_model,
+                env_model=env_model,
+                obs_net=obs_net,
+                model=networks[0],
+                optim=optim,
+                action_space=action_space,
+                observation_space=observation_space,
+                action_scaling=action_scaling,
+            ),
             "random": lambda: RandomPolicy(
                 self_model=self_model,
                 env_model=env_model,

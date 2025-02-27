@@ -1,11 +1,12 @@
-from typing import List, Sequence, Tuple, Any, Optional, Callable, TypeVar
-from math import ceil, sqrt
+from typing import List, Sequence, Tuple, Any, Optional, Callable, TypeVar, Dict
+
 
 from tianshou.data import EpochStats
-from abc import ABC, abstractmethod
 
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
+from math import ceil, sqrt
 import seaborn as sns
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -15,7 +16,7 @@ PlotFunction = Callable[[plt.Axes, PlotArgs], None]
 PlotFunctionTuple = Tuple[PlotFunction, Tuple[Any, ...]]
 
 
-class BasePlotter(ABC):
+class Plotter:
     def __init__(self, epoch_stats: List[EpochStats]) -> None:
         self.epoch_stats = epoch_stats
         self.epochs = [stats.epoch for stats in epoch_stats]
@@ -49,9 +50,43 @@ class BasePlotter(ABC):
         if not save_pdf:
             plt.show()
 
-    @abstractmethod
     def _get_plot_functions(self) -> Sequence[PlotFunctionTuple]:
-        """Returns the plot functions to use, i.e., which plots the figure should contain."""
+        return [
+            (self._plot_returns, ("returns",)),
+            (self._plot_returns, ("int_returns",)),
+            (self._plot_losses, ("policy_stats",)),
+            (self._plot_losses, ("self_model_stats",)),
+            (self._plot_losses, ("env_model_stats",)),
+            (self._plot_intra_episodic_returns, ("train",)),
+            (self._plot_intra_episodic_returns, ("test",)),
+        ]
+
+    def _plot_losses(self, ax: plt.Axes, loss_type: str) -> None:
+        losses = self._extract_losses(loss_type)
+        if not losses:
+            # if the losses are not available, do not include the plot
+            self._plot_empty(ax)
+        else:
+            colors = plt.cm.rainbow(np.linspace(0, 1, len(losses)))
+            for (loss_name, loss_values), color in zip(losses.items(), colors):
+                stds = np.zeros_like(loss_values)  # for backwards compatibility
+                self._plot_with_ci(ax, self.epochs, loss_values, stds, loss_name, color)
+
+            ax.set_title(f"{loss_type.replace('_', ' ').title()[:-6]} Losses")
+            ax.set_ylabel("Loss")
+            ax.legend()
+        self._set_consistent_x_axis(ax)
+
+    def _extract_losses(self, loss_type: str) -> Dict[str, List[float]]:
+        losses = defaultdict(list)
+        for stats in self.epoch_stats:
+            training_stat = self._get_nested_attr(stats, ["training_stat"])
+            loss_object = self._get_nested_attr(training_stat, [loss_type])
+            if loss_object is not None:
+                loss_dict = loss_object.get_loss_stats_dict()
+                for loss, value in loss_dict.items():
+                    losses[loss].append(value)
+        return losses
 
     def _set_plot_style(self) -> None:
         plt.style.use("seaborn-v0_8-whitegrid")

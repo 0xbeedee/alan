@@ -4,9 +4,8 @@ from core.types import SelfModelProtocol, EnvModelProtocol
 import gymnasium as gym
 import torch
 from torch import nn
-from tianshou.data import VectorReplayBuffer, Collector, EpochStats
+from tianshou.data import VectorReplayBuffer, EpochStats
 from tianshou.policy import BasePolicy
-from tianshou.trainer import OnpolicyTrainer, OffpolicyTrainer, OfflineTrainer
 from tianshou.env.venvs import BaseVectorEnv
 from tianshou.utils import TensorboardLogger
 
@@ -17,9 +16,7 @@ from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
     ObsNet,
     GoalNetHackActor,
-    SimpleNetHackActor,
     GoalNetHackCritic,
-    SimpleNetHackCritic,
     NetHackVAE,
     DiscreteVAE,
     MDNRNN,
@@ -37,7 +34,7 @@ from core import (
     CorePolicy,
 )
 from lifelong import VectorKnowledgeBase, TrajectoryBandit
-from utils.plotters import GoalStatsPlotter
+from .plotter import Plotter
 
 
 class ExperimentFactory:
@@ -60,11 +57,8 @@ class ExperimentFactory:
             else RecordTTY(wrapped_env, output_path=rec_path)
         )
 
-    def create_buffer(
-        self, buf_size: int, env_num: int
-    ) -> Union[GoalVectorReplayBuffer, VectorReplayBuffer]:
-        buf_class = GoalVectorReplayBuffer if self.is_goal_aware else VectorReplayBuffer
-        return buf_class(buf_size, env_num)
+    def create_buffer(self, buf_size: int, env_num: int) -> GoalVectorReplayBuffer:
+        return GoalVectorReplayBuffer(buf_size, env_num)
 
     def create_knowledge_base_and_bandit(
         self, kb_size: int, env_num: int, kb_path: str
@@ -103,7 +97,7 @@ class ExperimentFactory:
         return vae, mdnrnn
 
     def create_obsnet(self, vae_encoder: nn.Module, device: torch.device) -> nn.Module:
-        # because ObsNet is just a wrapper for the VAE encoder, we need only act on the latter as we switch environments
+        # ObsNet is just a wrapper for the VAE encoder
         return ObsNet(vae_encoder=vae_encoder, device=device)
 
     def create_actor_critic(
@@ -112,18 +106,10 @@ class ExperimentFactory:
         state_dim: int,
         action_space: gym.Space,
         device: torch.device,
-    ) -> Tuple[
-        Union[GoalNetHackActor, SimpleNetHackActor],
-        Union[GoalNetHackCritic, SimpleNetHackCritic],
-    ]:
-        actor_class, critic_class = (
-            (GoalNetHackActor, GoalNetHackCritic)
-            if self.is_goal_aware
-            else (SimpleNetHackActor, SimpleNetHackCritic)
-        )
-        return actor_class(
+    ) -> Tuple[GoalNetHackActor, GoalNetHackCritic]:
+        return GoalNetHackActor(
             obs_net, state_dim, action_space, device=device
-        ), critic_class(obs_net, device=device)
+        ), GoalNetHackCritic(obs_net, device=device)
 
     def create_intrinsic_modules(
         self,
@@ -199,13 +185,13 @@ class ExperimentFactory:
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
-        act_net: Union[GoalNetHackActor, SimpleNetHackActor],
-        critic_net: Union[GoalNetHackCritic, SimpleNetHackCritic],
+        act_net: GoalNetHackActor,
+        critic_net: GoalNetHackCritic,
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
         observation_space: gym.Space,
         action_scaling: bool,
-    ) -> Union[CorePolicy, BasePolicy]:
+    ) -> CorePolicy:
 
         policy_map = {
             "ppo_based": lambda: PPOBasedPolicy(
@@ -237,35 +223,31 @@ class ExperimentFactory:
 
     def create_collector(
         self,
-        policy: Union[CorePolicy, BasePolicy],
+        policy: CorePolicy,
         envs: BaseVectorEnv,
-        buffer: Union[GoalVectorReplayBuffer, VectorReplayBuffer],
+        buffer: GoalVectorReplayBuffer,
         knowledge_base: VectorReplayBuffer | None,
         bandit: TrajectoryBandit | None,
-    ) -> Union[Collector, GoalCollector]:
-        collector_class = GoalCollector if self.is_goal_aware else Collector
-        return collector_class(policy, envs, buffer, knowledge_base, bandit)
+    ) -> GoalCollector:
+        return GoalCollector(policy, envs, buffer, knowledge_base, bandit)
 
     def create_trainer(
         self,
         policy: BasePolicy,
-        train_collector: Union[Collector, GoalCollector],
-        test_collector: Union[Collector, GoalCollector],
+        train_collector: GoalCollector,
+        test_collector: GoalCollector,
         logger: TensorboardLogger,
         trainer_type: str = "onpolicy",
         is_dream: bool = False,
     ) -> Union[
-        OnpolicyTrainer,
-        OffpolicyTrainer,
-        OfflineTrainer,
         GoalOnpolicyTrainer,
         GoalOffpolicyTrainer,
         GoalOfflineTrainer,
     ]:
         trainer_map = {
-            "onpolicy": (OnpolicyTrainer, GoalOnpolicyTrainer),
-            "offpolicy": (OffpolicyTrainer, GoalOffpolicyTrainer),
-            "offline": (OfflineTrainer, GoalOfflineTrainer),
+            "onpolicy": GoalOnpolicyTrainer,
+            "offpolicy": GoalOffpolicyTrainer,
+            "offline": GoalOfflineTrainer,
         }
 
         if trainer_type not in trainer_map:
@@ -273,8 +255,7 @@ class ExperimentFactory:
                 f"Invalid trainer_type: {trainer_type}. Must be one of {list(trainer_map.keys())}"
             )
 
-        standard_trainer, goal_trainer = trainer_map[trainer_type]
-        trainer_class = goal_trainer if self.is_goal_aware else standard_trainer
+        trainer_class = trainer_map[trainer_type]
 
         train_type = "dream" if is_dream else "real"
         common_kwargs = {
@@ -296,5 +277,5 @@ class ExperimentFactory:
     def create_plotter(
         self,
         epoch_stats: EpochStats,
-    ) -> GoalStatsPlotter:
-        return GoalStatsPlotter(epoch_stats)
+    ) -> Plotter:
+        return Plotter(epoch_stats)

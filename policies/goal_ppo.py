@@ -65,16 +65,6 @@ class GoalPPO(CorePolicy):
         # monkey patching is necessary for MPS compatibility
         self.ppo_policy._compute_returns = self._compute_returns
 
-    def learn(
-        self,
-        batch: GoalBatchProtocol,
-        batch_size: int | None,
-        repeat: int,
-        *args: Any,
-        **kwargs: Any,
-    ) -> TPPOTrainingStats:
-        return self.ppo_policy.learn(batch, batch_size, repeat, *args, **kwargs)
-
     def _forward(
         self,
         batch: ObsBatchProtocol,
@@ -87,6 +77,16 @@ class GoalPPO(CorePolicy):
         result = self.ppo_policy.forward(batch, state, **kwargs)
         result.latent_goal = self.latent_goal
         return result
+
+    def learn(
+        self,
+        batch: GoalBatchProtocol,
+        batch_size: int | None,
+        repeat: int,
+        *args: Any,
+        **kwargs: Any,
+    ) -> TPPOTrainingStats:
+        return self.ppo_policy.learn(batch, batch_size, repeat, *args, **kwargs)
 
     def process_fn(
         self,

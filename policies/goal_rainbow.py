@@ -16,7 +16,7 @@ import gymnasium as gym
 
 import torch
 
-from networks import GoalNetHackActor
+from networks import GoalActor
 from core import CorePolicy
 
 
@@ -33,7 +33,7 @@ class GoalRainbow(CorePolicy):
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
         # the actor is precisely equivalent to the DQN model network
-        model: GoalNetHackActor,
+        model: GoalActor,
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
         observation_space: gym.Space | None,

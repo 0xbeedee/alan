@@ -17,7 +17,7 @@ import gymnasium as gym
 
 import torch
 
-from networks import GoalNetHackActor, GoalNetHackCritic
+from networks import GoalActor, GoalCritic
 from core import CorePolicy
 
 
@@ -33,8 +33,8 @@ class GoalPPO(CorePolicy):
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
-        act_net: GoalNetHackActor,
-        critic_net: GoalNetHackCritic,
+        act_net: GoalActor,
+        critic_net: GoalCritic,
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
         observation_space: gym.Space | None,

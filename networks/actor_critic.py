@@ -7,7 +7,7 @@ from torch import nn
 import torch
 
 
-class GoalNetHackActor(nn.Module):
+class GoalActor(nn.Module):
     def __init__(
         self,
         obs_net: nn.Module,
@@ -64,7 +64,7 @@ class GoalNetHackActor(nn.Module):
         return super().to(device)
 
 
-class GoalNetHackCritic(nn.Module):
+class GoalCritic(nn.Module):
     def __init__(
         self,
         obs_net: nn.Module,

@@ -15,8 +15,8 @@ import os
 from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
     ObsNet,
-    GoalNetHackActor,
-    GoalNetHackCritic,
+    GoalActor,
+    GoalCritic,
     NetHackVAE,
     DiscreteVAE,
     MDNRNN,
@@ -106,12 +106,12 @@ class ExperimentFactory:
         state_dim: int,
         action_space: gym.Space,
         device: torch.device,
-    ) -> Tuple[GoalNetHackActor, GoalNetHackCritic]:
+    ) -> Tuple[GoalActor, GoalCritic]:
         is_actor_critic = self.config.get("policy.is_actor_critic")
         # all policies need an actor...
-        actor = GoalNetHackActor(obs_net, state_dim, action_space, device)
+        actor = GoalActor(obs_net, state_dim, action_space, device)
         # ...but not all policies need a critic
-        critic = GoalNetHackCritic(obs_net, device) if is_actor_critic else None
+        critic = GoalCritic(obs_net, device) if is_actor_critic else None
         return actor, critic
 
     def create_intrinsic_modules(
@@ -188,8 +188,8 @@ class ExperimentFactory:
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
-        actor: GoalNetHackActor,
-        critic: GoalNetHackCritic,
+        actor: GoalActor,
+        critic: GoalCritic,
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
         observation_space: gym.Space,

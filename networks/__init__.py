@@ -4,6 +4,6 @@ from .mdnrnn import MDNRNN
 from .observation_net import ObsNet
 
 from .actor_critic import (
-    GoalNetHackActor,
-    GoalNetHackCritic,
+    GoalActor,
+    GoalCritic,
 )

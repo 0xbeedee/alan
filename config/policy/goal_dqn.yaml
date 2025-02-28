@@ -1,3 +1,4 @@
 name: "goal_dqn"
 trainer_type: "offpolicy"
+is_actor_critic: false
 learning_rate: 3e-4

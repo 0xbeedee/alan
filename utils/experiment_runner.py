@@ -206,7 +206,7 @@ class ExperimentRunner:
         )
         self.obs_net = self.factory.create_obsnet(self.vae.encoder, self.device)
         # hidden_dim * 2 because we concat (h, c) into a single tensor in the policy.forward()
-        self.policy_nets = self.factory.create_policy_nets(
+        self.actor, self.critic = self.factory.create_policy_nets(
             self.obs_net, self.mdnrnn.hidden_dim * 2, self.env.action_space, self.device
         )
 
@@ -241,25 +241,27 @@ class ExperimentRunner:
     def _setup_policy(self) -> None:
         """Sets up the policy."""
         # (optional) sanity check
-        # assert self.policy_nets[0].obs_net is self.obs_net
+        # assert self.actor.obs_net is self.obs_net
         obs_net_params = self.obs_net.parameters()
 
         # exclude obs_net parameters because obs_net is trained separately
-        actor_params = [
-            p for p in self.policy_nets[0].parameters() if p not in obs_net_params
-        ]
-        critic_params = [
-            p for p in self.policy_nets[1].parameters() if p not in obs_net_params
-        ]
-        # TODO if I don't use the critic, this just gives me more parameters to train, slowing things down!
-        combined_params = actor_params + critic_params
+        actor_params = [p for p in self.actor.parameters() if p not in obs_net_params]
+        train_params = actor_params
 
-        self.optimizer = torch.optim.Adam(combined_params, lr=self.learning_rate)
+        if self.critic is not None:
+            # only add the critic params if we have a critic
+            critic_params = [
+                p for p in self.critic.parameters() if p not in obs_net_params
+            ]
+            train_params += critic_params
+
+        self.optimizer = torch.optim.Adam(train_params, lr=self.learning_rate)
         self.policy = self.factory.create_policy(
             self.self_model,
             self.env_model,
             self.obs_net,
-            self.policy_nets,
+            self.actor,
+            self.critic,
             self.optimizer,
             self.env.action_space,
             self.env.observation_space,

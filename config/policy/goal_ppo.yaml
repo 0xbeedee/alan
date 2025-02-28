@@ -1,3 +1,4 @@
 name: "goal_ppo"
 trainer_type: "onpolicy"
+is_actor_critic: true
 learning_rate: 3e-4

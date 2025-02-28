@@ -107,10 +107,12 @@ class ExperimentFactory:
         action_space: gym.Space,
         device: torch.device,
     ) -> Tuple[GoalNetHackActor, GoalNetHackCritic]:
-        # create both actor and critic for all policies to keep code cleaner
-        return GoalNetHackActor(
-            obs_net, state_dim, action_space, device=device
-        ), GoalNetHackCritic(obs_net, device=device)
+        is_actor_critic = self.config.get("policy.is_actor_critic")
+        # all policies need an actor...
+        actor = GoalNetHackActor(obs_net, state_dim, action_space, device)
+        # ...but not all policies need a critic
+        critic = GoalNetHackCritic(obs_net, device) if is_actor_critic else None
+        return actor, critic
 
     def create_intrinsic_modules(
         self,
@@ -186,7 +188,8 @@ class ExperimentFactory:
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
-        networks: Tuple[nn.Module],
+        actor: GoalNetHackActor,
+        critic: GoalNetHackCritic,
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
         observation_space: gym.Space,
@@ -198,8 +201,8 @@ class ExperimentFactory:
                 self_model=self_model,
                 env_model=env_model,
                 obs_net=obs_net,
-                act_net=networks[0],
-                critic_net=networks[1],
+                act_net=actor,
+                critic_net=critic,
                 optim=optim,
                 action_space=action_space,
                 observation_space=observation_space,
@@ -209,7 +212,7 @@ class ExperimentFactory:
                 self_model=self_model,
                 env_model=env_model,
                 obs_net=obs_net,
-                model=networks[0],
+                model=actor,
                 optim=optim,
                 action_space=action_space,
                 observation_space=observation_space,

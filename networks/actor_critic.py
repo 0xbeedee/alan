@@ -64,6 +64,25 @@ class GoalActor(nn.Module):
         return super().to(device)
 
 
+class GoalRainbowActor(GoalActor):
+    def __init__(
+        self, obs_net, state_dim, action_space, num_atoms=51, device=torch.device("cpu")
+    ):
+        super().__init__(obs_net, state_dim, action_space, device)
+        self.num_atoms = num_atoms
+
+    def forward(
+        self,
+        batch_obs_goal: GoalBatchProtocol,
+        state: Optional[torch.Tensor] = None,
+        info: Dict = {},
+    ):
+        logits, state = super().forward(batch_obs_goal, state, info)
+        # reshape the logits to match the shape expected by C51
+        # TODO this does not work!!! I think I might need to simply add a further layer for this expansion (or ovewrite the final layer)
+        return logits.view(-1, self.n_actions, self.num_atoms)
+
+
 class GoalCritic(nn.Module):
     def __init__(
         self,

@@ -16,6 +16,7 @@ from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
     ObsNet,
     GoalActor,
+    GoalRainbowActor,
     GoalCritic,
     NetHackVAE,
     DiscreteVAE,
@@ -107,11 +108,19 @@ class ExperimentFactory:
         action_space: gym.Space,
         device: torch.device,
     ) -> Tuple[GoalActor, GoalCritic]:
-        is_actor_critic = self.config.get("policy.is_actor_critic")
-        # all policies need an actor...
-        actor = GoalActor(obs_net, state_dim, action_space, device)
+        policy_config = self.config.get("policy")
+        if policy_config["name"] != "goal_rainbow":
+            # all policies need an actor...
+            actor = GoalActor(obs_net, state_dim, action_space, device)
+        else:
+            # (because Rainbow is distributional, its actor is non-standard)
+            actor = GoalRainbowActor(
+                obs_net, state_dim, action_space, policy_config["num_atoms"], device
+            )
         # ...but not all policies need a critic
-        critic = GoalCritic(obs_net, device) if is_actor_critic else None
+        critic = (
+            GoalCritic(obs_net, device) if policy_config["is_actor_critic"] else None
+        )
         return actor, critic
 
     def create_intrinsic_modules(
@@ -208,7 +217,7 @@ class ExperimentFactory:
                 observation_space=observation_space,
                 action_scaling=action_scaling,
             ),
-            "goal_dqn": lambda: GoalRainbow(
+            "goal_rainbow": lambda: GoalRainbow(
                 self_model=self_model,
                 env_model=env_model,
                 obs_net=obs_net,

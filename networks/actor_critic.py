@@ -21,16 +21,16 @@ class GoalActor(nn.Module):
         self.n_actions = action_space.n
         self.device = device
 
-        hidden_dim = obs_net.o_dim // 3
+        self.hidden_dim = obs_net.o_dim // 3
         self.obs_munet = nn.Sequential(
-            nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU()
+            nn.Linear(obs_net.o_dim, self.hidden_dim), nn.ReLU()
         ).to(device)
         self.goal_munet = nn.Sequential(
-            nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU()
+            nn.Linear(obs_net.o_dim, self.hidden_dim), nn.ReLU()
         ).to(device)
 
         self.final_layer = nn.Linear(
-            hidden_dim + hidden_dim + self.state_dim, self.n_actions
+            self.hidden_dim + self.hidden_dim + self.state_dim, self.n_actions
         ).to(device)
 
     def forward(
@@ -66,10 +66,15 @@ class GoalActor(nn.Module):
 
 class GoalRainbowActor(GoalActor):
     def __init__(
-        self, obs_net, state_dim, action_space, num_atoms=51, device=torch.device("cpu")
+        self, obs_net, state_dim, action_space, n_atoms=51, device=torch.device("cpu")
     ):
         super().__init__(obs_net, state_dim, action_space, device)
-        self.num_atoms = num_atoms
+        self.n_atoms = n_atoms
+        # return logits of dim (B, n_actions * n_atoms)
+        self.final_layer = nn.Linear(
+            self.hidden_dim + self.hidden_dim + self.state_dim,
+            self.n_actions * self.n_atoms,
+        ).to(device)
 
     def forward(
         self,
@@ -78,9 +83,9 @@ class GoalRainbowActor(GoalActor):
         info: Dict = {},
     ):
         logits, state = super().forward(batch_obs_goal, state, info)
-        # reshape the logits to match the shape expected by C51
-        # TODO this does not work!!! I think I might need to simply add a further layer for this expansion (or ovewrite the final layer)
-        return logits.view(-1, self.n_actions, self.num_atoms)
+        # C51 expects tensors of shape (B, n_actions, n_atoms)
+        logits = logits.view(-1, self.n_actions, self.n_atoms)
+        return logits, state
 
 
 class GoalCritic(nn.Module):

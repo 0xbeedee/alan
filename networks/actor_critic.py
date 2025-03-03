@@ -64,30 +64,6 @@ class GoalActor(nn.Module):
         return super().to(device)
 
 
-class GoalRainbowActor(GoalActor):
-    def __init__(
-        self, obs_net, state_dim, action_space, n_atoms=51, device=torch.device("cpu")
-    ):
-        super().__init__(obs_net, state_dim, action_space, device)
-        self.n_atoms = n_atoms
-        # return logits of dim (B, n_actions * n_atoms)
-        self.final_layer = nn.Linear(
-            self.hidden_dim + self.hidden_dim + self.state_dim,
-            self.n_actions * self.n_atoms,
-        ).to(device)
-
-    def forward(
-        self,
-        batch_obs_goal: GoalBatchProtocol,
-        state: Optional[torch.Tensor] = None,
-        info: Dict = {},
-    ):
-        logits, state = super().forward(batch_obs_goal, state, info)
-        # C51 expects tensors of shape (B, n_actions, n_atoms)
-        logits = logits.view(-1, self.n_actions, self.n_atoms)
-        return logits, state
-
-
 class GoalCritic(nn.Module):
     def __init__(
         self,

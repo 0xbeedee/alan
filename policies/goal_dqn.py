@@ -1,13 +1,14 @@
 from typing import Any, Literal
+
 from core.types import (
     GoalBatchProtocol,
     SelfModelProtocol,
     EnvModelProtocol,
 )
 
-from tianshou.data import ReplayBuffer
+from tianshou.data import Batch, ReplayBuffer
 from tianshou.data.types import ObsBatchProtocol
-from tianshou.policy.modelfree.rainbow import RainbowPolicy
+from tianshou.policy.modelfree.dqn import TDQNTrainingStats
 from tianshou.policy.base import TLearningRateScheduler
 
 from torch import nn
@@ -18,12 +19,13 @@ import torch
 
 from networks import GoalActor
 from core import CorePolicy
+from .dqn_prime import DQNPrimePolicy
 
 
-class GoalRainbow(CorePolicy):
-    """A policy based based Tianshou's (DQN) Rainbow policy.
+class GoalDQN(CorePolicy):
+    """A policy based based Tianshou's (double) DQN policy.
 
-    (To use vanilla Rainbow one must simply disable all the extra modules at experimentation time.)
+    (To use vanilla DQN one must simply disable all the extra modules at experimentation time.)
     """
 
     def __init__(
@@ -32,7 +34,6 @@ class GoalRainbow(CorePolicy):
         self_model: SelfModelProtocol,
         env_model: EnvModelProtocol,
         obs_net: nn.Module,
-        # the actor is precisely equivalent to the DQN model network
         model: GoalActor,
         optim: torch.optim.Optimizer,
         action_space: gym.Space,
@@ -40,6 +41,8 @@ class GoalRainbow(CorePolicy):
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
+        target_update_freq: int = 0,
+        is_double: bool = True,
     ) -> None:
         super().__init__(
             self_model=self_model,
@@ -52,23 +55,15 @@ class GoalRainbow(CorePolicy):
             lr_scheduler=lr_scheduler,
         )
 
-        self.rainbow_policy = RainbowPolicy(
+        self.dqn_policy = DQNPrimePolicy(
             model=model,
             optim=optim,
             action_space=action_space,
             observation_space=observation_space,
+            target_update_freq=target_update_freq,
+            is_double=is_double,
             lr_scheduler=lr_scheduler,
         )
-
-    def learn(
-        self,
-        batch: GoalBatchProtocol,
-        batch_size: int | None,
-        repeat: int,
-        *args: Any,
-        **kwargs: Any,
-    ) -> RainbowPolicy:
-        return self.rainbow_policy.learn(batch, batch_size, repeat, *args, **kwargs)
 
     def _forward(
         self,
@@ -79,9 +74,18 @@ class GoalRainbow(CorePolicy):
         # somewhat hacky, but it provides a cleaner interface with Tianshou
         batch.obs["latent_goal"] = self.latent_goal
 
-        result = self.rainbow_policy.forward(batch, state, **kwargs)
+        result = self.dqn_policy.forward(batch, state, **kwargs)
+        result.act = torch.as_tensor(result.act)
         result.latent_goal = self.latent_goal
         return result
+
+    def learn(
+        self,
+        batch: GoalBatchProtocol,
+        *args: Any,
+        **kwargs: Any,
+    ) -> TDQNTrainingStats:
+        return self.dqn_policy.learn(batch, *args, **kwargs)
 
     def process_fn(
         self,
@@ -93,4 +97,4 @@ class GoalRainbow(CorePolicy):
         batch.obs["latent_goal"] = batch.latent_goal
         # one goal per observation
         batch.obs_next["latent_goal"] = batch.latent_goal_next
-        return self.rainbow_policy.process_fn(batch, buffer, indices)
+        return self.dqn_policy.process_fn(batch, buffer, indices)

@@ -24,7 +24,7 @@ from networks import (
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, BBold, ZeroBBold, HER, ZeroHER
 from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
-from policies import GoalPPO, GoalRainbow, RandomPolicy
+from policies import GoalPPO, GoalDQN, RandomPolicy
 from config import ConfigManager
 from core import (
     GoalCollector,
@@ -217,7 +217,7 @@ class ExperimentFactory:
                 observation_space=observation_space,
                 action_scaling=action_scaling,
             ),
-            "goal_rainbow": lambda: GoalRainbow(
+            "goal_dqn": lambda: GoalDQN(
                 self_model=self_model,
                 env_model=env_model,
                 obs_net=obs_net,
@@ -226,6 +226,8 @@ class ExperimentFactory:
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,
+                target_update_freq=self.config.get("policy.target_update_freq"),
+                is_double=self.config.get("policy.is_double"),
             ),
             "random": lambda: RandomPolicy(
                 self_model=self_model,

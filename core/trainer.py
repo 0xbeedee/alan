@@ -273,6 +273,17 @@ class GoalTrainer(BaseTrainer):
 
         return test_stat, stop_fn_flag
 
+    def _sample_and_update(self, buffer: GoalReplayBufferProtocol) -> CoreTrainingStats:
+        """Samples a mini-batch, performs one gradient step, and updates the _gradient_step counter.
+
+        Note that this method is only used in the off-policy case."""
+        self._gradient_step += 1
+        # sample_size=batch_size, so exactly one grads step will be performed
+        # no need to calculate the number of grad steps, like in on-policy case
+        update_stat = self.policy.update(sample_size=self.batch_size, buffer=buffer)
+        self._update_moving_avg_stats_and_log_update_data(update_stat.policy_stats)
+        return update_stat
+
 
 class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
     """Offline trainer that works with goals. It samples mini-batches from buffer and passes them to policy.update().

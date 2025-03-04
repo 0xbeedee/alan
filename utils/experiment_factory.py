@@ -16,7 +16,6 @@ from environments import DictObservation, Resetting, RecordTTY, RecordRGB
 from networks import (
     ObsNet,
     GoalActor,
-    GoalRainbowActor,
     GoalCritic,
     NetHackVAE,
     DiscreteVAE,

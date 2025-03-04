@@ -5,6 +5,5 @@ from .observation_net import ObsNet
 
 from .actor_critic import (
     GoalActor,
-    GoalRainbowActor,
     GoalCritic,
 )

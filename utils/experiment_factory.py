@@ -108,14 +108,8 @@ class ExperimentFactory:
         device: torch.device,
     ) -> Tuple[GoalActor, GoalCritic]:
         policy_config = self.config.get("policy")
-        if policy_config["name"] != "goal_rainbow":
-            # all policies need an actor...
-            actor = GoalActor(obs_net, state_dim, action_space, device)
-        else:
-            # (because Rainbow is distributional, its actor is non-standard)
-            actor = GoalRainbowActor(
-                obs_net, state_dim, action_space, policy_config["num_atoms"], device
-            )
+        # all policies need an actor...
+        actor = GoalActor(obs_net, state_dim, action_space, device)
         # ...but not all policies need a critic
         critic = (
             GoalCritic(obs_net, device) if policy_config["is_actor_critic"] else None

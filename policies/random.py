@@ -2,7 +2,6 @@ from typing import Any, Literal
 from core.types import (
     RandomActBatchProtocol,
     GoalBatchProtocol,
-    GoalReplayBufferProtocol,
     SelfModelProtocol,
     EnvModelProtocol,
 )

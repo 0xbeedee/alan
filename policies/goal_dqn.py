@@ -6,7 +6,7 @@ from core.types import (
     EnvModelProtocol,
 )
 
-from tianshou.data import Batch, ReplayBuffer
+from tianshou.data import ReplayBuffer
 from tianshou.data.types import ObsBatchProtocol
 from tianshou.policy.modelfree.dqn import TDQNTrainingStats
 from tianshou.policy.base import TLearningRateScheduler

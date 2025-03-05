@@ -278,17 +278,10 @@ class ExperimentFactory:
         common_kwargs = {
             "policy": policy,
             "logger": logger,
+            "train_collector": train_collector,
+            "test_collector": test_collector,
             **self.config.get(f"training.{train_type}", {}),
         }
-
-        if trainer_type != "offline":
-            common_kwargs.update(
-                {
-                    "train_collector": train_collector,
-                    "test_collector": test_collector,
-                }
-            )
-
         return trainer_class(**common_kwargs)
 
     def create_plotter(

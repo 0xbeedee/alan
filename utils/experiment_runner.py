@@ -103,6 +103,9 @@ class ExperimentRunner:
         self.epoch_stats, self.dream_epoch_stats = [], []
         for epoch_stat in self.trainer:
             self.epoch_stats.append(epoch_stat)
+            if self.policy_config == "random":
+                # no dreaming when using a random policy
+                continue
             if self._envmodel_is_good(epoch_stat):
                 # only run the dream if we have a good enough model of the environment
                 self._run_dream()
@@ -278,7 +281,7 @@ class ExperimentRunner:
                 knowledge_base=None,  # the KB only collects from the real env
                 bandit=None,
             )
-            # only test in the real environment, need set test_collector to None to skip the Trainer's test_step()
+            # only test in the real environment, set test_collector to None to skip the Trainer's test_step()
             self.dream_test_collector = None
         else:
             self.train_collector = self.factory.create_collector(

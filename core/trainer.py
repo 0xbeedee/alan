@@ -1,3 +1,4 @@
+from pyparsing import col
 from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
 from typing import Callable
 import logging
@@ -286,13 +287,25 @@ class GoalTrainer(BaseTrainer):
 
 
 class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
-    """Offline trainer that works with goals. It samples mini-batches from buffer and passes them to policy.update().
-
-    This implementation is the same as Tianshou's OfflineTrainer. This class exists for conceptual consistency.
-    """
+    """Offline trainer that works with goals. It samples mini-batches from buffer and passes them to policy.update()."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def policy_update_fn(
+        self,
+        collect_stats: CollectStatsBase | None = None,
+    ) -> CoreTrainingStats | None:
+        """Perform one off-line policy update."""
+        if hasattr(self.policy, "is_random"):
+            is_policy_random = getattr(self.policy, "is_random")
+            if is_policy_random:
+                # we're using the random policy
+                training_stat = self.policy.update(
+                    sample_size=self.batch_size, buffer=self.train_collector.buffer
+                )
+                return training_stat
+        OfflineTrainer.policy_update_fn(collect_stats)
 
 
 class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):

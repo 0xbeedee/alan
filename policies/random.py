@@ -46,6 +46,8 @@ class RandomPolicy(CorePolicy):
             action_bound_method=action_bound_method,
             lr_scheduler=lr_scheduler,
         )
+        # needed by the OfflineTrainer
+        self.is_random = True
 
     def _forward(
         self,
@@ -58,8 +60,6 @@ class RandomPolicy(CorePolicy):
     def learn(
         self,
         batch: GoalBatchProtocol,
-        batch_size: int | None,
-        repeat: int,
         *args: Any,
         **kwargs: Any,
     ) -> None:

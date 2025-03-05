@@ -1,4 +1,4 @@
 name: "random"
-trainer_type: "offline" # TODO this needs testing
+trainer_type: "offline"
 is_actor_critic: false
 learning_rate: 3e-4

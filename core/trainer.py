@@ -1,4 +1,3 @@
-from pyparsing import col
 from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
 from typing import Callable
 import logging

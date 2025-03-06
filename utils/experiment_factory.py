@@ -78,7 +78,12 @@ class ExperimentFactory:
         bandit = TrajectoryBandit(knowledge_base)
         return knowledge_base, bandit
 
-    def create_vae_mdnrnn(self, observation_space: gym.Space, device: torch.device):
+    def create_vae_mdnrnn(
+        self,
+        observation_space: gym.Space,
+        device: torch.device,
+        weights_path: str | None = None,
+    ):
         vae_map = {
             "nethack": NetHackVAE,
             "discrete": DiscreteVAE,
@@ -94,6 +99,35 @@ class ExperimentFactory:
             **self.config.get("obsnet.mdnrnn"),
             device=device,
         )
+
+        if weights_path:
+            # load the weights from the specified path
+            dt = "%d%m%Y-%H%M%S"
+            for f in os.listdir(weights_path):
+                if "vae" in f:
+                    valid_vae_weights = [(f, datetime.strptime(f.split("_")[0], dt))]
+                if "mdnrnn" in f:
+                    valid_mdnrnn_weights = [(f, datetime.strptime(f.split("_")[0], dt))]
+
+            if valid_vae_weights:
+                # we have valid VAE weights
+                latest_vae_weights = max(valid_vae_weights, key=lambda x: x[1])[0]
+                vae.load_state_dict(
+                    torch.load(
+                        os.path.join(weights_path, latest_vae_weights),
+                        weights_only=True,
+                    )
+                )
+            if valid_mdnrnn_weights:
+                # we have valid MDNRNN weights
+                latest_mdnrnn_weights = max(valid_mdnrnn_weights, key=lambda x: x[1])[0]
+                mdnrnn.load_state_dict(
+                    torch.load(
+                        os.path.join(weights_path, latest_mdnrnn_weights),
+                        weights_only=True,
+                    )
+                )
+
         return vae, mdnrnn
 
     def create_obsnet(self, vae_encoder: nn.Module, device: torch.device) -> nn.Module:

@@ -29,7 +29,8 @@ ART_DIR = "artefacts"
 LOG_DIR = f"{ART_DIR}/logs"
 PLOT_DIR = f"{ART_DIR}/plots"
 REC_DIR = f"{ART_DIR}/recs"
-KB_DIR = f"{ART_DIR}/kbs"
+KB_DIR = f"{ART_DIR}/kbs"  # knowledge bases
+WEIGHTS_DIR = f"{ART_DIR}/weights"  # NN weights
 
 
 class ExperimentRunner:
@@ -57,6 +58,11 @@ class ExperimentRunner:
         self.env_name = self.config.get("environment.base.name")
         self.num_envs = self.config.get("environment.vec.num_envs")
         self.num_dream_envs = self.config.get("environment.vec.num_dream_envs")
+
+        # using saved weights or not is an env-related question
+        self.use_saved_weights = self.config.get("environment.use_saved_weights")
+        # TODO adjust lr et al. if using finetuning!
+        self.use_finetuning = self.config.get("environment.use_finetuning")
 
         self.train_buf_size = self.config.get("buffers.train_buf_size")
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
@@ -119,6 +125,11 @@ class ExperimentRunner:
         if self.persist_kb:
             print("[+] Saving the knowledge base...")
             self._save_kb()
+
+        # TODO perhaps allow for the possibility of saving model weights even if the policy is not random?
+        if self.policy_config == "random":
+            print("[+] Saving the weights of the environment model...")
+            self._save_envmodel_weights()
 
         print("[+] All done!")
 
@@ -195,6 +206,7 @@ class ExperimentRunner:
             self.intrinsic_slow_config,
             self.use_kb,
             "goal" if self.is_goal_aware else "vanilla",
+            return_base_path=True,
         )
         self.knowledge_base, self.bandit = (
             self.factory.create_knowledge_base_and_bandit(
@@ -204,8 +216,23 @@ class ExperimentRunner:
 
     def _setup_networks(self) -> None:
         """Sets up the observation, actor, and critic networks."""
+        weights_path = None
+        if self.use_saved_weights:
+            weights_path = _make_save_path(
+                WEIGHTS_DIR,
+                self.env_name,
+                self.policy_config,
+                self.obsnet_config,
+                self.intrinsic_fast_config,
+                self.intrinsic_slow_config,
+                self.use_kb,
+                "goal" if self.is_goal_aware else "vanilla",
+                return_base_path=True,
+            )
         self.vae, self.mdnrnn = self.factory.create_vae_mdnrnn(
-            self.env.observation_space, self.device
+            self.env.observation_space,
+            self.device,
+            weights_path=weights_path,
         )
         self.obs_net = self.factory.create_obsnet(self.vae.encoder, self.device)
         # hidden_dim * 2 because we concat (h, c) into a single tensor in the policy.forward()
@@ -450,6 +477,35 @@ class ExperimentRunner:
         if self.use_kb and self.policy_config != "random":
             self.knowledge_base.save_hdf5(kb_path)
 
+    def _save_envmodel_weights(self) -> None:
+        """Saves the Knowledge Base to the artefacts."""
+        vae_weights_path = _make_save_path(
+            WEIGHTS_DIR,
+            self.env_name,
+            self.policy_config,
+            self.obsnet_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
+            self.is_goal_aware,
+            self.use_kb,
+            filename="vae",
+            ext="pth",
+        )
+        mdnrnn_weights_path = _make_save_path(
+            WEIGHTS_DIR,
+            self.env_name,
+            self.policy_config,
+            self.obsnet_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
+            self.is_goal_aware,
+            self.use_kb,
+            filename="mdnrnn",
+            ext="pth",
+        )
+        torch.save(self.policy.env_model.vae.state_dict(), vae_weights_path)
+        torch.save(self.policy.env_model.mdnrnn.state_dict(), mdnrnn_weights_path)
+
 
 def _make_env(
     env_name: str,
@@ -496,12 +552,14 @@ def _make_save_path(
     intrinsic_slow_config: str,
     is_goal_aware: bool,
     use_kb: bool,
+    return_base_path: bool | None = None,
+    filename: str | None = None,
     ext: str | None = None,
 ) -> str:
     """Creates a path to save the artefacts (plots, recordings, and logs)."""
     timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
 
-    sub_path = [
+    base_path = [
         base_path,
         env_config.lower(),
         policy_config.lower(),
@@ -512,9 +570,18 @@ def _make_save_path(
     ]
     if use_kb:
         # add an extra directory to the path
-        sub_path.append("kb")
+        base_path.append("kb")
 
-    save_path = os.path.join(*sub_path, f"{timestamp}.{ext}" if ext else timestamp)
+    if return_base_path:
+        # useful for loading the KB and the model weights
+        return os.path.join(*base_path)
+
+    save_file = f"{timestamp}"
+    if filename:
+        save_file += f"_{filename}"
+    if ext:
+        save_file += f".{ext}"
+    save_path = os.path.join(*base_path, save_file)
     # create the directory if it doesn't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     return save_path

@@ -1,3 +1,5 @@
+use_saved_weights: true
+
 base:
   name: "FrozenLake-v1"
   render_mode: "rgb_array"

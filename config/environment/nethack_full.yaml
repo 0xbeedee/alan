@@ -1,3 +1,5 @@
+use_saved_weights: true
+
 base:
   name: "NetHack-v0"
 

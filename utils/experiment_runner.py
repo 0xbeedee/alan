@@ -30,7 +30,7 @@ LOG_DIR = f"{ART_DIR}/logs"
 PLOT_DIR = f"{ART_DIR}/plots"
 REC_DIR = f"{ART_DIR}/recs"
 KB_DIR = f"{ART_DIR}/kbs"  # knowledge bases
-WEIGHTS_DIR = f"{ART_DIR}/weights"  # NN weights
+WEIGHTS_DIR = f"{ART_DIR}/weights"  # envmodel weights
 
 
 class ExperimentRunner:
@@ -61,7 +61,6 @@ class ExperimentRunner:
 
         # using saved weights or not is an env-related question
         self.use_saved_weights = self.config.get("environment.use_saved_weights")
-        # TODO adjust lr et al. if using finetuning!
         self.use_finetuning = self.config.get("environment.use_finetuning")
 
         self.train_buf_size = self.config.get("buffers.train_buf_size")
@@ -229,11 +228,14 @@ class ExperimentRunner:
                 "goal" if self.is_goal_aware else "vanilla",
                 return_base_path=True,
             )
-        self.vae, self.mdnrnn = self.factory.create_vae_mdnrnn(
+        self.vae, self.mdnrnn, is_pretrained = self.factory.create_vae_mdnrnn(
             self.env.observation_space,
             self.device,
             weights_path=weights_path,
         )
+        # freeze world model if using pre-traind weights AND no fine-tuning
+        self.freeze_envmodel = is_pretrained and not self.use_finetuning
+
         self.obs_net = self.factory.create_obsnet(self.vae.encoder, self.device)
         # hidden_dim * 2 because we concat (h, c) into a single tensor in the policy.forward()
         self.actor, self.critic = self.factory.create_policy_nets(
@@ -243,7 +245,13 @@ class ExperimentRunner:
     def _setup_models(self) -> None:
         """Sets up the environment model and the self model."""
         self.vae_trainer, self.mdnrnn_trainer = self.factory.create_envmodel_trainers(
-            self.vae, self.mdnrnn, self.batch_size, self.learning_rate, self.device
+            self.vae,
+            self.mdnrnn,
+            self.batch_size,
+            self.learning_rate,
+            self.device,
+            self.use_finetuning,
+            self.freeze_envmodel,
         )
         self.env_model = EnvModel(
             self.vae,
@@ -411,7 +419,10 @@ class ExperimentRunner:
 
         This check is important because the agent uses the same policy in the dream and the real environments. Hence, if the dream is inaccurate, the agent will act in an inaccurate representation of reality, which will likely hurt performance.
         """
-        # TODO this check should also accomodate the use of pretrained models (in which case I either skip it, or use a more lenient threshold)
+        if self.freeze_envmodel:
+            # if using a purely pretrained model, assume that it's good
+            return True
+
         vae_loss = epoch_stat.training_stat.env_model_stats.vae_loss
         mdnrnn_loss = epoch_stat.training_stat.env_model_stats.mdnrnn_loss
         # the MDN-RNN loss could be negative due to the GMM component
@@ -422,7 +433,11 @@ class ExperimentRunner:
             # keep track of the initial loss
             self.init_mwm_loss = mean_loss
 
-        if mean_loss > 0.1 * self.init_mwm_loss:
+        thresh = 0.1
+        if self.use_finetuning:
+            # use a more lenient threshold for model quality if fine-tuning
+            thresh = 0.3
+        if mean_loss > thresh * self.init_mwm_loss:
             return False
 
         return True

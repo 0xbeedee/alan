@@ -83,7 +83,7 @@ class ExperimentFactory:
         observation_space: gym.Space,
         device: torch.device,
         weights_path: str | None = None,
-    ):
+    ) -> Tuple[Union[NetHackVAE, DiscreteVAE], MDNRNN, bool]:
         vae_map = {
             "nethack": NetHackVAE,
             "discrete": DiscreteVAE,
@@ -100,6 +100,8 @@ class ExperimentFactory:
             device=device,
         )
 
+        is_pretrained_vae = False
+        is_pretrained_mdnrnn = False
         if weights_path:
             # load the weights from the specified path
             dt = "%d%m%Y-%H%M%S"
@@ -111,6 +113,7 @@ class ExperimentFactory:
 
             if valid_vae_weights:
                 # we have valid VAE weights
+                is_pretrained_vae = True
                 latest_vae_weights = max(valid_vae_weights, key=lambda x: x[1])[0]
                 vae.load_state_dict(
                     torch.load(
@@ -120,6 +123,7 @@ class ExperimentFactory:
                 )
             if valid_mdnrnn_weights:
                 # we have valid MDNRNN weights
+                is_pretrained_mdnrnn = True
                 latest_mdnrnn_weights = max(valid_mdnrnn_weights, key=lambda x: x[1])[0]
                 mdnrnn.load_state_dict(
                     torch.load(
@@ -128,7 +132,7 @@ class ExperimentFactory:
                     )
                 )
 
-        return vae, mdnrnn
+        return vae, mdnrnn, is_pretrained_vae and is_pretrained_mdnrnn
 
     def create_obsnet(self, vae_encoder: nn.Module, device: torch.device) -> nn.Module:
         # ObsNet is just a wrapper for the VAE encoder
@@ -198,7 +202,9 @@ class ExperimentFactory:
         batch_size: int,
         learning_rate: float,
         device: torch.device,
-    ) -> Tuple[nn.Module, nn.Module]:
+        use_finetuning: bool = False,
+        freeze_envmodel: bool = False,
+    ) -> Tuple[Union[NetHackVAETrainer, DiscreteVAETrainer], MDNRNNTrainer]:
         vae_trainer_map = {
             "nethack": NetHackVAETrainer,
             "discrete": DiscreteVAETrainer,
@@ -206,7 +212,12 @@ class ExperimentFactory:
 
         vae_trainer_class = vae_trainer_map[self.config.get("obsnet.name")]
         vae_trainer = vae_trainer_class(
-            vae, batch_size, learning_rate=learning_rate, device=device
+            vae,
+            batch_size,
+            learning_rate=learning_rate,
+            device=device,
+            use_finetuning=use_finetuning,
+            freeze_envmodel=freeze_envmodel,
         )
 
         mdnrnn_trainer = MDNRNNTrainer(
@@ -215,6 +226,8 @@ class ExperimentFactory:
             batch_size,
             learning_rate=learning_rate,
             device=device,
+            use_finetuning=use_finetuning,
+            freeze_envmodel=freeze_envmodel,
         )
 
         return vae_trainer, mdnrnn_trainer

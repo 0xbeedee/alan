@@ -24,19 +24,29 @@ class MDNRNNTrainer:
         learning_rate: float = 1e-3,
         alpha: float = 0.9,
         device: torch.device = torch.device("cpu"),
+        use_finetuning: bool = False,
+        freeze_envmodel: bool = False,
     ):
         self.mdnrnn = mdnrnn.to(device)
         self.vae = vae.to(device)
+        self.batch_size = batch_size
+        self.device = device
+        self.use_finetuning = use_finetuning
+        self.freeze_envmodel = freeze_envmodel
 
-        self.optimizer = torch.optim.RMSprop(
-            self.mdnrnn.parameters(), lr=learning_rate, alpha=alpha
-        )
+        if self.use_finetuning:
+            # TODO this is a rather naive approach, and possibly unfit for stochasstic envs (like NetHack)
+            # reduce the learning rate to make new experience less influential
+            self.optimizer = torch.optim.RMSprop(
+                self.mdnrnn.parameters(), lr=learning_rate / 10, alpha=alpha
+            )
+        else:
+            self.optimizer = torch.optim.RMSprop(
+                self.mdnrnn.parameters(), lr=learning_rate, alpha=alpha
+            )
         self.scheduler = ReduceLROnPlateau(
             self.optimizer, "min", factor=0.5, patience=5
         )
-
-        self.batch_size = batch_size
-        self.device = device
 
     def train(self, data: Batch | ReplayBuffer) -> Tuple[
         SequenceSummaryStats,
@@ -45,7 +55,10 @@ class MDNRNNTrainer:
         SequenceSummaryStats,
     ]:
         """Trains the MDNRNN model for one epoch."""
-        # train for one epoch only because we expect to accumulate plenty of data over the agent's lifetime
+        if self.freeze_envmodel:
+            # no training needed
+            return None, None, None, None
+
         losses_summary, gmm_losses_summary, bce_losses_summary, mse_losses_summary = (
             self._data_pass(data)
         )

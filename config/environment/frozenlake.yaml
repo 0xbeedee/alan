@@ -1,4 +1,5 @@
 use_saved_weights: true
+use_finetuning: false
 
 base:
   name: "FrozenLake-v1"

@@ -19,13 +19,24 @@ class VAETrainer:
         learning_rate: float = 1e-3,
         kl_weight: float = 1.0,
         device: torch.device = torch.device("cpu"),
+        use_finetuning: bool = False,
+        freeze_envmodel: bool = False,
     ) -> None:
         self.vae = vae.to(device)
         self.batch_size = batch_size
         self.kl_weight = kl_weight
         self.device = device
+        self.use_finetuning = use_finetuning
+        self.freeze_envmodel = freeze_envmodel
 
-        self.optimizer = torch.optim.Adam(self.vae.parameters(), lr=learning_rate)
+        if self.use_finetuning:
+            # TODO this is a rather naive approach, and possibly unfit for stochasstic envs (like NetHack)
+            # reduce the learning rate to make new experience less influential
+            self.optimizer = torch.optim.Adam(
+                self.vae.parameters(), lr=learning_rate / 10
+            )
+        else:
+            self.optimizer = torch.optim.Adam(self.vae.parameters(), lr=learning_rate)
         self.scheduler = ReduceLROnPlateau(
             self.optimizer, "min", factor=0.5, patience=5
         )
@@ -40,6 +51,10 @@ class VAETrainer:
         self, data: Batch
     ) -> Tuple[SequenceSummaryStats, SequenceSummaryStats, SequenceSummaryStats]:
         """Trains the VAE for one epoch."""
+        if self.freeze_envmodel:
+            # no training needed
+            return None, None, None
+
         losses_summary, recon_losses_summary, kl_losses_summary = self._data_pass(data)
         self.scheduler.step(losses_summary.mean)
         return losses_summary, recon_losses_summary, kl_losses_summary

@@ -102,7 +102,7 @@ class ExperimentFactory:
 
         is_pretrained_vae = False
         is_pretrained_mdnrnn = False
-        if weights_path:
+        if weights_path and os.path.exists(weights_path):
             # load the weights from the specified path
             dt = "%d%m%Y-%H%M%S"
             for f in os.listdir(weights_path):

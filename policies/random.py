@@ -4,8 +4,9 @@ from core.types import (
     GoalBatchProtocol,
     SelfModelProtocol,
     EnvModelProtocol,
+    GoalReplayBufferProtocol,
 )
-
+from core.stats import CoreTrainingStats
 from tianshou.data.types import ObsBatchProtocol
 from tianshou.data.batch import Batch, BatchProtocol
 from tianshou.policy.base import TLearningRateScheduler
@@ -75,3 +76,12 @@ class RandomPolicy(CorePolicy):
         result.act = torch.tensor([self.action_space.sample()])
 
         return result
+    
+    def update(
+        self,
+        sample_size: int | None,
+        buffer: GoalReplayBufferProtocol | None,
+        **kwargs: Any,
+    ) -> CoreTrainingStats:
+        # no update for random policy
+        return CoreTrainingStats(policy_stats=None, self_model_stats=None, env_model_stats=None)

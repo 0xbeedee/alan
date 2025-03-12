@@ -297,14 +297,13 @@ class GoalOfflineTrainer(OfflineTrainer, GoalTrainer):
     ) -> CoreTrainingStats | None:
         """Perform one off-line policy update."""
         if hasattr(self.policy, "is_random"):
-            is_policy_random = getattr(self.policy, "is_random")
-            if is_policy_random:
-                # we're using the random policy
-                training_stat = self.policy.update(
-                    sample_size=self.batch_size, buffer=self.train_collector.buffer
-                )
-                return training_stat
-        OfflineTrainer.policy_update_fn(collect_stats)
+            # need to pass through the update for correct statistics logging
+            training_stat = self.policy.update(
+                sample_size=self.batch_size, buffer=self.train_collector.buffer
+            )
+            return training_stat
+        else:
+            return OfflineTrainer.policy_update_fn(collect_stats)
 
 
 class GoalOffpolicyTrainer(OffpolicyTrainer, GoalTrainer):

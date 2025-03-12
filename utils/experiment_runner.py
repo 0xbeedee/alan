@@ -67,9 +67,9 @@ class ExperimentRunner:
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
         self.test_buf_size = self.config.get("buffers.test_buf_size")
 
-        self.use_kb = self.config.get("use_kb")
-        self.persist_kb = self.config.get("save_kb")
-        self.kb_size = self.config.get("buffers.kb_size")
+        self.use_kb = self.config.get("use_kb", False)
+        self.persist_kb = self.config.get("save_kb", False)
+        self.kb_size = self.config.get("buffers.kb_size", 0)
 
         # use the real batch size by default
         self.batch_size = self.config.get("training.real.batch_size")
@@ -99,8 +99,9 @@ class ExperimentRunner:
         print("[+] Setting up the trainer...")
         self._setup_trainer(is_dream=False)
 
-        print("[+] Weaving the dream...")
-        self._setup_dream()
+        if self.policy_config != "random":
+            print("[+] Weaving the dream...")
+            self._setup_dream()
 
     def run(self, save_pdf_plot: bool = True) -> None:
         """Runs the experiment and collects epoch statistics."""
@@ -112,8 +113,12 @@ class ExperimentRunner:
                 # no dreaming when using a random policy
                 continue
             if self._envmodel_is_good(epoch_stat):
-                # only run the dream if we have a good enough model of the environment
-                self._run_dream()
+                if self.policy_config != "random":
+                    # only run the dream if env model is good (and not using a random policy)
+                    self._run_dream()
+                else:
+                    print("[+] Environment model is good enough. Stopping training prematurely.")
+                    break
 
         print("\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot...")
         self._plot(save_pdf=save_pdf_plot)
@@ -423,15 +428,7 @@ class ExperimentRunner:
             # if using a purely pretrained model, assume that it's good
             return True
 
-        vae_loss = epoch_stat.training_stat.env_model_stats.vae_loss
-        mdnrnn_loss = epoch_stat.training_stat.env_model_stats.mdnrnn_loss
-        # the MDN-RNN loss could be negative due to the GMM component
-        mean_loss = (vae_loss.mean + abs(mdnrnn_loss.mean)) / 2
-        # mean_std = (vae_loss.std + mdnrnn_loss.std) / 2
-
-        if not hasattr(self, "init_mwm_loss"):
-            # keep track of the initial loss
-            self.init_mwm_loss = mean_loss
+        mean_loss = self._calculate_mean_loss(epoch_stat)
 
         thresh = 0.1
         if self.use_finetuning:
@@ -441,6 +438,19 @@ class ExperimentRunner:
             return False
 
         return True
+
+    def _calculate_mean_loss(self, epoch_stat: EpochStats) -> float:
+        """Calculates the mean loss of the environment model."""
+        vae_loss = epoch_stat.training_stat.env_model_stats.vae_loss
+        mdnrnn_loss = epoch_stat.training_stat.env_model_stats.mdnrnn_loss
+        # the MDN-RNN loss could be negative due to the GMM component
+        mean_loss = (vae_loss.mean + abs(mdnrnn_loss.mean)) / 2
+
+        if not hasattr(self, "init_mwm_loss"):
+            # keep track of the initial loss
+            self.init_mwm_loss = mean_loss
+
+        return mean_loss
 
     def _plot(self, save_pdf: bool = True) -> None:
         """Plots the data.

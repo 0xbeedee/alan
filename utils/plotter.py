@@ -69,6 +69,7 @@ class Plotter:
         else:
             colors = plt.cm.rainbow(np.linspace(0, 1, len(losses)))
             for (loss_name, loss_values), color in zip(losses.items(), colors):
+                loss_name = loss_name.replace('_', ' ')
                 stds = np.zeros_like(loss_values)  # for backwards compatibility
                 self._plot_with_ci(ax, self.epochs, loss_values, stds, loss_name, color)
 
@@ -109,12 +110,13 @@ class Plotter:
             returns, returns_std = self._extract_data(
                 [f"{collect_type}_collect_stat", f"{returns_type}_stat"]
             )
+            collect_type = collect_type.replace('_', ' ')
             self._plot_with_ci(
                 ax_,
                 self.epochs,
                 returns,
                 returns_std,
-                f"{collect_type}",
+                collect_type,
                 colours[idx],
             )
 
@@ -154,6 +156,7 @@ class Plotter:
         color: Any,
     ) -> None:
         """Adds confidence intervals to the provided data."""
+        label = label.replace('_', ' ')
         ax.plot(x, y, label=label, color=color, linewidth=2)
         ax.fill_between(
             x,

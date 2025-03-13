@@ -3,7 +3,7 @@ save_kb: false
 is_goal_aware: true
 
 buffers:
-  train_buf_size: 10000
+  train_buf_size: 100000
   test_buf_size: 1
 
 training:

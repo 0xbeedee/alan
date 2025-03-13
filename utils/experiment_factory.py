@@ -44,7 +44,7 @@ class ExperimentFactory:
         self.config = config
         self.is_goal_aware = config.get("is_goal_aware")
 
-    def wrap_env(self, env: gym.Env, rec_path: str) -> gym.Env:
+    def wrap_env(self, env: gym.Env, rec_path: str | None = None) -> gym.Env:
         wrapped_env = None
         if isinstance(env.observation_space, gym.spaces.Discrete):
             wrapped_env = DictObservation(env)

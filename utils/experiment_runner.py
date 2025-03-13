@@ -2,6 +2,7 @@ from typing import Generator
 from contextlib import contextmanager
 from datetime import datetime
 import os
+import pickle
 
 import torch
 import gymnasium as gym
@@ -31,6 +32,7 @@ PLOT_DIR = f"{ART_DIR}/plots"
 REC_DIR = f"{ART_DIR}/recs"
 KB_DIR = f"{ART_DIR}/kbs"  # knowledge bases
 WEIGHTS_DIR = f"{ART_DIR}/weights"  # envmodel weights
+BUFFER_DIR = f"{ART_DIR}/buffers"  # training buffer
 
 
 class ExperimentRunner:
@@ -116,24 +118,25 @@ class ExperimentRunner:
                 if self.policy_config != "random":
                     # only run the dream if env model is good (and not using a random policy)
                     self._run_dream()
-                else:
-                    print("[+] Environment model is good enough. Stopping training prematurely.")
-                    break
-
-        print("\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot...")
-        self._plot(save_pdf=save_pdf_plot)
-
-        print("[+] Recording a rollout...")
-        self._record_rollout()
 
         if self.persist_kb:
             print("[+] Saving the knowledge base...")
             self._save_kb()
 
-        # TODO perhaps allow for the possibility of saving model weights even if the policy is not random?
+        if self.policy_config != "random":
+            print(
+                "\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot..."
+            )
+            self._plot(save_pdf=save_pdf_plot)
+
+            print("[+] Recording a rollout...")
+            self._record_rollout()
+
         if self.policy_config == "random":
-            print("[+] Saving the weights of the environment model...")
-            self._save_envmodel_weights()
+            print("[+] Saving training buffer transitions...")
+            self._save_training_buffer()
+            # print("[+] Saving the weights of the environment model...")
+            # self._save_envmodel_weights()
 
         print("[+] All done!")
 
@@ -452,6 +455,22 @@ class ExperimentRunner:
 
         return mean_loss
 
+    def _save_training_buffer(self) -> None:
+        """Saves the transitions collected in the training buffer."""
+        buffer_path = _make_save_path(
+            BUFFER_DIR,
+            self.env_name,
+            self.policy_config,
+            self.obsnet_config,
+            self.intrinsic_fast_config,
+            self.intrinsic_slow_config,
+            self.is_goal_aware,
+            self.use_kb,
+            filename="buffer",
+            ext="pkl",
+        )
+        pickle.dump(self.train_collector.buffer, open(buffer_path, "wb"))
+
     def _plot(self, save_pdf: bool = True) -> None:
         """Plots the data.
 
@@ -502,34 +521,34 @@ class ExperimentRunner:
         if self.use_kb and self.policy_config != "random":
             self.knowledge_base.save_hdf5(kb_path)
 
-    def _save_envmodel_weights(self) -> None:
-        """Saves the Knowledge Base to the artefacts."""
-        vae_weights_path = _make_save_path(
-            WEIGHTS_DIR,
-            self.env_name,
-            self.policy_config,
-            self.obsnet_config,
-            self.intrinsic_fast_config,
-            self.intrinsic_slow_config,
-            self.is_goal_aware,
-            self.use_kb,
-            filename="vae",
-            ext="pth",
-        )
-        mdnrnn_weights_path = _make_save_path(
-            WEIGHTS_DIR,
-            self.env_name,
-            self.policy_config,
-            self.obsnet_config,
-            self.intrinsic_fast_config,
-            self.intrinsic_slow_config,
-            self.is_goal_aware,
-            self.use_kb,
-            filename="mdnrnn",
-            ext="pth",
-        )
-        torch.save(self.policy.env_model.vae.state_dict(), vae_weights_path)
-        torch.save(self.policy.env_model.mdnrnn.state_dict(), mdnrnn_weights_path)
+    # def _save_envmodel_weights(self) -> None:
+    #     """Saves the Knowledge Base to the artefacts."""
+    #     vae_weights_path = _make_save_path(
+    #         WEIGHTS_DIR,
+    #         self.env_name,
+    #         self.policy_config,
+    #         self.obsnet_config,
+    #         self.intrinsic_fast_config,
+    #         self.intrinsic_slow_config,
+    #         self.is_goal_aware,
+    #         self.use_kb,
+    #         filename="vae",
+    #         ext="pth",
+    #     )
+    #     mdnrnn_weights_path = _make_save_path(
+    #         WEIGHTS_DIR,
+    #         self.env_name,
+    #         self.policy_config,
+    #         self.obsnet_config,
+    #         self.intrinsic_fast_config,
+    #         self.intrinsic_slow_config,
+    #         self.is_goal_aware,
+    #         self.use_kb,
+    #         filename="mdnrnn",
+    #         ext="pth",
+    #     )
+    #     torch.save(self.policy.env_model.vae.state_dict(), vae_weights_path)
+    #     torch.save(self.policy.env_model.mdnrnn.state_dict(), mdnrnn_weights_path)
 
 
 def _make_env(

@@ -29,7 +29,6 @@ class NetHackVAETrainer(VAETrainer):
     ):
         """Computes the cross-entropy loss, the MSE loss and the KLD loss, depending on the various parts of the observation."""
         recon_loss = 0.0
-        total_elements = 0
 
         # egocentric_view is not part of the vanilla env observations, so we need to compute its ground truth here (using the encoder's Crop instance)
         inputs["egocentric_view"] = enc_crop(
@@ -44,7 +43,6 @@ class NetHackVAETrainer(VAETrainer):
                 ).long()  # (B, H, W)
                 loss = F.cross_entropy(logits, target, reduction="mean")
                 recon_loss += loss
-                total_elements += 1
 
         for key in self.vae.continuous_keys:
             if key in reconstructions:
@@ -52,8 +50,6 @@ class NetHackVAETrainer(VAETrainer):
                 target = torch.as_tensor(inputs[key], device=self.device).float()
                 loss = F.mse_loss(recon, target, reduction="mean")
                 recon_loss += loss
-                total_elements += 1
-        recon_loss /= total_elements
 
         kl_loss = self._compute_kl_loss(dist, z)
 

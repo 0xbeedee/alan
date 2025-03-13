@@ -75,10 +75,14 @@ class NetHackVAE(nn.Module):
         for key, recon in recons.items():
             if key in self.categorical_keys:
                 # the second dim is only useful for internal purposes
-                recon = torch.argmax(recon, dim=1)
+                recon = (
+                    torch.argmax(recon, dim=1)
+                    if recon.dim() > 3
+                    else torch.argmax(recon, dim=0)
+                )
             if is_dream:
                 # the first dimension is always 1 when dreaming
-                recon = recon.squeeze()
+                recon = recon.squeeze(0) if recon.dim() > 1 else recon
             observation[key] = recon
 
         return observation

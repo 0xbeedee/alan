@@ -100,11 +100,11 @@ def train_envmodel(
         buffer = pickle.load(f)
     logger.info(f"Loaded buffer with {len(buffer)} transitions from {buffer_path}")
 
-    # split data into train and test sets
-    idxs = np.random.permutation(buffer.sample_indices(0))
-    split_idx = int(len(idxs) * (1 - test_split))
-    train_idxs = idxs[:split_idx]
-    test_idxs = idxs[split_idx:]
+    # temporal order is important for RNN training
+    total_indices = buffer.sample_indices(0)
+    split_idx = int(len(total_indices) * (1 - test_split))
+    train_idxs = total_indices[:split_idx]
+    test_idxs = total_indices[split_idx:]
     train_buffer = buffer[train_idxs]
     test_buffer = buffer[test_idxs]
     logger.info(
@@ -139,18 +139,27 @@ def train_envmodel(
         train_stats = env_model.learn(train_buffer)
         train_vae_loss = train_stats.vae_loss.mean
         train_mdnrnn_loss = train_stats.mdnrnn_loss.mean
-        train_mean_loss = (train_vae_loss + abs(train_mdnrnn_loss)) / 2
+        train_mdnrnn_gmm_loss = train_stats.mdnrnn_gmm_loss.mean
+        train_mdnrnn_bce_loss = train_stats.mdnrnn_bce_loss.mean
+        train_mdnrnn_mse_loss = train_stats.mdnrnn_mse_loss.mean
+        train_mean_loss = (train_vae_loss + train_mdnrnn_loss) / 2
 
         test_stats = env_model.evaluate(test_buffer)
         test_vae_loss = test_stats.vae_loss.mean
         test_mdnrnn_loss = test_stats.mdnrnn_loss.mean
-        test_mean_loss = (test_vae_loss + abs(test_mdnrnn_loss)) / 2
+        test_mdnrnn_gmm_loss = test_stats.mdnrnn_gmm_loss.mean
+        test_mdnrnn_bce_loss = test_stats.mdnrnn_bce_loss.mean
+        test_mdnrnn_mse_loss = test_stats.mdnrnn_mse_loss.mean
+        test_mean_loss = (test_vae_loss + test_mdnrnn_loss) / 2
 
         train_history.append(
             {
                 "epoch": epoch + 1,
                 "vae_loss": train_vae_loss,
                 "mdnrnn_loss": train_mdnrnn_loss,
+                "mdnrnn_gmm_loss": train_mdnrnn_gmm_loss,
+                "mdnrnn_bce_loss": train_mdnrnn_bce_loss,
+                "mdnrnn_mse_loss": train_mdnrnn_mse_loss,
                 "mean_loss": train_mean_loss,
             }
         )
@@ -159,6 +168,9 @@ def train_envmodel(
                 "epoch": epoch + 1,
                 "vae_loss": test_vae_loss,
                 "mdnrnn_loss": test_mdnrnn_loss,
+                "mdnrnn_gmm_loss": test_mdnrnn_gmm_loss,
+                "mdnrnn_bce_loss": test_mdnrnn_bce_loss,
+                "mdnrnn_mse_loss": test_mdnrnn_mse_loss,
                 "mean_loss": test_mean_loss,
             }
         )
@@ -167,8 +179,12 @@ def train_envmodel(
 
         logger.info(
             f"Epoch {epoch + 1}/{max_epochs} ({epoch_time:.2f}s) | "
-            f"Train: VAE={train_vae_loss:.4f}, MDNRNN={train_mdnrnn_loss:.4f}, Mean={train_mean_loss:.4f} | "
-            f"Test: VAE={test_vae_loss:.4f}, MDNRNN={test_mdnrnn_loss:.4f}, Mean={test_mean_loss:.4f}"
+            f"Train: VAE={train_vae_loss:.4f}, MDNRNN={train_mdnrnn_loss:.4f} "
+            f"(GMM={train_mdnrnn_gmm_loss:.4f}, BCE={train_mdnrnn_bce_loss:.4f}, MSE={train_mdnrnn_mse_loss:.4f}) "
+            f"Mean={train_mean_loss:.4f} | "
+            f"Test: VAE={test_vae_loss:.4f}, MDNRNN={test_mdnrnn_loss:.4f} "
+            f"(GMM={test_mdnrnn_gmm_loss:.4f}, BCE={test_mdnrnn_bce_loss:.4f}, MSE={test_mdnrnn_mse_loss:.4f}) "
+            f"Mean={test_mean_loss:.4f}"
         )
 
         # save if test loss improved
@@ -253,40 +269,69 @@ def plot_training_history(history: Dict[str, Any], save_path: str) -> None:
 
     epochs = [entry["epoch"] for entry in train_data]
 
-    fig, axes = plt.subplots(3, 1, figsize=(10, 15), sharex=True)
+    _, axes = plt.subplots(4, 1, figsize=(10, 20), sharex=True)
 
-    # mean loss
+    # VAE loss
     axes[0].plot(
-        epochs, [entry["mean_loss"] for entry in train_data], "b-", label="Train"
+        epochs, [entry["vae_loss"] for entry in train_data], "b-", label="Train"
     )
-    axes[0].plot(
-        epochs, [entry["mean_loss"] for entry in test_data], "r-", label="Test"
-    )
-    axes[0].set_ylabel("Mean Loss")
+    axes[0].plot(epochs, [entry["vae_loss"] for entry in test_data], "r-", label="Test")
+    axes[0].set_ylabel("VAE Loss")
     axes[0].set_title("Training Progress")
     axes[0].legend()
     axes[0].grid(True)
 
-    # VAE loss
+    # GMM loss
     axes[1].plot(
-        epochs, [entry["vae_loss"] for entry in train_data], "b-", label="Train"
+        epochs,
+        [entry["mdnrnn_gmm_loss"] for entry in train_data],
+        "b-",
+        label="Train",
     )
-    axes[1].plot(epochs, [entry["vae_loss"] for entry in test_data], "r-", label="Test")
-    axes[1].set_ylabel("VAE Loss")
+    axes[1].plot(
+        epochs,
+        [entry["mdnrnn_gmm_loss"] for entry in test_data],
+        "r-",
+        label="Test",
+    )
+    axes[1].set_ylabel("GMM Loss")
     axes[1].legend()
     axes[1].grid(True)
 
-    # MDNRNN loss
+    # BCE loss
     axes[2].plot(
-        epochs, [entry["mdnrnn_loss"] for entry in train_data], "b-", label="Train"
+        epochs,
+        [entry["mdnrnn_bce_loss"] for entry in train_data],
+        "b-",
+        label="Train",
     )
     axes[2].plot(
-        epochs, [entry["mdnrnn_loss"] for entry in test_data], "r-", label="Test"
+        epochs,
+        [entry["mdnrnn_bce_loss"] for entry in test_data],
+        "r-",
+        label="Test",
     )
-    axes[2].set_xlabel("Epoch")
-    axes[2].set_ylabel("MDNRNN Loss")
+    axes[2].set_ylabel("BCE Loss")
     axes[2].legend()
     axes[2].grid(True)
+
+    # MSE loss
+    axes[3].plot(
+        epochs,
+        [entry["mdnrnn_mse_loss"] for entry in train_data],
+        "b-",
+        label="Train",
+    )
+    axes[3].plot(
+        epochs,
+        [entry["mdnrnn_mse_loss"] for entry in test_data],
+        "r-",
+        label="Test",
+    )
+    axes[3].set_xlabel("Epoch")
+    axes[3].set_ylabel("MSE Loss")
+    axes[3].legend()
+    axes[3].grid(True)
 
     plt.tight_layout()
     plt.savefig(save_path)
@@ -299,7 +344,6 @@ def save_model_summary(history: Dict[str, Any], save_dir: str, timestamp: str) -
     test_data = history["test"]
     config = history["config"]
 
-    # Find best test epoch
     best_test_epoch = min(test_data, key=lambda x: x["mean_loss"])
     best_train_epoch = min(train_data, key=lambda x: x["mean_loss"])
 

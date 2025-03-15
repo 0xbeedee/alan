@@ -1,10 +1,9 @@
 import os
 import pickle
-import numpy as np
 import logging
 import time
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Literal
 import matplotlib.pyplot as plt
 
 import torch
@@ -30,6 +29,9 @@ logger = logging.getLogger("envmodel_trainer")
 
 
 def train_envmodel(
+    env_name: Literal[
+        "frozenlake", "nethack", "nethack_score", "nethack_gold"
+    ] = "frozenlake",
     batch_size: int = 64,
     learning_rate: float = 1e-3,
     max_epochs: int = 10,
@@ -40,15 +42,20 @@ def train_envmodel(
     """Train the environment model using offline data."""
     start_time = time.time()
     logger.info(
-        f"Starting environment model training with params: batch_size={batch_size}, "
+        f"Starting environment model training with params: env={env_name}, batch_size={batch_size}, "
         f"lr={learning_rate}, epochs={max_epochs}, patience={patience}, device={device}"
     )
 
     # setup
     base_conf_path = "config/vanilla_offline.yaml"
-    env_name = "frozenlake"
     policy_config = "random"
-    obsnet_config = "discrete"
+
+    # Set environment-specific configurations
+    if env_name == "frozenlake":
+        obsnet_config = "discrete"
+    else:  # nethack variants
+        obsnet_config = "nethack"
+
     intrinsic_fast_config = "zero_icm"
     intrinsic_slow_config = "zero_her"
     is_goal_aware = True
@@ -215,13 +222,14 @@ def train_envmodel(
         "train": train_history,
         "test": test_history,
         "config": {
+            "env_name": env_name,
             "batch_size": batch_size,
             "learning_rate": learning_rate,
             "max_epochs": max_epochs,
             "test_split": test_split,
             "patience": patience,
             "device": str(device),
-            "env_name": full_env_name,
+            "full_env_name": full_env_name,
             "buffer_path": buffer_path,
         },
     }
@@ -338,7 +346,7 @@ def plot_training_history(history: Dict[str, Any], save_path: str) -> None:
     plt.close()
 
 
-def save_model_summary(history: Dict[str, Any], save_dir: str, timestamp: str) -> None:
+def save_model_summary(history: Dict[str, Any], save_dir: str, timestamp: str) -> str:
     """Save a summary of the model's performance."""
     train_data = history["train"]
     test_data = history["test"]
@@ -376,7 +384,12 @@ def save_model_summary(history: Dict[str, Any], save_dir: str, timestamp: str) -
 
 if __name__ == "__main__":
     # using hardcoded parameters makes for simpler debugging
+    # Change this to the environment you want to train on
+    # Options: "frozenlake", "nethack", "nethack_score", "nethack_gold"
+    env_name = "frozenlake"
+
     train_envmodel(
+        env_name=env_name,
         batch_size=64,
         learning_rate=1e-3,
         max_epochs=10,

@@ -58,7 +58,6 @@ def train_envmodel(
 
     intrinsic_fast_config = "zero_icm"
     intrinsic_slow_config = "zero_her"
-    is_goal_aware = True
     device = torch.device(device)
 
     config_manager = ConfigManager(base_conf_path)
@@ -100,7 +99,6 @@ def train_envmodel(
         obsnet_config,
         intrinsic_fast_config,
         intrinsic_slow_config,
-        "goal" if is_goal_aware else "vanilla",
     )
     buffer_path = find_most_recent_buffer(buffer_dir=buffer_base_path)
     with open(buffer_path, "rb") as f:
@@ -125,7 +123,6 @@ def train_envmodel(
         obsnet_config,
         intrinsic_fast_config,
         intrinsic_slow_config,
-        "goal" if is_goal_aware else "vanilla",
     )
     os.makedirs(save_dir, exist_ok=True)
 

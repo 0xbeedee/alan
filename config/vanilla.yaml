@@ -1,9 +1,8 @@
 use_kb: true
 save_kb: true
-is_goal_aware: true
 
 buffers:
-  train_buf_size: 10000
+  train_buf_size: 100000
   test_buf_size: 1
   kb_size: 20000
 
@@ -11,9 +10,9 @@ buffers:
 
 training:
   real:
-    max_epoch: 5
-    step_per_epoch: 1000
-    step_per_collect: 100
+    max_epoch: 10
+    step_per_epoch: 10000
+    step_per_collect: 1000
     episode_per_test: 1
     batch_size: 64
     repeat_per_collect: 1

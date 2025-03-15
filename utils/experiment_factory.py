@@ -42,7 +42,6 @@ class ExperimentFactory:
 
     def __init__(self, config: ConfigManager):
         self.config = config
-        self.is_goal_aware = config.get("is_goal_aware")
 
     def wrap_env(self, env: gym.Env, rec_path: str | None = None) -> gym.Env:
         wrapped_env = None

@@ -81,7 +81,6 @@ class ExperimentRunner:
         self.trainer_type = self.config.get("policy.trainer_type")
 
         self.factory = ExperimentFactory(self.config)
-        self.is_goal_aware = self.factory.is_goal_aware
 
     def setup(self) -> None:
         print("[+] Setting up the environments...")
@@ -166,7 +165,6 @@ class ExperimentRunner:
                 self.obsnet_config,
                 self.intrinsic_fast_config,
                 self.intrinsic_slow_config,
-                self.is_goal_aware,
                 self.use_kb,
                 self.factory,
             )
@@ -212,7 +210,6 @@ class ExperimentRunner:
             self.intrinsic_fast_config,
             self.intrinsic_slow_config,
             self.use_kb,
-            "goal" if self.is_goal_aware else "vanilla",
             return_base_path=True,
         )
         self.knowledge_base, self.bandit = (
@@ -233,7 +230,6 @@ class ExperimentRunner:
                 self.intrinsic_fast_config,
                 self.intrinsic_slow_config,
                 self.use_kb,
-                "goal" if self.is_goal_aware else "vanilla",
                 return_base_path=True,
             )
         self.vae, self.mdnrnn, is_pretrained = self.factory.create_vae_mdnrnn(
@@ -351,7 +347,6 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_fast_config,
             self.intrinsic_slow_config,
-            self.is_goal_aware,
             self.use_kb,
         )
         self.writer = SummaryWriter(os.path.split(self.log_path)[0])
@@ -464,7 +459,6 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_fast_config,
             self.intrinsic_slow_config,
-            self.is_goal_aware,
             self.use_kb,
             filename="buffer",
             ext="pkl",
@@ -483,7 +477,6 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_fast_config,
             self.intrinsic_slow_config,
-            self.is_goal_aware,
             self.use_kb,
         )
 
@@ -514,7 +507,6 @@ class ExperimentRunner:
             self.obsnet_config,
             self.intrinsic_fast_config,
             self.intrinsic_slow_config,
-            self.is_goal_aware,
             self.use_kb,
             ext="h5",
         )
@@ -530,7 +522,6 @@ class ExperimentRunner:
     #         self.obsnet_config,
     #         self.intrinsic_fast_config,
     #         self.intrinsic_slow_config,
-    #         self.is_goal_aware,
     #         self.use_kb,
     #         filename="vae",
     #         ext="pth",
@@ -542,7 +533,6 @@ class ExperimentRunner:
     #         self.obsnet_config,
     #         self.intrinsic_fast_config,
     #         self.intrinsic_slow_config,
-    #         self.is_goal_aware,
     #         self.use_kb,
     #         filename="mdnrnn",
     #         ext="pth",
@@ -559,7 +549,6 @@ def _make_env(
     obsnet_config: str,
     intrinsic_fast_config: str,
     intrinsic_slow_config: str,
-    is_goal_aware: bool,
     use_kb: bool,
     factory: ExperimentFactory,
 ):
@@ -577,7 +566,6 @@ def _make_env(
             obsnet_config,
             intrinsic_fast_config,
             intrinsic_slow_config,
-            is_goal_aware,
             use_kb,
             ext="mp4" if env.render_mode == "rgb_array" else "ttyrec",
         )
@@ -594,7 +582,6 @@ def _make_save_path(
     obsnet_config: str,
     intrinsic_fast_config: str,
     intrinsic_slow_config: str,
-    is_goal_aware: bool,
     use_kb: bool,
     return_base_path: bool | None = None,
     filename: str | None = None,
@@ -610,7 +597,6 @@ def _make_save_path(
         obsnet_config.lower(),
         intrinsic_fast_config.lower(),
         intrinsic_slow_config.lower(),
-        "goal" if is_goal_aware else "vanilla",
     ]
     if use_kb:
         # add an extra directory to the path

@@ -30,7 +30,7 @@ logger = logging.getLogger("envmodel_trainer")
 
 def train_envmodel(
     env_name: Literal[
-        "frozenlake", "nethack", "nethack_score", "nethack_gold"
+        "frozenlake", "nethack_full", "nethack_score", "nethack_gold"
     ] = "frozenlake",
     batch_size: int = 64,
     learning_rate: float = 1e-3,
@@ -47,7 +47,7 @@ def train_envmodel(
     )
 
     # setup
-    base_conf_path = "config/vanilla_offline.yaml"
+    base_conf_path = "config/offline.yaml"
     policy_config = "random"
 
     # Set environment-specific configurations
@@ -381,13 +381,12 @@ def save_model_summary(history: Dict[str, Any], save_dir: str, timestamp: str) -
 
 if __name__ == "__main__":
     # using hardcoded parameters makes for simpler debugging
-    # Change this to the environment you want to train on
-    # Options: "frozenlake", "nethack", "nethack_score", "nethack_gold"
-    env_name = "frozenlake"
+    # options: "frozenlake", "nethack_full", "nethack_score", "nethack_gold"
+    env_name = "nethack_full"
 
     train_envmodel(
         env_name=env_name,
-        batch_size=64,
+        batch_size=32,
         learning_rate=1e-3,
         max_epochs=10,
         test_split=0.2,

@@ -47,6 +47,7 @@ class MDNRNNTrainer:
         self.scheduler = ReduceLROnPlateau(
             self.optimizer, "min", factor=0.5, patience=5
         )
+        self.max_grad_norm = 1.0  # gradient clipping threshold
 
     def train(self, data: Batch | ReplayBuffer) -> Tuple[
         SequenceSummaryStats,
@@ -90,6 +91,9 @@ class MDNRNNTrainer:
                 latent_obs, batch.act, batch.rew, batch.done, latent_obs_next
             )
             loss_dict["loss"].backward()
+
+            # gradient clipping to stabilise training
+            torch.nn.utils.clip_grad_norm_(self.mdnrnn.parameters(), self.max_grad_norm)
             self.optimizer.step()
 
             losses.append(loss_dict["loss"].item())
@@ -125,10 +129,10 @@ class MDNRNNTrainer:
 
         gmm = gmm_loss(latent_obs_next, mus, sigmas, logpi)
         bce = F.binary_cross_entropy_with_logits(ds, terminal)
-
-        latent_size = latent_obs.shape[1]
         mse = F.mse_loss(rs, reward)
-        scale = latent_size + 2
 
+        # scale the losses to be comparable
+        latent_size = latent_obs.shape[1]
+        scale = latent_size + 2
         loss = (gmm + bce + mse) / scale
         return {"gmm": gmm, "bce": bce, "mse": mse, "loss": loss}

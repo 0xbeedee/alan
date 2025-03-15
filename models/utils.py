@@ -13,7 +13,6 @@ def sample_mdn(mus: torch.Tensor, sigmas: torch.Tensor, logpi: torch.Tensor):
     mixture_model = MixtureSameFamily(
         mixture_distribution=mixture_dist, component_distribution=component_dist
     )
-
     z = mixture_model.sample()  # (batch_size, latent_dim)
     return mixture_model, z
 
@@ -29,9 +28,9 @@ def gmm_loss(
 
     More precisely, it computes minus the log probability of the batch under the GMM model described by mus, sigmas and pi.
     """
+    # to improve numerical stability
+    sigmas = torch.clamp(sigmas, min=1e-6)
     gmm, _ = sample_mdn(mus, sigmas, logpi)
-
-    # log probability of the batch under the GMM
     log_prob = gmm.log_prob(batch)
     if reduce:
         return -torch.mean(log_prob)

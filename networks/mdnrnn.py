@@ -29,25 +29,63 @@ class MDNRNN(nn.Module):
         self.n_gaussian_comps: int = n_gaussian_comps
         self.device = device
 
+        # initialize RNN with proper hidden state initialization
+        self.rnn_cell = nn.LSTMCell(latent_dim + action_dim, hidden_dim).to(device)
+        self.hidden = None
+
         # outputs parameters for the Gaussian Mixture Model (GMM)
-        self.gmm_linear = nn.Linear(
-            hidden_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2
+        self.gmm_linear = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.LayerNorm(hidden_dim // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim // 2, (2 * latent_dim + 1) * n_gaussian_comps + 2),
         ).to(device)
 
-        self.rnn_cell = nn.LSTMCell(latent_dim + action_dim, hidden_dim).to(device)
+        self._init_weights()
+
+    def _init_weights(self):
+        """Initialize network weights with proper scaling."""
+        for name, param in self.named_parameters():
+            if "weight" in name and len(param.shape) >= 2:
+                nn.init.orthogonal_(param, gain=1.0)
+            elif "bias" in name:
+                nn.init.constant_(param, 0)
+            elif "weight" in name and len(param.shape) == 1:
+                nn.init.constant_(param, 1.0)
+
+    def reset_hidden(self, batch_size: int = 1):
+        """Reset the hidden state of the RNN."""
+        self.hidden = (
+            torch.zeros(batch_size, self.hidden_dim, device=self.device),
+            torch.zeros(batch_size, self.hidden_dim, device=self.device),
+        )
 
     def forward(
         self,
         actions: torch.Tensor,
         latents: torch.Tensor,
         hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-        tau: float = 1.0,
+        tau: float = 0.1,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Performs a forward pass through the MDNRNN for multiple time steps."""
-        outs, hidden = self.pass_through_rnn(actions, latents, hidden=hidden)
+        """Performs a forward pass through the MDNRNN for a single time step."""
+        batch_size = latents.shape[0]
 
-        bs = latents.shape[0]  # batch size
-        mus, sigmas, logpi, rs, ds = self._compute_gmm_parameters(outs, bs, tau=tau)
+        if hidden is None:
+            if self.hidden is None or self.hidden[0].shape[0] != batch_size:
+                self.reset_hidden(batch_size)
+            hidden = self.hidden
+
+        outs, hidden = self.pass_through_rnn(actions, latents, hidden=hidden)
+        self.hidden = hidden  # store the hidden state
+
+        mus, sigmas, logpi, rs, ds = self._compute_gmm_parameters(
+            outs, batch_size, tau=tau
+        )
 
         return mus, sigmas, logpi, rs, ds, (outs, hidden)
 
@@ -57,22 +95,30 @@ class MDNRNN(nn.Module):
         latents: torch.Tensor,
         hidden: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Pass inputs through the RNN cell."""
+        batch_size = latents.shape[0]
+
+        if hidden is None:
+            if self.hidden is None or self.hidden[0].shape[0] != batch_size:
+                self.reset_hidden(batch_size)
+            hidden = self.hidden
+
         ins = torch.cat(
             [actions, latents], dim=1
         )  # (batch_dim, action_dim + latent_dim)
-        # h_t = hidden state at time t, c_t = cell state at time t
         h_t, c_t = self.rnn_cell(ins, hx=hidden)  # each (batch_dim, hidden_dim)
-
+        self.hidden = (h_t, c_t)
         return h_t, c_t
 
     def _compute_gmm_parameters(
-        self, rnn_outs: torch.Tensor, bs: int, tau: float = 1.0
+        self, rnn_outs: torch.Tensor, bs: int, tau: float = 0.1
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Compute GMM parameters from RNN outputs."""
         gmm_outs = self.gmm_linear(
             rnn_outs
         )  # (batch_dim, (2 * latent_dim + 1) * n_gaussian_comps + 2)
 
-        # to separate the GMM parameters
+        # to separate the parameters
         stride = self.n_gaussian_comps * self.latent_dim
 
         mus = gmm_outs[:, :stride].contiguous()  # (batch_dim, stride)

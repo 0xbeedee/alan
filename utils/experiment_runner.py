@@ -106,7 +106,7 @@ class ExperimentRunner:
 
     def run(self, save_pdf_plot: bool = True) -> None:
         """Runs the experiment and collects epoch statistics."""
-        print("\n[+] Running the experiment...")
+        print("[+] Running the experiment...\n")
         self.epoch_stats, self.dream_epoch_stats = [], []
         for epoch_stat in self.trainer:
             self.epoch_stats.append(epoch_stat)
@@ -117,14 +117,14 @@ class ExperimentRunner:
                 if self.policy_config != "random":
                     # only run the dream if env model is good (and not using a random policy)
                     self._run_dream()
-
+        print()
         if self.persist_kb:
             print("[+] Saving the knowledge base...")
             self._save_kb()
 
         if self.policy_config != "random":
             print(
-                "\n[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot..."
+                "[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot..."
             )
             self._plot(save_pdf=save_pdf_plot)
 
@@ -237,6 +237,11 @@ class ExperimentRunner:
             self.device,
             weights_path=weights_path,
         )
+
+        if is_pretrained:
+            print("  [+] Using pre-trained environment model...")
+        else:
+            print("  [+] Training environment model from scratch...")
 
         # freeze world model if using pre-trained weights AND no fine-tuning
         self.freeze_envmodel = is_pretrained and not self.use_finetuning

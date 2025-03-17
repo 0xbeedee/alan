@@ -237,7 +237,8 @@ class ExperimentRunner:
             self.device,
             weights_path=weights_path,
         )
-        # freeze world model if using pre-traind weights AND no fine-tuning
+
+        # freeze world model if using pre-trained weights AND no fine-tuning
         self.freeze_envmodel = is_pretrained and not self.use_finetuning
 
         self.obs_net = self.factory.create_obsnet(self.vae.encoder, self.device)

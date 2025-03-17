@@ -3,8 +3,9 @@ import pickle
 import logging
 import time
 import json
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Literal, Tuple
 import matplotlib.pyplot as plt
+import numpy as np
 
 import torch
 import gymnasium as gym
@@ -13,6 +14,7 @@ from models.env_model import EnvModel
 from config.config import ConfigManager
 from utils.experiment_factory import ExperimentFactory
 from utils.experiment_runner import BUFFER_DIR, WEIGHTS_DIR
+from core.types import GoalReplayBufferProtocol
 
 # configure logging
 logging.basicConfig(
@@ -37,13 +39,14 @@ def train_envmodel(
     max_epochs: int = 10,
     test_split: float = 0.2,
     patience: int = 5,
+    seq_length: int = 20,
     device: str = "cuda" if torch.cuda.is_available() else "cpu",
 ):
     """Train the environment model using offline data."""
     start_time = time.time()
     logger.info(
         f"Starting environment model training with params: env={env_name}, batch_size={batch_size}, "
-        f"lr={learning_rate}, epochs={max_epochs}, patience={patience}, device={device}"
+        f"lr={learning_rate}, epochs={max_epochs}, patience={patience}, seq_length={seq_length}, device={device}"
     )
 
     # setup
@@ -105,15 +108,13 @@ def train_envmodel(
         buffer = pickle.load(f)
     logger.info(f"Loaded buffer with {len(buffer)} transitions from {buffer_path}")
 
-    # temporal order is important for RNN training
-    total_indices = buffer.sample_indices(0)
-    split_idx = int(len(total_indices) * (1 - test_split))
-    train_idxs = total_indices[:split_idx]
-    test_idxs = total_indices[split_idx:]
-    train_buffer = buffer[train_idxs]
-    test_buffer = buffer[test_idxs]
+    train_buffer, test_buffer, train_starts, test_starts = split_buffer(
+        buffer, batch_size, seq_length, test_split
+    )
     logger.info(
-        f"Split data into {len(train_buffer)} training and {len(test_buffer)} testing transitions"
+        f"Split data into {len(train_buffer)} training and {len(test_buffer)} testing transitions "
+        f"using {len(train_starts)} training sequences and {len(test_starts)} testing sequences "
+        f"of length {seq_length}"
     )
 
     save_dir = os.path.join(
@@ -136,7 +137,10 @@ def train_envmodel(
     # early stopping variables
     patience_counter = 0
     best_epoch = 0
-
+    best_vae_state = None
+    best_mdnrnn_state = None
+    initial_vae_state = vae.state_dict().copy()
+    initial_mdnrnn_state = mdnrnn.state_dict().copy()
     for epoch in range(max_epochs):
         epoch_start = time.time()
 
@@ -191,18 +195,17 @@ def train_envmodel(
             f"Mean={test_mean_loss:.4f}"
         )
 
-        # save if test loss improved
+        # track best model
         if test_mean_loss < best_test_loss:
             best_test_loss = test_mean_loss
             best_epoch = epoch + 1
             patience_counter = 0
 
-            vae_path = os.path.join(save_dir, "vae.pth")
-            mdnrnn_path = os.path.join(save_dir, "mdnrnn.pth")
+            # store the best model states
+            best_vae_state = vae.state_dict().copy()
+            best_mdnrnn_state = mdnrnn.state_dict().copy()
 
-            torch.save(vae.state_dict(), vae_path)
-            torch.save(mdnrnn.state_dict(), mdnrnn_path)
-            logger.info(f"Saved best model with test loss {test_mean_loss:.4f}")
+            logger.info(f"New best model with test loss {test_mean_loss:.4f}")
         else:
             patience_counter += 1
             logger.info(
@@ -213,8 +216,27 @@ def train_envmodel(
                 logger.info(f"Early stopping triggered after {epoch + 1} epochs")
                 break
 
-    # save training history
+    # save only the best model at the end of training
+    if best_epoch > 0:
+        logger.info(
+            f"Saving best model from epoch {best_epoch} with test loss {best_test_loss:.4f}"
+        )
+    else:
+        logger.warning("No improvement was found during training, saving initial model")
+
     timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
+    vae_path = os.path.join(save_dir, f"{timestamp}_vae.pth")
+    mdnrnn_path = os.path.join(save_dir, f"{timestamp}_mdnrnn.pth")
+
+    if best_vae_state is None or best_mdnrnn_state is None:
+        best_vae_state = initial_vae_state
+        best_mdnrnn_state = initial_mdnrnn_state
+
+    torch.save(best_vae_state, vae_path)
+    torch.save(best_mdnrnn_state, mdnrnn_path)
+    logger.info(f"Model saved to {vae_path} and {mdnrnn_path}")
+
+    # save training history
     history = {
         "train": train_history,
         "test": test_history,
@@ -225,9 +247,13 @@ def train_envmodel(
             "max_epochs": max_epochs,
             "test_split": test_split,
             "patience": patience,
+            "seq_length": seq_length,
             "device": str(device),
             "full_env_name": full_env_name,
             "buffer_path": buffer_path,
+            "num_train_sequences": len(train_starts),
+            "num_test_sequences": len(test_starts),
+            "best_epoch": best_epoch,
         },
     }
     history_path = os.path.join(save_dir, f"training_history_{timestamp}.pkl")
@@ -265,6 +291,86 @@ def find_most_recent_buffer(buffer_dir: str) -> str:
 
     latest_buffer = max(valid_buffers, key=lambda x: x[1])[0]
     return os.path.join(buffer_dir, latest_buffer)
+
+
+def split_buffer(
+    buffer: GoalReplayBufferProtocol,
+    batch_size: int,
+    seq_length: int,
+    test_split: float,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Split the buffer into train and test sets, ensuring enough valid sequences for training by maintaining temporal coherence within sequences."""
+    total_indices = buffer.sample_indices(0)
+    total_size = len(total_indices)
+    logger.info(f"Total transitions in buffer: {total_size}")
+
+    # this should be long enough to capture temporal dependencies
+    logger.info(f"Using sequence length of {seq_length} for RNN training")
+
+    # find episode boundaries to avoid crossing them
+    done_indices = np.where(buffer.done[total_indices])[0]
+    episode_starts = np.concatenate(([0], done_indices + 1))
+    episode_ends = np.concatenate((done_indices, [total_size - 1]))
+
+    # try to find valid sequences, reducing sequence length if necessary
+    original_seq_length = seq_length
+    valid_starts = []
+    while seq_length >= 2:
+        valid_starts = []
+        for start, end in zip(episode_starts, episode_ends):
+            # only use episodes that are long enough
+            if end - start + 1 >= seq_length:
+                # add all possible starting points within this episode
+                valid_starts.extend(range(start, end - seq_length + 2))
+
+        # check if we have enough valid sequences
+        min_required = max(
+            2, int(batch_size * 1.5)
+        )  # need at least batch_size * 1.5 sequences
+        if len(valid_starts) >= min_required:
+            break
+
+        # reduce sequence length and try again
+        seq_length = max(2, seq_length - 2)
+
+    if len(valid_starts) < 2:
+        raise ValueError(
+            f"Not enough valid sequences found in buffer even after reducing sequence length to {seq_length}. "
+            f"Found {len(valid_starts)} sequences. The buffer may not contain enough transitions."
+        )
+
+    if seq_length != original_seq_length:
+        logger.warning(
+            f"Reduced sequence length from {original_seq_length} to {seq_length} "
+            f"to ensure enough valid sequences for training"
+        )
+
+    logger.info(f"Found {len(valid_starts)} valid sequences of length {seq_length}")
+
+    # shuffle the valid starting points to break temporal order between sequences
+    # while maintaining temporal coherence within sequences
+    np.random.shuffle(valid_starts)
+
+    # split into train and test sets
+    split_idx = int(len(valid_starts) * (1 - test_split))
+    train_starts = valid_starts[:split_idx]
+    test_starts = valid_starts[split_idx:]
+
+    # create sequence indices for training and testing
+    train_idxs = []
+    for start in train_starts:
+        train_idxs.extend(total_indices[start : start + seq_length])
+
+    test_idxs = []
+    for start in test_starts:
+        test_idxs.extend(total_indices[start : start + seq_length])
+
+    train_idxs = np.array(train_idxs)
+    test_idxs = np.array(test_idxs)
+
+    train_buffer = buffer[train_idxs]
+    test_buffer = buffer[test_idxs]
+    return train_buffer, test_buffer, train_starts, test_starts
 
 
 def plot_training_history(history: Dict[str, Any], save_path: str) -> None:
@@ -382,14 +488,15 @@ def save_model_summary(history: Dict[str, Any], save_dir: str, timestamp: str) -
 if __name__ == "__main__":
     # using hardcoded parameters makes for simpler debugging
     # options: "frozenlake", "nethack_full", "nethack_score", "nethack_gold"
-    env_name = "nethack_full"
+    env_name = "frozenlake"
 
-    train_envmodel(
+    best_loss, best_epoch = train_envmodel(
         env_name=env_name,
-        batch_size=32,
+        batch_size=64,
         learning_rate=1e-3,
         max_epochs=10,
         test_split=0.2,
         patience=5,
+        seq_length=20,
         device="cuda" if torch.cuda.is_available() else "cpu",
     )

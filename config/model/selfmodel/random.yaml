@@ -1,0 +1,4 @@
+goal_strategy: "random"
+noise_scale: 0.5
+noise_seed: 42
+log_goals: false 

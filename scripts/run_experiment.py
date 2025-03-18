@@ -11,8 +11,8 @@ def main(
     obsnet_config,
     intrinsic_fast_config,
     intrinsic_slow_config,
-    model_config,
-    goal_strategy_config,
+    envmodel_config,
+    selfmodel_config,
     device,
 ):
     runner = ExperimentRunner(
@@ -22,8 +22,8 @@ def main(
         obsnet_config,
         intrinsic_fast_config,
         intrinsic_slow_config,
-        model_config,
-        goal_strategy_config,
+        envmodel_config,
+        selfmodel_config,
         device,
     )
 
@@ -32,22 +32,14 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="""
-            The Reinforcement Learning Experiment Runner.
-
-            This script sets up and runs reinforcement learning experiments with customizable environments, policies, and observation networks.
-
-            Experiments are defined through YAML configuration files (usually located in the config/ directory), allowing for easy parameter tuning and reproducibility.
-            """
-    )
+    parser = argparse.ArgumentParser(description="Run an experiment.")
     parser.add_argument(
         "-c",
         "--config",
         type=str,
         required=True,
-        help="Path to the base configuration file (including .yaml extension)",
-        metavar="BASE_CONFIG_PATH",
+        help="Path to the base config file",
+        metavar="CONFIG_PATH",
     )
     parser.add_argument(
         "-e",
@@ -79,7 +71,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Name of the fast intrinsic module config file (without .yaml extension)",
-        metavar="INTRINSIC_CONFIG",
+        metavar="INTRINSIC_FAST_CONFIG",
     )
     parser.add_argument(
         "-is",
@@ -87,23 +79,23 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Name of the slow intrinsic module config file (without .yaml extension)",
-        metavar="INTRINSIC_CONFIG",
+        metavar="INTRINSIC_SLOW_CONFIG",
     )
     parser.add_argument(
-        "-m",
-        "--model",
+        "-em",
+        "--envmodel",
         type=str,
         required=True,
-        help="Name of the config file for the models (without .yaml extension)",
-        metavar="MODEL_CONFIG",
+        help="Name of the environment model config file (without .yaml extension)",
+        metavar="ENVMODEL_CONFIG",
     )
     parser.add_argument(
-        "-g",
-        "--goal_strategy",
+        "-sm",
+        "--selfmodel",
         type=str,
-        default="zero",
-        help="Name of the goal selection strategy config file (without .yaml extension)",
-        metavar="GOAL_STRATEGY_CONFIG",
+        required=True,
+        help="Name of the self model config file (without .yaml extension)",
+        metavar="SELFMODEL_CONFIG",
     )
     parser.add_argument(
         "-d",
@@ -123,7 +115,7 @@ if __name__ == "__main__":
         args.obsnet,
         args.intrinsic_fast,
         args.intrinsic_slow,
-        args.model,
-        args.goal_strategy,
+        args.envmodel,
+        args.selfmodel,
         torch.device(args.device),
     )

@@ -212,8 +212,8 @@ class ExperimentFactory:
         fast_intrinsic_module: FastIntrinsicModuleProtocol,
         slow_intrinsic_module: SlowIntrinsicModuleProtocol,
     ) -> SelfModelProtocol:
-        goal_strategy = self.config.get("goal.name", "random")
-        goal_config = self.config.get_except("goal", exclude="name")
+        goal_strategy = self.config.get("selfmodel.goal_strategy", "random")
+        goal_config = self.config.get_except("selfmodel", exclude="goal_strategy")
 
         self_model = SelfModel(
             fast_intrinsic_module,
@@ -246,6 +246,7 @@ class ExperimentFactory:
             device=device,
             use_finetuning=use_finetuning,
             freeze_envmodel=freeze_envmodel,
+            lr_scale=self.config.get("model_envmodel.lr_scale"),
         )
 
         mdnrnn_trainer = MDNRNNTrainer(
@@ -256,6 +257,7 @@ class ExperimentFactory:
             device=device,
             use_finetuning=use_finetuning,
             freeze_envmodel=freeze_envmodel,
+            lr_scale=self.config.get("model_envmodel.lr_scale"),
         )
 
         return vae_trainer, mdnrnn_trainer

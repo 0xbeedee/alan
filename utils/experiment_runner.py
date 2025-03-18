@@ -44,8 +44,8 @@ class ExperimentRunner:
         obsnet_config: str,
         intrinsic_fast_config: str,
         intrinsic_slow_config: str,
-        model_config: str,
-        goal_strategy_config: str,
+        envmodel_config: str,
+        selfmodel_config: str,
         device: torch.device,
     ) -> None:
         self.base_config_path = base_config_path
@@ -54,8 +54,8 @@ class ExperimentRunner:
         self.obsnet_config = obsnet_config
         self.intrinsic_fast_config = intrinsic_fast_config
         self.intrinsic_slow_config = intrinsic_slow_config
-        self.model_config = model_config
-        self.goal_strategy_config = goal_strategy_config
+        self.envmodel_config = envmodel_config
+        self.selfmodel_config = selfmodel_config
         self.device = device
 
         self._setup_config()
@@ -64,16 +64,16 @@ class ExperimentRunner:
         self.num_dream_envs = self.config.get("environment.vec.num_dream_envs")
 
         # using saved weights or not is an env-related question
-        self.use_saved_weights = self.config.get("model.use_saved_weights")
-        self.use_finetuning = self.config.get("environment.use_finetuning")
+        self.use_saved_weights = self.config.get("model_envmodel.use_saved_weights")
+        self.use_finetuning = self.config.get("model_envmodel.use_finetuning")
 
         self.train_buf_size = self.config.get("buffers.train_buf_size")
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
         self.test_buf_size = self.config.get("buffers.test_buf_size")
 
-        self.use_kb = self.config.get("use_kb", False)
-        self.persist_kb = self.config.get("save_kb", False)
-        self.kb_size = self.config.get("buffers.kb_size", 0)
+        self.use_kb = self.config.get("use_kb")
+        self.persist_kb = self.config.get("save_kb")
+        self.kb_size = self.config.get("buffers.kb_size")
 
         # use the real batch size by default
         self.batch_size = self.config.get("training.real.batch_size")
@@ -116,9 +116,8 @@ class ExperimentRunner:
                 # no dreaming when using a random policy
                 continue
             if self._envmodel_is_good(epoch_stat):
-                if self.policy_config != "random":
-                    # only run the dream if env model is good (and not using a random policy)
-                    self._run_dream()
+                # only run the dream if env model is good
+                self._run_dream()
         print()
         if self.persist_kb:
             print("[+] Saving the knowledge base...")
@@ -149,8 +148,8 @@ class ExperimentRunner:
                 "obsnet": self.obsnet_config,
                 "intrinsic_fast": self.intrinsic_fast_config,
                 "intrinsic_slow": self.intrinsic_slow_config,
-                "goal": self.goal_strategy_config,
-                "model": self.model_config,
+                "model_envmodel": self.envmodel_config,
+                "model_selfmodel": self.selfmodel_config,
             }
         )
 
@@ -242,9 +241,9 @@ class ExperimentRunner:
         )
 
         if is_pretrained:
-            print("  [+] Using pre-trained environment model...")
+            print(" [+] Using a pre-trained environment model...")
         else:
-            print("  [+] Training environment model from scratch...")
+            print(" [+] Training an environment model from scratch...")
 
         # freeze world model if using pre-trained weights AND no fine-tuning
         self.freeze_envmodel = is_pretrained and not self.use_finetuning

@@ -26,6 +26,7 @@ class MDNRNNTrainer:
         device: torch.device = torch.device("cpu"),
         use_finetuning: bool = False,
         freeze_envmodel: bool = False,
+        lr_scale: float = 0.1,
     ):
         self.mdnrnn = mdnrnn.to(device)
         self.vae = vae.to(device)
@@ -35,10 +36,10 @@ class MDNRNNTrainer:
         self.freeze_envmodel = freeze_envmodel
 
         if self.use_finetuning:
-            # TODO this is a rather naive approach, and possibly unfit for stochasstic envs (like NetHack)
-            # reduce the learning rate to make new experience less influential
+            # TODO this is a rather naive approach, and possibly unfit for stochastic envs (like NetHack)
+            # scale the learning rate for finetuning
             self.optimizer = torch.optim.RMSprop(
-                self.mdnrnn.parameters(), lr=learning_rate / 10, alpha=alpha
+                self.mdnrnn.parameters(), lr=learning_rate * lr_scale, alpha=alpha
             )
         else:
             self.optimizer = torch.optim.RMSprop(

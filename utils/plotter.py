@@ -67,11 +67,12 @@ class Plotter:
         functions = [
             (self._plot_returns, ("returns",)),
             (self._plot_returns, ("int_returns",)),
+            (self._plot_intra_episodic_returns, ("train",)),
             (self._plot_policy_losses, ()),
             (self._plot_selfmodel_losses, ()),
             (self._plot_envmodel_losses, ()),
-            (self._plot_intra_episodic_returns, ("train",)),
-            (self._plot_intra_episodic_returns, ("test",)),
+            # we only care about episodic returns in the test set
+            # (self._plot_intra_episodic_returns, ("test",)),
         ]
         # if self._has_goal_stats():
         #     functions.append((self._plot_goal_strategy_stats, ()))
@@ -136,7 +137,8 @@ class Plotter:
                     fast_name = prefix + "_loss"
                     fast_losses = values
 
-        if not fast_losses:
+        if not fast_losses or all(loss == 0 for loss in fast_losses):
+            # if losses are all 0, we used zero_<fast_name> so plotting is superfluous
             self._plot_empty(ax)
             return
 

@@ -12,6 +12,7 @@ def main(
     intrinsic_fast_config,
     intrinsic_slow_config,
     model_config,
+    goal_strategy_config,
     device,
 ):
     runner = ExperimentRunner(
@@ -22,6 +23,7 @@ def main(
         intrinsic_fast_config,
         intrinsic_slow_config,
         model_config,
+        goal_strategy_config,
         device,
     )
 
@@ -96,6 +98,14 @@ if __name__ == "__main__":
         metavar="MODEL_CONFIG",
     )
     parser.add_argument(
+        "-g",
+        "--goal_strategy",
+        type=str,
+        default="zero",
+        help="Name of the goal selection strategy config file (without .yaml extension)",
+        metavar="GOAL_STRATEGY_CONFIG",
+    )
+    parser.add_argument(
         "-d",
         "--device",
         type=str,
@@ -114,5 +124,6 @@ if __name__ == "__main__":
         args.intrinsic_fast,
         args.intrinsic_slow,
         args.model,
+        args.goal_strategy,
         torch.device(args.device),
     )

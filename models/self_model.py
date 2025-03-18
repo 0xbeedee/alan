@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 from core.types import (
     GoalBatchProtocol,
     LatentObsActNextBatchProtocol,
@@ -9,6 +9,19 @@ from core.types import (
 from tianshou.policy.base import TrainingStats
 import numpy as np
 import torch
+import logging
+from dataclasses import dataclass
+
+
+@dataclass
+class GoalStats:
+    """Statistics about goal selection strategy."""
+
+    goal_strategy: str
+    avg_steps_per_goal: float = 0.0
+    total_goal_selections: int = 0
+    total_goal_resets: int = 0
+    active_goals: int = 0
 
 
 class SelfModel:
@@ -21,17 +34,130 @@ class SelfModel:
         self,
         fast_intrinsic_module: FastIntrinsicModuleProtocol,
         slow_intrinsic_module: SlowIntrinsicModuleProtocol,
+        goal_strategy: str = "random",
+        noise_scale: float = 0.5,
+        noise_seed: int = 42,
+        log_goals: bool = False,
     ) -> None:
+        """Initialize the self model with a specified goal strategy.
+
+        Args:
+            fast_intrinsic_module: Module for fast intrinsic reward computation
+            slow_intrinsic_module: Module for slow intrinsic reward computation
+            goal_strategy: Strategy for goal selection - "zero", "random", or other future strategies
+            noise_scale: Scale of noise to add for random goals
+            noise_seed: Seed for random number generation
+            log_goals: Whether to log goal selection info
+        """
         self.fast_intrinsic_module = fast_intrinsic_module
         self.slow_intrinsic_module = slow_intrinsic_module
 
+        # Store goal selection parameters
+        self.goal_strategy = goal_strategy
+        self.noise_scale = noise_scale
+        self.noise_seed = noise_seed
+
+        # to store environment-specific goals
+        self.env_goals: Dict[int, np.ndarray] = {}
+
+        # for tracking goal consistency
+        self.log_goals = log_goals
+        if self.log_goals:
+            logging.basicConfig(level=logging.INFO)
+            self.logger = logging.getLogger("GoalConsistency")
+            self.goal_selections = 0
+            self.goal_resets = 0
+
+        self._setup_goal_strategy()
+
+    def _setup_goal_strategy(self) -> None:
+        """Configure the goal selection function based on the specified strategy."""
+        if self.goal_strategy == "zero":
+            self._select_goal_fn = self._zero_goal_strategy
+        elif self.goal_strategy == "random":
+            self._select_goal_fn = self._random_goal_strategy
+        else:
+            raise ValueError(f"Unknown goal strategy: {self.goal_strategy}")
+
+        if self.log_goals:
+            self.logger.info(f"Using goal strategy: {self.goal_strategy}")
+
+    def _zero_goal_strategy(
+        self, latent_obs_np: np.ndarray, env_key: int
+    ) -> np.ndarray:
+        """Zero goal strategy - goals are all zeros."""
+        return np.zeros_like(latent_obs_np[env_key])
+
+    def _random_goal_strategy(
+        self, latent_obs_np: np.ndarray, env_key: int
+    ) -> np.ndarray:
+        """Random goal strategy - goals are current observation plus random noise."""
+        rng = np.random.RandomState(self.noise_seed + env_key)
+        noise = rng.normal(0, self.noise_scale, size=latent_obs_np[env_key].shape)
+        return latent_obs_np[env_key] + noise
+
     @torch.no_grad()
     def select_goal(self, latent_obs: torch.Tensor) -> np.ndarray:
-        """Selects a goal for the agent to pursue based on the batch of observations it receives in input."""
-        # a basic goal selection mechanism: simply add some gaussian noise
-        goal = latent_obs + torch.randn_like(latent_obs)
-        # return in numpy format for consistency with the other Batch entries
-        return goal.cpu().numpy().astype(np.float32)
+        """Selects a goal for the agent to pursue based on the batch of observations it receives in input.
+
+        Goals remain consistent for each environment until explicitly reset.
+        """
+        latent_obs_np = latent_obs.cpu().numpy().astype(np.float32)
+        goals = np.zeros_like(latent_obs_np)
+
+        for i in range(latent_obs_np.shape[0]):
+            env_key = i
+            # if environment doesn't have a goal yet, generate one
+            if env_key not in self.env_goals:
+                self.env_goals[env_key] = self._select_goal_fn(latent_obs_np, env_key)
+
+                if self.log_goals:
+                    self.goal_selections += 1
+                    self.logger.info(
+                        f"New goal created for env {env_key} using {self.goal_strategy} strategy"
+                    )
+
+            goals[i] = self.env_goals[env_key]
+
+        # Log statistics periodically
+        if (
+            self.log_goals
+            and self.goal_selections % 100 == 0
+            and self.goal_selections > 0
+        ):
+            self.logger.info(
+                f"Goal stats - Selections: {self.goal_selections}, Resets: {self.goal_resets}"
+            )
+            if self.goal_resets > 0:
+                self.logger.info(
+                    f"Average steps per goal: {self.goal_selections / self.goal_resets:.2f}"
+                )
+
+        return goals
+
+    def reset_env_goals(self, env_ids: np.ndarray) -> None:
+        """Reset goals for specific environments."""
+        for env_id in env_ids:
+            if env_id in self.env_goals:
+                if self.log_goals:
+                    self.logger.info(f"Resetting goal for env {env_id}")
+                    self.goal_resets += 1
+
+                del self.env_goals[env_id]
+
+    def get_goal_stats(self) -> GoalStats:
+        """Return statistics about goal generation."""
+        avg_steps = 0.0
+        if self.log_goals and self.goal_resets > 0:
+            avg_steps = self.goal_selections / self.goal_resets
+
+        return GoalStats(
+            goal_strategy=self.goal_strategy,
+            avg_steps_per_goal=avg_steps,
+            total_goal_selections=getattr(self, "goal_selections", 0),
+            total_goal_resets=getattr(self, "goal_resets", 0),
+            active_goals=len(self.env_goals),
+        )
 
     @torch.no_grad()
     def fast_intrinsic_reward(self, batch: LatentObsActNextBatchProtocol) -> np.ndarray:
@@ -51,4 +177,6 @@ class SelfModel:
         self.slow_intrinsic_module.rewrite_rewards_(indices)
 
     def learn(self, batch: GoalBatchProtocol, **kwargs: Any) -> TrainingStats:
-        return self.fast_intrinsic_module.learn(batch, **kwargs)
+        stats = self.fast_intrinsic_module.learn(batch, **kwargs)
+        stats.goal_stats = self.get_goal_stats()
+        return stats

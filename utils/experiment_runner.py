@@ -12,7 +12,7 @@ from tianshou.utils import TensorboardLogger
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 
-from models import SelfModel, EnvModel
+from models import EnvModel
 from intrinsic import ZeroICM, ZeroHER
 from config import ConfigManager
 from .experiment_factory import ExperimentFactory
@@ -45,6 +45,7 @@ class ExperimentRunner:
         intrinsic_fast_config: str,
         intrinsic_slow_config: str,
         model_config: str,
+        goal_strategy_config: str,
         device: torch.device,
     ) -> None:
         self.base_config_path = base_config_path
@@ -54,6 +55,7 @@ class ExperimentRunner:
         self.intrinsic_fast_config = intrinsic_fast_config
         self.intrinsic_slow_config = intrinsic_slow_config
         self.model_config = model_config
+        self.goal_strategy_config = goal_strategy_config
         self.device = device
 
         self._setup_config()
@@ -123,9 +125,7 @@ class ExperimentRunner:
             self._save_kb()
 
         if self.policy_config != "random":
-            print(
-                "[+] Plotting..." if not save_pdf_plot else "\n[+] Saving the plot..."
-            )
+            print("[+] Plotting..." if not save_pdf_plot else "[+] Saving the plot...")
             self._plot(save_pdf=save_pdf_plot)
 
             print("[+] Recording a rollout...")
@@ -149,6 +149,7 @@ class ExperimentRunner:
                 "obsnet": self.obsnet_config,
                 "intrinsic_fast": self.intrinsic_fast_config,
                 "intrinsic_slow": self.intrinsic_slow_config,
+                "goal": self.goal_strategy_config,
                 "model": self.model_config,
             }
         )
@@ -281,7 +282,7 @@ class ExperimentRunner:
                 self.device,
             )
         )
-        self.self_model = SelfModel(
+        self.self_model = self.factory.create_self_model(
             fast_intrinsic_module,
             slow_intrinsic_module,
         )

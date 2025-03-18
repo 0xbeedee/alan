@@ -1,5 +1,10 @@
 from typing import Tuple, Union
-from core.types import SelfModelProtocol, EnvModelProtocol
+from core.types import (
+    SelfModelProtocol,
+    EnvModelProtocol,
+    FastIntrinsicModuleProtocol,
+    SlowIntrinsicModuleProtocol,
+)
 
 import gymnasium as gym
 import torch
@@ -23,6 +28,7 @@ from networks import (
 )
 from intrinsic import ICM, ZeroICM, DeltaICM, BBold, ZeroBBold, HER, ZeroHER
 from models.trainers import NetHackVAETrainer, MDNRNNTrainer, DiscreteVAETrainer
+from models import SelfModel
 from policies import GoalPPO, GoalDQN, RandomPolicy
 from config import ConfigManager
 from core import (
@@ -193,6 +199,22 @@ class ExperimentFactory:
         )
 
         return fast_intrinsic_module, slow_intrinsic_module
+
+    def create_self_model(
+        self,
+        fast_intrinsic_module: FastIntrinsicModuleProtocol,
+        slow_intrinsic_module: SlowIntrinsicModuleProtocol,
+    ) -> SelfModelProtocol:
+        goal_strategy = self.config.get("goal.name", "random")
+        goal_config = self.config.get_except("goal", exclude="name")
+
+        self_model = SelfModel(
+            fast_intrinsic_module,
+            slow_intrinsic_module,
+            goal_strategy=goal_strategy,
+            **goal_config,
+        )
+        return self_model
 
     def create_envmodel_trainers(
         self,

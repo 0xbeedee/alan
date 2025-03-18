@@ -178,6 +178,8 @@ class GoalCollector(Collector):
                     done=done_R,
                     info=info_R,
                     policy=policy_R,
+                    # include environment IDs for goal management
+                    env_id=ready_env_ids_R,
                 ),
             )
 

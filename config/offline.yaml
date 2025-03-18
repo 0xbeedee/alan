@@ -2,13 +2,13 @@ use_kb: false
 save_kb: false
 
 buffers:
-  train_buf_size: 1000
+  train_buf_size: 100000
   test_buf_size: 1
 
 training:
   real:
     max_epoch: 10
-    step_per_epoch: 100
-    step_per_collect: 10
+    step_per_epoch: 10000
+    step_per_collect: 1000
     episode_per_test: 1
     batch_size: 64

@@ -109,6 +109,12 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         It is meant to be overwritten by the policy.
         """
+        # reset goals for environments that have completed episodes
+        if hasattr(batch, "done") and hasattr(batch, "env_id"):
+            done_env_ids = batch.env_id[batch.done]
+            if len(done_env_ids) > 0:
+                self.self_model.reset_env_goals(done_env_ids)
+
         self.combine_fast_reward_(batch)
         batch.latent_obs = self.obs_net(batch.obs)
         batch.latent_obs_next = self.obs_net(batch.obs_next)

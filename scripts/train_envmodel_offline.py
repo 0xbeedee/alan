@@ -13,17 +13,22 @@ from datetime import datetime
 from models.env_model import EnvModel
 from config.config import ConfigManager
 from utils.experiment_factory import ExperimentFactory
-from utils.experiment_runner import BUFFER_DIR, WEIGHTS_DIR
+from utils.experiment_runner import ART_DIR, BUFFER_DIR, WEIGHTS_DIR
 from core.types import GoalReplayBufferProtocol
 
 # configure logging
+log_dir = os.path.join(ART_DIR, "offline_logs")
+os.makedirs(log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(
-            f"envmodel_training_{datetime.now().strftime('%d%m%Y-%H%M%S')}.log"
+            os.path.join(
+                log_dir,
+                f"envmodel_training_{datetime.now().strftime('%d%m%Y-%H%M%S')}.log",
+            ),
         ),
     ],
 )
@@ -52,13 +57,10 @@ def train_envmodel(
     # setup
     base_conf_path = "config/offline.yaml"
     policy_config = "random"
-
-    # Set environment-specific configurations
     if env_name == "frozenlake":
         obsnet_config = "discrete"
-    else:  # nethack variants
+    else:
         obsnet_config = "nethack"
-
     intrinsic_fast_config = "zero_icm"
     intrinsic_slow_config = "zero_her"
     device = torch.device(device)
@@ -98,10 +100,7 @@ def train_envmodel(
     buffer_base_path = os.path.join(
         BUFFER_DIR,
         full_env_name.lower(),
-        policy_config,
         obsnet_config,
-        intrinsic_fast_config,
-        intrinsic_slow_config,
     )
     buffer_path = find_most_recent_buffer(buffer_dir=buffer_base_path)
     with open(buffer_path, "rb") as f:
@@ -120,10 +119,7 @@ def train_envmodel(
     save_dir = os.path.join(
         WEIGHTS_DIR,
         full_env_name.lower(),
-        policy_config,
         obsnet_config,
-        intrinsic_fast_config,
-        intrinsic_slow_config,
     )
     os.makedirs(save_dir, exist_ok=True)
 

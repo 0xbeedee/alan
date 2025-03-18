@@ -64,7 +64,7 @@ class ExperimentRunner:
         self.num_dream_envs = self.config.get("environment.vec.num_dream_envs")
 
         # using saved weights or not is an env-related question
-        self.use_saved_weights = self.config.get("environment.use_saved_weights")
+        self.use_saved_weights = self.config.get("model.use_saved_weights")
         self.use_finetuning = self.config.get("environment.use_finetuning")
 
         self.train_buf_size = self.config.get("buffers.train_buf_size")
@@ -232,6 +232,8 @@ class ExperimentRunner:
                 self.intrinsic_slow_config,
                 self.use_kb,
                 return_base_path=True,
+                # the weights only depend on the env and the VAE/MDNRNN
+                buff_weights_path=True,
             )
         self.vae, self.mdnrnn, is_pretrained = self.factory.create_vae_mdnrnn(
             self.env.observation_space,
@@ -469,6 +471,8 @@ class ExperimentRunner:
             self.use_kb,
             filename="buffer",
             ext="pkl",
+            # the buffer only depends on the env and the VAE/MDNRNN
+            buff_weights_path=True,
         )
         pickle.dump(self.train_collector.buffer, open(buffer_path, "wb"))
 
@@ -590,24 +594,37 @@ def _make_save_path(
     intrinsic_fast_config: str,
     intrinsic_slow_config: str,
     use_kb: bool,
-    return_base_path: bool | None = None,
     filename: str | None = None,
     ext: str | None = None,
+    return_base_path: bool = False,
+    buff_weights_path: bool = False,
 ) -> str:
-    """Creates a path to save the artefacts (plots, recordings, and logs)."""
+    """Creates a path to save the artefacts (plots, recordings, and logs).
+
+    If simplified_path is True, path will only depend on env_config and obsnet_config.
+    This is used for weights and buffers that should be reusable across different
+    intrinsic modules and policies.
+    """
     timestamp = datetime.now().strftime("%d%m%Y-%H%M%S")
 
-    base_path = [
-        base_path,
-        env_config.lower(),
-        policy_config.lower(),
-        obsnet_config.lower(),
-        intrinsic_fast_config.lower(),
-        intrinsic_slow_config.lower(),
-    ]
-    if use_kb:
-        # add an extra directory to the path
-        base_path.append("kb")
+    if buff_weights_path:
+        base_path = [
+            base_path,
+            env_config.lower(),
+            obsnet_config.lower(),
+        ]
+    else:
+        base_path = [
+            base_path,
+            env_config.lower(),
+            policy_config.lower(),
+            obsnet_config.lower(),
+            intrinsic_fast_config.lower(),
+            intrinsic_slow_config.lower(),
+        ]
+        if use_kb:
+            # add an extra directory to the path
+            base_path.append("kb")
 
     if return_base_path:
         # useful for loading the KB and the model weights

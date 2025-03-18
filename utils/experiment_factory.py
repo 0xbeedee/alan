@@ -110,14 +110,22 @@ class ExperimentFactory:
         if weights_path and os.path.exists(weights_path):
             # load the weights from the specified path
             dt = "%d%m%Y-%H%M%S"
+            valid_vae_weights = []
+            valid_mdnrnn_weights = []
             for f in os.listdir(weights_path):
-                if "vae" in f:
-                    valid_vae_weights = [(f, datetime.strptime(f.split("_")[0], dt))]
-                if "mdnrnn" in f:
-                    valid_mdnrnn_weights = [(f, datetime.strptime(f.split("_")[0], dt))]
+                try:
+                    if f.endswith("_vae.pth"):
+                        valid_vae_weights.append(
+                            (f, datetime.strptime(f.split("_")[0], dt))
+                        )
+                    elif f.endswith("_mdnrnn.pth"):
+                        valid_mdnrnn_weights.append(
+                            (f, datetime.strptime(f.split("_")[0], dt))
+                        )
+                except ValueError:
+                    continue
 
             if valid_vae_weights:
-                # we have valid VAE weights
                 is_pretrained_vae = True
                 latest_vae_weights = max(valid_vae_weights, key=lambda x: x[1])[0]
                 vae.load_state_dict(
@@ -127,7 +135,6 @@ class ExperimentFactory:
                     )
                 )
             if valid_mdnrnn_weights:
-                # we have valid MDNRNN weights
                 is_pretrained_mdnrnn = True
                 latest_mdnrnn_weights = max(valid_mdnrnn_weights, key=lambda x: x[1])[0]
                 mdnrnn.load_state_dict(

@@ -21,16 +21,33 @@ class GoalActor(nn.Module):
         self.n_actions = action_space.n
         self.device = device
 
-        self.hidden_dim = obs_net.o_dim // 3
+        self.hidden_dim = obs_net.o_dim // 2  # Increased hidden dimension
+
         self.obs_munet = nn.Sequential(
-            nn.Linear(obs_net.o_dim, self.hidden_dim), nn.ReLU()
-        ).to(device)
-        self.goal_munet = nn.Sequential(
-            nn.Linear(obs_net.o_dim, self.hidden_dim), nn.ReLU()
+            nn.Linear(obs_net.o_dim, self.hidden_dim * 2),
+            nn.LayerNorm(self.hidden_dim * 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(self.hidden_dim * 2, self.hidden_dim),
+            nn.ReLU(),
         ).to(device)
 
-        self.final_layer = nn.Linear(
-            self.hidden_dim + self.hidden_dim + self.state_dim, self.n_actions
+        self.goal_munet = nn.Sequential(
+            nn.Linear(obs_net.o_dim, self.hidden_dim * 2),
+            nn.LayerNorm(self.hidden_dim * 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(self.hidden_dim * 2, self.hidden_dim),
+            nn.ReLU(),
+        ).to(device)
+
+        self.final_net = nn.Sequential(
+            nn.Linear(
+                self.hidden_dim + self.hidden_dim + self.state_dim, self.hidden_dim
+            ),
+            nn.LayerNorm(self.hidden_dim),
+            nn.ReLU(),
+            nn.Linear(self.hidden_dim, self.n_actions),
         ).to(device)
 
     def forward(
@@ -52,15 +69,15 @@ class GoalActor(nn.Module):
         if state is None:
             # the first policy.forward() call has a None state
             state = torch.zeros(obs_out.shape[0], self.state_dim, device=self.device)
-        logits = self.final_layer(torch.cat((obss, goals, state), dim=1))
+        logits = self.final_net(torch.cat((obss, goals, state), dim=1))
         return logits, state
 
     def to(self, device: torch.device) -> Self:
         self.device = device
         self.obs_net = self.obs_net.to(device)
-        self.final_layer = self.final_layer.to(device)
         self.obs_munet = self.obs_munet.to(device)
         self.goal_munet = self.goal_munet.to(device)
+        self.final_net = self.final_net.to(device)
         return super().to(device)
 
 
@@ -74,14 +91,32 @@ class GoalCritic(nn.Module):
         self.obs_net = obs_net.to(device)
         self.device = device
 
-        hidden_dim = obs_net.o_dim // 3
+        hidden_dim = obs_net.o_dim // 2  # Increased hidden dimension
+
         self.obs_munet = nn.Sequential(
-            nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU()
+            nn.Linear(obs_net.o_dim, hidden_dim * 2),
+            nn.LayerNorm(hidden_dim * 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
         ).to(device)
+
         self.goal_munet = nn.Sequential(
-            nn.Linear(obs_net.o_dim, hidden_dim), nn.ReLU()
+            nn.Linear(obs_net.o_dim, hidden_dim * 2),
+            nn.LayerNorm(hidden_dim * 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.ReLU(),
         ).to(device)
-        self.final_layer = nn.Linear(hidden_dim + hidden_dim, 1).to(device)
+
+        self.final_net = nn.Sequential(
+            nn.Linear(hidden_dim + hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1),
+        ).to(device)
 
     def forward(
         self,
@@ -96,7 +131,7 @@ class GoalCritic(nn.Module):
                 batch_obs_goal["latent_goal"], dtype=torch.float32, device=self.device
             )
         )
-        v_s = self.final_layer(torch.cat((obss, goals), dim=1))
+        v_s = self.final_net(torch.cat((obss, goals), dim=1))
         return v_s
 
     def to(self, device: torch.device) -> Self:
@@ -104,5 +139,5 @@ class GoalCritic(nn.Module):
         self.obs_net = self.obs_net.to(device)
         self.obs_munet = self.obs_munet.to(device)
         self.goal_munet = self.goal_munet.to(device)
-        self.final_layer = self.final_layer.to(device)
+        self.final_net = self.final_net.to(device)
         return super().to(device)

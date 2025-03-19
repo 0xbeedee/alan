@@ -21,7 +21,7 @@ class GoalActor(nn.Module):
         self.n_actions = action_space.n
         self.device = device
 
-        self.hidden_dim = obs_net.o_dim // 2  # Increased hidden dimension
+        self.hidden_dim = obs_net.o_dim // 2
 
         self.obs_munet = nn.Sequential(
             nn.Linear(obs_net.o_dim, self.hidden_dim * 2),
@@ -91,7 +91,7 @@ class GoalCritic(nn.Module):
         self.obs_net = obs_net.to(device)
         self.device = device
 
-        hidden_dim = obs_net.o_dim // 2  # Increased hidden dimension
+        hidden_dim = obs_net.o_dim // 2
 
         self.obs_munet = nn.Sequential(
             nn.Linear(obs_net.o_dim, hidden_dim * 2),

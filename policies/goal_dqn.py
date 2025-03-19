@@ -43,6 +43,7 @@ class GoalDQN(CorePolicy):
         lr_scheduler: TLearningRateScheduler | None = None,
         target_update_freq: int = 0,
         is_double: bool = True,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             self_model=self_model,
@@ -63,6 +64,7 @@ class GoalDQN(CorePolicy):
             target_update_freq=target_update_freq,
             is_double=is_double,
             lr_scheduler=lr_scheduler,
+            **kwargs,
         )
 
     def _forward(

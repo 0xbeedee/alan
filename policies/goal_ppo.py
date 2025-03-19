@@ -41,6 +41,7 @@ class GoalPPO(CorePolicy):
         action_scaling: bool = False,
         action_bound_method: None | Literal["clip"] | Literal["tanh"] = "clip",
         lr_scheduler: TLearningRateScheduler | None = None,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             self_model=self_model,
@@ -61,6 +62,7 @@ class GoalPPO(CorePolicy):
             # hardcode dist_fn because we only use discrete action spaces
             dist_fn=self._dist_fn,
             action_scaling=action_scaling,
+            **kwargs,
         )
         # monkey patching is necessary for MPS compatibility
         self.ppo_policy._compute_returns = self._compute_returns
@@ -141,4 +143,4 @@ class GoalPPO(CorePolicy):
         return cast(BatchWithAdvantagesProtocol, batch)
 
     def _dist_fn(self, logits: torch.Tensor):
-        return torch.distributions.Categorical(logits=logits)
+        return torch.distributions.Categorical(logits=logits.clamp(-20, 20))

@@ -1,6 +1,12 @@
 name: "goal_dqn"
 trainer_type: "offpolicy"
 is_actor_critic: false
-learning_rate: 3e-4
-target_update_freq: 0
-is_double: True
+learning_rate: 1e-3
+
+hyperparams:
+  is_double: true
+  discount_factor: 0.99
+  estimation_step: 1
+  target_update_freq: 0
+  reward_normalization: false
+  clip_loss_grad: false

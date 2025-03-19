@@ -1,4 +1,19 @@
 name: "goal_ppo"
 trainer_type: "onpolicy"
 is_actor_critic: true
-learning_rate: 3e-4
+learning_rate: 1e-3
+
+hyperparams:
+  eps_clip: 0.2
+  vf_coef: 0.5
+  ent_coef: 0.01
+  gae_lambda: 0.95
+  max_batchsize: 256
+  discount_factor: 0.99
+  dual_clip: null
+  value_clip: false
+  advantage_normalization: true
+  recompute_advantage: false
+  max_grad_norm: 0.5
+  reward_normalization: true
+  deterministic_eval: false

@@ -286,6 +286,7 @@ class ExperimentFactory:
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,
+                **self.config.get("policy.hyperparams"),
             ),
             "goal_dqn": lambda: GoalDQN(
                 self_model=self_model,
@@ -296,8 +297,7 @@ class ExperimentFactory:
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,
-                target_update_freq=self.config.get("policy.target_update_freq"),
-                is_double=self.config.get("policy.is_double"),
+                **self.config.get("policy.hyperparams"),
             ),
             "random": lambda: RandomPolicy(
                 self_model=self_model,
@@ -306,9 +306,9 @@ class ExperimentFactory:
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,
+                **self.config.get("policy.hyperparams"),
             ),
         }
-
         policy_name = self.config.get("policy.name")
         if policy_name not in policy_map:
             raise ValueError(f"Unsupported algorithm: {policy_name}")

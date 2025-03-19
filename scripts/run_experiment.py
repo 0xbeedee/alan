@@ -1,5 +1,6 @@
 import argparse
 import torch
+import multiprocessing
 
 from utils.experiment_runner import ExperimentRunner
 
@@ -14,6 +15,9 @@ def main(
     envmodel_config,
     selfmodel_config,
     device,
+    use_kb,
+    save_kb,
+    enable_dream,
 ):
     runner = ExperimentRunner(
         base_config_path,
@@ -25,6 +29,9 @@ def main(
         envmodel_config,
         selfmodel_config,
         device,
+        use_kb=use_kb,
+        save_kb=save_kb,
+        enable_dream=enable_dream,
     )
 
     runner.setup()
@@ -106,6 +113,21 @@ if __name__ == "__main__":
         help="Device to run on",
         metavar="DEVICE",
     )
+    parser.add_argument(
+        "--use-kb",
+        action="store_true",
+        help="Use knowledge base",
+    )
+    parser.add_argument(
+        "--save-kb",
+        action="store_true",
+        help="Save knowledge base after training",
+    )
+    parser.add_argument(
+        "--enable-dream",
+        action="store_true",
+        help="Enable dreaming",
+    )
 
     args = parser.parse_args()
     main(
@@ -118,4 +140,7 @@ if __name__ == "__main__":
         args.envmodel,
         args.selfmodel,
         torch.device(args.device),
+        args.use_kb,
+        args.save_kb,
+        args.enable_dream,
     )

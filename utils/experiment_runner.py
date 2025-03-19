@@ -47,6 +47,9 @@ class ExperimentRunner:
         envmodel_config: str,
         selfmodel_config: str,
         device: torch.device,
+        use_kb: bool = False,
+        save_kb: bool = False,
+        enable_dream: bool = False,
     ) -> None:
         self.base_config_path = base_config_path
         self.env_config = env_config
@@ -57,6 +60,9 @@ class ExperimentRunner:
         self.envmodel_config = envmodel_config
         self.selfmodel_config = selfmodel_config
         self.device = device
+        self.use_kb = use_kb
+        self.persist_kb = save_kb
+        self.enable_dream = enable_dream
 
         self._setup_config()
         self.env_name = self.config.get("environment.base.name")
@@ -71,8 +77,6 @@ class ExperimentRunner:
         self.dream_train_buf_size = self.config.get("buffers.dream_train_buf_size")
         self.test_buf_size = self.config.get("buffers.test_buf_size")
 
-        self.use_kb = self.config.get("use_kb")
-        self.persist_kb = self.config.get("save_kb")
         self.kb_size = self.config.get("buffers.kb_size")
 
         # use the real batch size by default
@@ -102,7 +106,7 @@ class ExperimentRunner:
         print("[+] Setting up the trainer...")
         self._setup_trainer(is_dream=False)
 
-        if self.policy_config != "random":
+        if self.policy_config != "random" and self.enable_dream:
             print("[+] Weaving the dream...")
             self._setup_dream()
 
@@ -112,8 +116,8 @@ class ExperimentRunner:
         self.epoch_stats, self.dream_epoch_stats = [], []
         for epoch_stat in self.trainer:
             self.epoch_stats.append(epoch_stat)
-            if self.policy_config == "random":
-                # no dreaming when using a random policy
+            if self.policy_config == "random" or not self.enable_dream:
+                # no dreaming when using a random policy or dream is disabled
                 continue
             if self._envmodel_is_good(epoch_stat):
                 # only run the dream if env model is good

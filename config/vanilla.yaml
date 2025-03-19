@@ -1,5 +1,5 @@
-use_kb: true
-save_kb: true
+use_kb: false
+save_kb: false
 
 buffers:
   train_buf_size: 100000

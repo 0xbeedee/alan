@@ -1,6 +1,3 @@
-use_kb: true
-save_kb: true
-
 buffers:
   train_buf_size: 5000
   test_buf_size: 1

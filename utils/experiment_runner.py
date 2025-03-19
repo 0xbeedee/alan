@@ -496,7 +496,7 @@ class ExperimentRunner:
 
         plotter = self.factory.create_plotter(self.epoch_stats)
         # if save_pdf is False, the path will be ignored
-        plotter.plot(figsize=(20, 16), save_pdf=save_pdf, pdf_path=plot_path)
+        plotter.plot(figsize=(20, 14), save_pdf=save_pdf, pdf_path=plot_path)
 
     def _record_rollout(self) -> None:
         """Records a rollout lasting one episode."""

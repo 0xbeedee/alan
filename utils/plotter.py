@@ -23,7 +23,7 @@ class Plotter:
 
     def plot(
         self,
-        figsize: Tuple[int, int] = (15, 18),
+        figsize: Tuple[int, int] = (18, 14),
         save_pdf: bool = False,
         pdf_path: Optional[str] = None,
         ncols: Optional[int] = None,
@@ -56,10 +56,10 @@ class Plotter:
             {
                 "font.family": "serif",
                 "font.serif": ["Times New Roman"] + plt.rcParams["font.serif"],
-                "font.size": 10,
+                "font.size": 14,
                 "axes.labelsize": 12,
-                "axes.titlesize": 14,
-                "figure.titlesize": 16,
+                "axes.titlesize": 16,
+                "figure.titlesize": 18,
             }
         )
 

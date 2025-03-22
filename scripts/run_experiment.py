@@ -114,17 +114,17 @@ if __name__ == "__main__":
         metavar="DEVICE",
     )
     parser.add_argument(
-        "--use-kb",
+        "--use_kb",
         action="store_true",
         help="Use knowledge base",
     )
     parser.add_argument(
-        "--save-kb",
+        "--save_kb",
         action="store_true",
         help="Save knowledge base after training",
     )
     parser.add_argument(
-        "--enable-dream",
+        "--enable_dream",
         action="store_true",
         help="Enable dreaming",
     )

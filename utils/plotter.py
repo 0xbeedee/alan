@@ -23,10 +23,10 @@ class Plotter:
 
     def plot(
         self,
-        figsize: Tuple[int, int] = (18, 14),
+        figsize: Tuple[int, int] = (20, 16),
         save_pdf: bool = False,
         pdf_path: Optional[str] = None,
-        ncols: Optional[int] = None,
+        ncols: Optional[int] = 3,
     ) -> None:
         self._set_plot_style()
         plot_functions = self._get_plot_functions()
@@ -38,7 +38,13 @@ class Plotter:
         ncols = max(1, ncols)  # ncols must be >= 1
         nrows = ceil(num_plots / ncols)
 
-        fig, axs = plt.subplots(nrows, ncols, figsize=figsize, squeeze=False)
+        aspect_ratio = nrows / ncols
+        fig_width = figsize[0]
+        fig_height = figsize[0] * aspect_ratio
+        fig, axs = plt.subplots(
+            nrows, ncols, figsize=(fig_width, fig_height), squeeze=False
+        )
+
         axs_flat = axs.flatten()
         for ax, (func, args) in zip(axs_flat, plot_functions):
             func(ax, *args)
@@ -106,7 +112,13 @@ class Plotter:
 
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+        ax.legend(
+            lines1 + lines2,
+            labels1 + labels2,
+            loc="upper left",
+            fontsize=10,
+            framealpha=0.9,
+        )
         self._set_consistent_x_axis(ax)
 
     def _plot_policy_losses(self, ax: plt.Axes) -> None:
@@ -319,8 +331,8 @@ class Plotter:
         save_pdf: bool,
         pdf_path: Optional[str],
     ) -> None:
-        plt.tight_layout()
-        fig.subplots_adjust(top=1, hspace=0.3, wspace=0.3)
+        plt.tight_layout(pad=3.0)
+        fig.subplots_adjust(top=0.95, hspace=0.4, wspace=0.4)
 
         if save_pdf:
             if pdf_path is None:

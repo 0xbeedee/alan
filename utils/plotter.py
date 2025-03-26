@@ -98,11 +98,7 @@ class Plotter:
         test_returns, test_returns_std = self._extract_data(
             ["test_collect_stat", "ep_returns_stat"]
         )
-
-        has_test_data = test_returns and not all(x == 0 for x in test_returns)
-        has_train_data = False  # will check later
-
-        if has_test_data:
+        if test_returns:
             self._plot_with_ci(
                 ax,
                 self.epochs,
@@ -118,10 +114,7 @@ class Plotter:
         train_returns, train_returns_std = self._extract_data(
             ["train_collect_stat", "ep_returns_stat"]
         )
-
-        has_train_data = train_returns and not all(x == 0 for x in train_returns)
-
-        if has_train_data:
+        if train_returns:
             self._plot_with_ci(
                 ax2,
                 self.epochs,
@@ -134,7 +127,7 @@ class Plotter:
             self._set_y_limits_with_ci(ax2, train_returns, train_returns_std)
 
         # display messages if no data
-        if not has_test_data and not has_train_data:
+        if not test_returns and not train_returns:
             ax.text(
                 0.5,
                 0.5,
@@ -144,7 +137,7 @@ class Plotter:
                 transform=ax.transAxes,
                 fontsize=12,
             )
-        elif not has_test_data:
+        elif not test_returns:
             ax.text(
                 0.5,
                 0.5,
@@ -155,7 +148,7 @@ class Plotter:
                 fontsize=10,
                 color=self.test_color,
             )
-        elif not has_train_data:
+        elif not train_returns:
             ax2.text(
                 0.5,
                 0.3,

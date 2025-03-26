@@ -66,47 +66,162 @@ class Plotter:
                 "axes.labelsize": 12,
                 "axes.titlesize": 16,
                 "figure.titlesize": 18,
+                "axes.grid": True,
+                "grid.alpha": 0.3,
             }
         )
+        # use a consistent color palette throughout
+        self.colors = sns.color_palette("colorblind")
+        self.test_color = self.colors[0]  # blue
+        self.train_color = self.colors[1]  # orange
 
     def _get_plot_functions(self) -> Sequence[PlotFunctionTuple]:
         functions = [
-            (self._plot_returns, ("returns",)),
+            # test and train episodic returns
+            (self._plot_episodic_returns, ()),
+            # test and train n-step returns
+            (self._plot_nstep_returns, ()),
+            # intrinsic returns
             (self._plot_returns, ("int_returns",)),
-            (self._plot_intra_episodic_returns, ("train",)),
             (self._plot_policy_losses, ()),
             (self._plot_selfmodel_losses, ()),
             (self._plot_envmodel_losses, ()),
-            # we only care about episodic returns in the test set
-            # (self._plot_intra_episodic_returns, ("test",)),
+            # (self._plot_goal_strategy_stats, ()),
         ]
-        # if self._has_goal_stats():
-        #     functions.append((self._plot_goal_strategy_stats, ()))
         return functions
 
-    def _plot_returns(self, ax: plt.Axes, returns_type: str) -> None:
+    def _plot_episodic_returns(self, ax: plt.Axes) -> None:
+        """Plots the episodic returns with dual y-axes for test and train."""
         ax2 = ax.twinx()
-        colours = sns.color_palette("colorblind")
 
-        for idx, (collect_type, ax_) in enumerate([("test", ax), ("train", ax2)]):
-            returns, returns_std = self._extract_data(
-                [f"{collect_type}_collect_stat", f"{returns_type}_stat"]
-            )
-            collect_type = collect_type.replace("_", " ")
-            self._plot_with_ci(
-                ax_,
-                self.epochs,
-                returns,
-                returns_std,
-                collect_type,
-                colours[idx],
-            )
-
-        ax.set_title(
-            "Mean "
-            + ("Extrinsic" if returns_type == "returns" else "Intrinsic")
-            + " Returns"
+        # test data (left y-axis)
+        test_returns, test_returns_std = self._extract_data(
+            ["test_collect_stat", "ep_returns_stat"]
         )
+
+        has_test_data = test_returns and not all(x == 0 for x in test_returns)
+        has_train_data = False  # will check later
+
+        if has_test_data:
+            self._plot_with_ci(
+                ax,
+                self.epochs,
+                test_returns,
+                test_returns_std,
+                "test",
+                self.test_color,
+            )
+            # set appropriate y-axis limits
+            self._set_y_limits_with_ci(ax, test_returns, test_returns_std)
+
+        # handle train data (right y-axis)
+        train_returns, train_returns_std = self._extract_data(
+            ["train_collect_stat", "ep_returns_stat"]
+        )
+
+        has_train_data = train_returns and not all(x == 0 for x in train_returns)
+
+        if has_train_data:
+            self._plot_with_ci(
+                ax2,
+                self.epochs,
+                train_returns,
+                train_returns_std,
+                "train",
+                self.train_color,
+            )
+            # set appropriate y-axis limits
+            self._set_y_limits_with_ci(ax2, train_returns, train_returns_std)
+
+        # display messages if no data
+        if not has_test_data and not has_train_data:
+            ax.text(
+                0.5,
+                0.5,
+                "N/A",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=12,
+            )
+        elif not has_test_data:
+            ax.text(
+                0.5,
+                0.5,
+                "No completed test episodes",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=10,
+                color=self.test_color,
+            )
+        elif not has_train_data:
+            ax2.text(
+                0.5,
+                0.3,
+                "No completed train episodes",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=10,
+                color=self.train_color,
+            )
+
+        ax.set_title("Mean Episodic Returns")
+        ax.set_ylabel("Test Returns")
+        ax2.set_ylabel("Train Returns")
+
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        if lines1 or lines2:
+            ax.legend(
+                lines1 + lines2,
+                labels1 + labels2,
+                loc="upper left",
+                fontsize=10,
+                framealpha=0.9,
+            )
+        self._set_consistent_x_axis(ax)
+
+    def _plot_nstep_returns(self, ax: plt.Axes) -> None:
+        """Plots the n-step returns with dual y-axes for test and train."""
+        ax2 = ax.twinx()
+
+        # test data (left y-axis)
+        test_returns, test_returns_std = self._extract_data(
+            ["test_collect_stat", "returns_stat"]
+        )
+
+        self._plot_with_ci(
+            ax,
+            self.epochs,
+            test_returns,
+            test_returns_std,
+            "test",
+            self.test_color,
+        )
+
+        # set y-axis limits to include confidence intervals
+        self._set_y_limits_with_ci(ax, test_returns, test_returns_std)
+
+        # train data (right y-axis)
+        train_returns, train_returns_std = self._extract_data(
+            ["train_collect_stat", "returns_stat"]
+        )
+
+        self._plot_with_ci(
+            ax2,
+            self.epochs,
+            train_returns,
+            train_returns_std,
+            "train",
+            self.train_color,
+        )
+
+        # set y-axis limits to include confidence intervals
+        self._set_y_limits_with_ci(ax2, train_returns, train_returns_std)
+
+        ax.set_title("Mean N-Step Returns")
         ax.set_ylabel("Test Returns")
         ax2.set_ylabel("Train Returns")
 
@@ -119,6 +234,84 @@ class Plotter:
             fontsize=10,
             framealpha=0.9,
         )
+        self._set_consistent_x_axis(ax)
+
+    def _plot_returns(self, ax: plt.Axes, returns_type: str) -> None:
+        ax2 = ax.twinx()
+
+        has_test_data = False
+        has_train_data = False
+
+        for idx, (collect_type, ax_) in enumerate([("test", ax), ("train", ax2)]):
+            color = self.test_color if idx == 0 else self.train_color
+
+            if returns_type == "returns":
+                # try episodic returns first
+                ep_returns, ep_returns_std = self._extract_data(
+                    [f"{collect_type}_collect_stat", f"ep_{returns_type}_stat"]
+                )
+
+                if not ep_returns or all(x == 0 for x in ep_returns):
+                    # fall back to regular returns if no episodes completed
+                    returns, returns_std = self._extract_data(
+                        [f"{collect_type}_collect_stat", f"{returns_type}_stat"]
+                    )
+                else:
+                    returns, returns_std = ep_returns, ep_returns_std
+            else:
+                # for intrinsic rewards, use the regular approach
+                returns, returns_std = self._extract_data(
+                    [f"{collect_type}_collect_stat", f"{returns_type}_stat"]
+                )
+
+            if not returns:
+                continue
+
+            if idx == 0:
+                has_test_data = True
+            else:
+                has_train_data = True
+
+            collect_type = collect_type.replace("_", " ")
+            self._plot_with_ci(
+                ax_,
+                self.epochs,
+                returns,
+                returns_std,
+                collect_type,
+                color,
+            )
+
+            # set appropriate y-axis limits
+            self._set_y_limits_with_ci(ax_, returns, returns_std)
+
+        # display message if no data
+        if not has_test_data and not has_train_data:
+            ax.text(
+                0.5,
+                0.5,
+                "N/A",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=12,
+            )
+
+        title_prefix = "Intrinsic" if returns_type == "int_returns" else "Extrinsic"
+        ax.set_title(f"Mean {title_prefix} Returns")
+        ax.set_ylabel("Test Returns")
+        ax2.set_ylabel("Train Returns")
+
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        if lines1 or lines2:
+            ax.legend(
+                lines1 + lines2,
+                labels1 + labels2,
+                loc="upper left",
+                fontsize=10,
+                framealpha=0.9,
+            )
         self._set_consistent_x_axis(ax)
 
     def _plot_policy_losses(self, ax: plt.Axes) -> None:
@@ -187,22 +380,9 @@ class Plotter:
                 ax, self.epochs, mdnrnn_losses, stds, "mdnrnn loss", colors[1]
             )
 
-        ax.set_title("Environment Model Loss")
+        ax.set_title("World Model Loss")
         ax.set_ylabel("Loss")
         ax.legend()
-        self._set_consistent_x_axis(ax)
-
-    def _plot_intra_episodic_returns(self, ax: plt.Axes, data_type: str) -> None:
-        """Plots the returns achieved within an episode using boxplots."""
-        intra_returns = [
-            self._get_nested_attr(stats, [f"{data_type}_collect_stat", "returns"])
-            for stats in self.epoch_stats
-        ]
-
-        box_positions = np.arange(1, len(self.epochs) + 1)
-        ax.boxplot(intra_returns, positions=box_positions)
-        ax.set_title(f"Intra-epoch {data_type.capitalize()} Returns")
-        ax.set_ylabel("Returns")
         self._set_consistent_x_axis(ax)
 
     def _plot_losses(self, ax: plt.Axes, loss_type: str) -> None:
@@ -262,7 +442,7 @@ class Plotter:
         steps_per_goal = [stats.avg_steps_per_goal for stats in goal_stats_over_time]
         goal_strategy = goal_stats_over_time[0].goal_strategy
 
-        ax.plot(self.epochs, steps_per_goal, "o-", label="Avg steps per goal")
+        ax.plot(self.epochs, steps_per_goal, "o-", label="Avg. steps per goal")
         ax.set_title(f"Goal Strategy: {goal_strategy}")
         ax.set_ylabel("Average Steps")
         ax.legend()
@@ -279,7 +459,11 @@ class Plotter:
     ) -> None:
         """Adds confidence intervals to the provided data."""
         label = label.replace("_", " ")
-        ax.plot(x, y, label=label, color=color, linewidth=2)
+
+        # plot line with markers at data points
+        ax.plot(x, y, label=label, color=color, linewidth=2, marker="o", markersize=4)
+
+        # add confidence interval shading
         ax.fill_between(
             x,
             np.array(y) - np.array(yerr),
@@ -287,6 +471,57 @@ class Plotter:
             color=color,
             alpha=0.3,
         )
+
+    def _set_y_limits_with_ci(
+        self,
+        ax: plt.Axes,
+        values: Sequence[float],
+        errors: Sequence[float],
+        padding_percent: float = 10.0,
+    ) -> None:
+        """Sets appropriate y-axis limits to include full confidence intervals."""
+        if not values or not errors:
+            # set default limits if no data
+            ax.set_ylim([0, 1])
+            return
+
+        # ensure values and errors have the same length and no None values
+        values_clean = []
+        errors_clean = []
+
+        for val, err in zip(values, errors):
+            if val is not None and err is not None:
+                values_clean.append(val)
+                errors_clean.append(err)
+
+        # if we don't have clean values, set default limits
+        if not values_clean:
+            ax.set_ylim([0, 1])
+            return
+
+        # calculate the full range including confidence intervals
+        values_array = np.array(values_clean)
+        errors_array = np.array(errors_clean)
+
+        lower_bounds = values_array - errors_array
+        upper_bounds = values_array + errors_array
+
+        # find min and max including confidence intervals
+        y_min = np.min(lower_bounds)
+        y_max = np.max(upper_bounds)
+
+        # add padding
+        y_range = y_max - y_min
+        if y_range < 0.01:  # for very small ranges
+            y_range = 0.1  # set a minimum range
+
+        padding = y_range * (padding_percent / 100.0)
+
+        if any(y < 0 for y in values_clean):
+            ax.set_ylim([y_min - padding, y_max + padding])
+        else:
+            # no negative values, CIs should not go below zero
+            ax.set_ylim([max(0, y_min - padding), y_max + padding])
 
     def _plot_empty(self, ax: plt.Axes) -> None:
         ax.text(0.5, 0.5, "", ha="center", va="center", transform=ax.transAxes)
@@ -302,15 +537,26 @@ class Plotter:
         means = []
         stds = []
         for stats in self.epoch_stats:
-            data: Any = self._get_nested_attr(stats, key_path)
-            if isinstance(data, dict):
+            data = self._get_nested_attr(stats, key_path)
+            if data is None:
+                # skip None values
+                means.append(0.0)
+                stds.append(0.0)
+            elif isinstance(data, dict):
                 means.append(data.get("mean", 0.0))
                 stds.append(data.get("std", 0.0))
             elif hasattr(data, "mean") and hasattr(data, "std"):
-                means.append(data.mean)
-                stds.append(data.std)
+                # handle None attributes
+                mean_val = data.mean if data.mean is not None else 0.0
+                std_val = data.std if data.std is not None else 0.0
+                means.append(float(mean_val))
+                stds.append(float(std_val))
             else:
-                means.append(float(data))
+                # handle other types safely
+                try:
+                    means.append(float(data))
+                except (TypeError, ValueError):
+                    means.append(0.0)
                 stds.append(0.0)
         return means, stds
 
@@ -333,7 +579,6 @@ class Plotter:
     ) -> None:
         plt.tight_layout(pad=3.0)
         fig.subplots_adjust(top=0.95, hspace=0.4, wspace=0.4)
-
         if save_pdf:
             if pdf_path is None:
                 raise ValueError("pdf_path must be provided when save_pdf is True")

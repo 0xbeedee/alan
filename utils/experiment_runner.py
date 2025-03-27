@@ -63,8 +63,11 @@ class ExperimentRunner:
         self.use_kb = use_kb
         self.persist_kb = save_kb
         self.enable_dream = enable_dream
+        # the name with which the environment will be saved
+        self.env_save_name = env_config.lower()
 
         self._setup_config()
+        # the name of the environment as used by Gymnasium
         self.env_name = self.config.get("environment.base.name")
         self.num_envs = self.config.get("environment.vec.num_envs")
         self.num_dream_envs = self.config.get("environment.vec.num_dream_envs")
@@ -163,6 +166,7 @@ class ExperimentRunner:
         env_funs = [
             _make_env(
                 self.env_name,
+                self.env_save_name,
                 env_config,
                 REC_DIR,
                 self.policy_config,
@@ -208,7 +212,7 @@ class ExperimentRunner:
     def _setup_kb_bandit(self) -> None:
         kb_path = _make_save_path(
             KB_DIR,
-            self.env_name,
+            self.env_save_name,
             self.policy_config,
             self.obsnet_config,
             self.intrinsic_fast_config,
@@ -228,7 +232,7 @@ class ExperimentRunner:
         if self.use_saved_weights:
             weights_path = _make_save_path(
                 WEIGHTS_DIR,
-                self.env_name,
+                self.env_save_name,
                 self.policy_config,
                 self.obsnet_config,
                 self.intrinsic_fast_config,
@@ -354,7 +358,7 @@ class ExperimentRunner:
         """Sets up the TensorboardLogger."""
         self.log_path = _make_save_path(
             LOG_DIR,
-            self.env_name,
+            self.env_save_name,
             self.policy_config,
             self.obsnet_config,
             self.intrinsic_fast_config,
@@ -466,7 +470,7 @@ class ExperimentRunner:
         """Saves the transitions collected in the training buffer."""
         buffer_path = _make_save_path(
             BUFFER_DIR,
-            self.env_name,
+            self.env_save_name,
             self.policy_config,
             self.obsnet_config,
             self.intrinsic_fast_config,
@@ -486,7 +490,7 @@ class ExperimentRunner:
         """
         plot_path = _make_save_path(
             PLOT_DIR,
-            self.env_name,
+            self.env_save_name,
             self.policy_config,
             self.obsnet_config,
             self.intrinsic_fast_config,
@@ -516,7 +520,7 @@ class ExperimentRunner:
         """Saves the Knowledge Base to the artefacts."""
         kb_path = _make_save_path(
             KB_DIR,
-            self.env_name,
+            self.env_save_name,
             self.policy_config,
             self.obsnet_config,
             self.intrinsic_fast_config,
@@ -531,7 +535,7 @@ class ExperimentRunner:
     #     """Saves the Knowledge Base to the artefacts."""
     #     vae_weights_path = _make_save_path(
     #         WEIGHTS_DIR,
-    #         self.env_name,
+    #         self.env_save_name,
     #         self.policy_config,
     #         self.obsnet_config,
     #         self.intrinsic_fast_config,
@@ -542,7 +546,7 @@ class ExperimentRunner:
     #     )
     #     mdnrnn_weights_path = _make_save_path(
     #         WEIGHTS_DIR,
-    #         self.env_name,
+    #         self.env_save_name,
     #         self.policy_config,
     #         self.obsnet_config,
     #         self.intrinsic_fast_config,
@@ -557,6 +561,7 @@ class ExperimentRunner:
 
 def _make_env(
     env_name: str,
+    env_save_name: str,
     env_config: str,
     rec_dir: str,
     policy_config: str,
@@ -575,7 +580,7 @@ def _make_env(
         env = gym.make(env_name, **env_config)
         rec_path = _make_save_path(
             rec_dir,
-            env_name,
+            env_save_name,
             policy_config,
             obsnet_config,
             intrinsic_fast_config,
@@ -591,7 +596,7 @@ def _make_env(
 
 def _make_save_path(
     base_path: str,
-    env_config: str,
+    env_save_name: str,
     policy_config: str,
     obsnet_config: str,
     intrinsic_fast_config: str,
@@ -613,13 +618,13 @@ def _make_save_path(
     if buff_weights_path:
         base_path = [
             base_path,
-            env_config.lower(),
+            env_save_name,
             obsnet_config.lower(),
         ]
     else:
         base_path = [
             base_path,
-            env_config.lower(),
+            env_save_name,
             policy_config.lower(),
             obsnet_config.lower(),
             intrinsic_fast_config.lower(),

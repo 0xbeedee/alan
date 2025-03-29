@@ -178,6 +178,19 @@ class NetHackEncoder(nn.Module):
 
         glyphs_tr = torch.as_tensor(inputs["glyphs"], device=self.device)
         blstats_tr = torch.as_tensor(inputs["blstats"], device=self.device)
+
+        # adjustments are needed when using the bandit (due to how data is stored in KB)
+        # if glyphs_tr is 2-dimensional, add a batch dimension
+        if len(glyphs_tr.shape) == 2:
+            glyphs_tr = glyphs_tr.unsqueeze(0)
+            # update spatial_inputs with the corrected glyphs_tr
+            spatial_inputs["glyphs"] = glyphs_tr
+        # if blstats_tr is 1-dimensional, add a batch dimension
+        if len(blstats_tr.shape) == 1:
+            blstats_tr = blstats_tr.unsqueeze(0)
+            # update inputs with the corrected blstats_tr
+            inputs["blstats"] = blstats_tr
+
         cropped_inputs = self.crop(glyphs_tr, blstats_tr[:, :2])
         # inventory_inputs = {key: inputs[key] for key in self.inv_keys}
 

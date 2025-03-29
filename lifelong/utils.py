@@ -10,11 +10,14 @@ def is_similar(
     batch_obs2: Batch,
     thresh: float = 0.90,
 ) -> torch.Tensor:
+    # avoid modifying the originals
+    batch_obs1_copy = Batch({k: v for k, v in batch_obs1.items()})
+    batch_obs2_copy = Batch({k: v for k, v in batch_obs2.items()})
     # inefficient, but needed: the obss need to be passed through same network
-    latent1, latent2 = obs_net(batch_obs1), obs_net(batch_obs2)
+    latent1, latent2 = obs_net(batch_obs1_copy), obs_net(batch_obs2_copy)
+
     # TODO cosine similarity (after normalisation) could also be used here
     # TODO we could use other methods to go from [0, inf) to [0, 1] (e.g., sigmoids, RBF kernels, exp decay)
     distance = torch.norm(latent1 - latent2, p=2, dim=1, keepdim=True)  # (B, 1)
     similarity = 1.0 / (1.0 + distance)
-
     return similarity > thresh

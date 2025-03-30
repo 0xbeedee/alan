@@ -99,7 +99,7 @@ def train_envmodel(
     # load buffer
     buffer_base_path = os.path.join(
         BUFFER_DIR,
-        full_env_name.lower(),
+        env_name.lower(),
         obsnet_config,
     )
     buffer_path = find_most_recent_buffer(buffer_dir=buffer_base_path)
@@ -118,7 +118,7 @@ def train_envmodel(
 
     save_dir = os.path.join(
         WEIGHTS_DIR,
-        full_env_name.lower(),
+        env_name.lower(),
         obsnet_config,
     )
     os.makedirs(save_dir, exist_ok=True)
@@ -245,7 +245,6 @@ def train_envmodel(
             "patience": patience,
             "seq_length": seq_length,
             "device": str(device),
-            "full_env_name": full_env_name,
             "buffer_path": buffer_path,
             "num_train_sequences": len(train_starts),
             "num_test_sequences": len(test_starts),

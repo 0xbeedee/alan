@@ -306,7 +306,6 @@ class ExperimentFactory:
                 action_space=action_space,
                 observation_space=observation_space,
                 action_scaling=action_scaling,
-                **self.config.get("policy.hyperparams"),
             ),
         }
         policy_name = self.config.get("policy.name")

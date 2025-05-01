@@ -17,7 +17,13 @@ from tianshou.utils import TensorboardLogger
 from datetime import datetime
 import os
 
-from environments import DictObservation, Resetting, RecordTTY, RecordRGB
+from environments import (
+    DictObservation,
+    Resetting,
+    RecordTTY,
+    RecordRGB,
+    AddMessageFrozenLake,
+)
 from networks import (
     ObsNet,
     GoalActor,
@@ -50,17 +56,22 @@ class ExperimentFactory:
         self.config = config
 
     def wrap_env(self, env: gym.Env, rec_path: str | None = None) -> gym.Env:
-        wrapped_env = None
-        if isinstance(env.observation_space, gym.spaces.Discrete):
-            wrapped_env = DictObservation(env)
-        elif "NetHack" in env.unwrapped.spec.id:
-            wrapped_env = Resetting(env)
+        is_frozen_lake = "FrozenLake" in env.unwrapped.spec.id
+        is_nethack = "NetHack" in env.unwrapped.spec.id
 
-        return (
-            RecordRGB(wrapped_env, output_path=rec_path)
-            if env.render_mode == "rgb_array"
-            else RecordTTY(wrapped_env, output_path=rec_path)
-        )
+        wrapped_env = env
+        if isinstance(wrapped_env.observation_space, gym.spaces.Discrete):
+            wrapped_env = DictObservation(wrapped_env)
+        if is_frozen_lake:
+            wrapped_env = AddMessageFrozenLake(wrapped_env)
+        if is_nethack:
+            wrapped_env = Resetting(wrapped_env)
+        if env.render_mode == "rgb_array":
+            wrapped_env = RecordRGB(wrapped_env, output_path=rec_path)
+        else:
+            wrapped_env = RecordTTY(wrapped_env, output_path=rec_path)
+
+        return wrapped_env
 
     def create_buffer(self, buf_size: int, env_num: int) -> GoalVectorReplayBuffer:
         return GoalVectorReplayBuffer(buf_size, env_num)

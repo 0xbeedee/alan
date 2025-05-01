@@ -8,7 +8,7 @@ For our own experiments, we use [NetHack](https://github.com/heiner/nle), but th
 
 ## Running the code
 
-The code uses `python 3.11.10`. To run it, do the following:
+The code uses `python 3.11.12`. To run it, do the following:
 
 1. (Optional) Set up a virtual environment;
 2. Install all the requirements (i.e., `pip install -r requirements.txt`);

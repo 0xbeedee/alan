@@ -33,7 +33,10 @@ log = logging.getLogger(__name__)
 class GoalTrainer(BaseTrainer):
     """GoalTrainer is a goal-aware Tianshou Trainer. It returns an iterator that yields a 3-tuple (epoch, stats, info) for each epoch.
 
-    For details, see https://tianshou.org/en/stable/03_api/trainer/base.html.
+    It extends the standard Tianshou BaseTrainer to handle EpNStepCollectStats (including intrinsic rewards)
+    and CoreTrainingStats during collection, logging, and progress display.
+
+    For details on the base trainer, see https://tianshou.org/en/stable/03_api/trainer/base.html.
     """
 
     def __init__(

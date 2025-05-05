@@ -129,6 +129,7 @@ class GoalReplayBuffer(ReplayBuffer):
                 self._index,
             )
             return result
+        # return 0 for episode reward/length if the episode is not finished
         return ptr, self._ep_rew * 0.0, self._ep_int_rew * 0.0, 0, self._ep_idx
 
 

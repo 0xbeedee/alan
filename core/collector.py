@@ -184,37 +184,42 @@ class GoalCollector(Collector):
             )
 
             # add data into the buffer
-            _, ep_rew_R, ep_int_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
+            ptr, ep_rew_R, ep_int_rew_R, ep_len_R, ep_idx_R = self.buffer.add(
                 current_iteration_batch,
                 buffer_ids=ready_env_ids_R,
             )
 
             # update the knowledge base, if one is specified
             if self.knowledge_base is not None:
-                kb_batch = cast(
-                    KBBatchProtocol,
-                    Batch(
-                        obs=last_obs_RO,
-                        act=act_RA,
-                        rew=rew_R,
-                        traj_id=cur_traj_id[ready_env_ids_R],
-                    ),
+                cur_traj_id = self._update_knowledge_base(
+                    last_obs_RO,
+                    act_RA,
+                    rew_R,
+                    done_R,
+                    ready_env_ids_R,
+                    cur_traj_id,
                 )
-
-                # first add the current transitions to the knowledge base
-                self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
-                # increment traj ID if we got a positive reward OR the episode is over
-                combined_condition = (rew_R > 0) | done_R
-                # convert the boolean mask to indices
-                condition_indices = np.where(combined_condition)[0]
-                idxs_to_update = ready_env_ids_R[condition_indices]
-                if len(idxs_to_update) > 0:
-                    cur_traj_id[idxs_to_update] += 1
 
             # collect statistics
             num_episodes_done_this_iter = np.sum(done_R)
             num_collected_episodes += num_episodes_done_this_iter
             step_count += len(ready_env_ids_R)
+
+            self._update_stats(
+                rew_R,
+                int_rew_R,
+                done_R,
+                ep_rew_R,
+                ep_int_rew_R,
+                ep_len_R,
+                ep_idx_R,
+                nstep_returns,
+                nstep_intrinsic_returns,
+                episode_returns,
+                episode_intrinsic_returns,
+                episode_lens,
+                episode_start_indices,
+            )
 
             # preparing for the next iteration
             # obs_next, info and hidden_state will be modified inplace in the code below, so we copy to not affect the data in the buffer
@@ -398,6 +403,66 @@ class GoalCollector(Collector):
             policy_R,
             hidden_state_RH,
         )
+
+    def _update_knowledge_base(
+        self,
+        last_obs_RO: np.ndarray,
+        act_RA: np.ndarray,
+        rew_R: np.ndarray,
+        done_R: np.ndarray,
+        ready_env_ids_R: np.ndarray,
+        cur_traj_id: np.ndarray,
+    ) -> np.ndarray:
+        """Updates the knowledge base with the current transition and manages trajectory IDs."""
+        kb_batch = cast(
+            KBBatchProtocol,
+            Batch(
+                obs=last_obs_RO,
+                act=act_RA,
+                rew=rew_R,
+                traj_id=cur_traj_id[ready_env_ids_R],
+            ),
+        )
+
+        # first add the current transitions to the knowledge base
+        self.knowledge_base.add(kb_batch, buffer_ids=ready_env_ids_R)
+        # increment traj ID if we got a positive reward OR the episode is over
+        combined_condition = (rew_R > 0) | done_R
+        # convert the boolean mask to indices
+        condition_indices = np.where(combined_condition)[0]
+        idxs_to_update = ready_env_ids_R[condition_indices]
+        if len(idxs_to_update) > 0:
+            cur_traj_id[idxs_to_update] += 1
+        return cur_traj_id
+
+    def _update_stats(
+        self,
+        rew_R: np.ndarray,
+        int_rew_R: np.ndarray,
+        done_R: np.ndarray,
+        ep_rew_R: np.ndarray,
+        ep_int_rew_R: np.ndarray,
+        ep_len_R: np.ndarray,
+        ep_idx_R: np.ndarray,
+        # the below are modified in place
+        nstep_returns: list[float],
+        nstep_intrinsic_returns: list[float],
+        episode_returns: list[float],
+        episode_intrinsic_returns: list[float],
+        episode_lens: list[int],
+        episode_start_indices: list[int],
+    ) -> None:
+        """Updates the statistics lists based on the results of the current step."""
+        nstep_returns.extend(rew_R)
+        nstep_intrinsic_returns.extend(int_rew_R)
+
+        num_episodes_done_this_iter = np.sum(done_R)
+        if num_episodes_done_this_iter > 0:
+            env_ind_local_D = np.where(done_R)[0]
+            episode_lens.extend(ep_len_R[env_ind_local_D])
+            episode_returns.extend(ep_rew_R[env_ind_local_D])
+            episode_intrinsic_returns.extend(ep_int_rew_R[env_ind_local_D])
+            episode_start_indices.extend(ep_idx_R[env_ind_local_D])
 
     def _pass_through_bandit_(
         self,

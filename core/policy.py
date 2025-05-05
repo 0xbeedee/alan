@@ -96,7 +96,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
 
         # use the result computed through _forward() by default
         result = self._forward(batch, state, **kwargs)
-        self._handle_state_(result, state, **kwargs)
+        self._update_rnn_state_(result, state, **kwargs)
         return result
 
     def process_fn(
@@ -213,7 +213,7 @@ class CorePolicy(BasePolicy[CoreTrainingStats]):
         """
         self.self_model.slow_intrinsic_reward_(indices)
 
-    def _handle_state_(
+    def _update_rnn_state_(
         self,
         result: ActBatchProtocol,
         state: torch.Tensor,

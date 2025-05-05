@@ -1,29 +1,26 @@
 import gymnasium as gym
-import torch
+from typing import Dict, Any, Tuple, SupportsFloat
 
 
-class Resetting(gym.Wrapper):
-    """Turns a Gymnasium environment into something that can be step()ed indefinitely."""
+class AutoReset(gym.Wrapper):
+    """Wraps a Gymnasium environment to automatically reset it when an episode ends (terminated or truncated)."""
 
-    def __init__(self, gym_env):
-        super().__init__(gym_env)
-        self.episode_return = None
-        self.episode_step = None
+    def __init__(self, env: gym.Env):
+        super().__init__(env)
 
-    def reset(self, seed=None, options=None):
-        self.episode_return = torch.zeros(1, 1)
-        self.episode_step = torch.zeros(1, 1, dtype=torch.int32)
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[Any, Dict[str, Any]]:
         observation, info = self.env.reset(seed=seed, options=options)
         return observation, info
 
-    def step(self, action):
+    def step(
+        self, action: Any
+    ) -> Tuple[Any, SupportsFloat, bool, bool, Dict[str, Any]]:
         observation, reward, terminated, truncated, info = self.env.step(action)
-        self.episode_step += 1
-        self.episode_return += reward
 
         if terminated or truncated:
+            # auto-reset the environment
             observation, info = self.env.reset()
-            self.episode_return = torch.zeros(1, 1)
-            self.episode_step = torch.zeros(1, 1, dtype=torch.int32)
 
         return observation, reward, terminated, truncated, info

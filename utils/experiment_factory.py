@@ -19,7 +19,7 @@ import os
 
 from environments import (
     DictObservation,
-    Resetting,
+    AutoReset,
     RecordTTY,
     RecordRGB,
     AddMessageFrozenLake,
@@ -65,7 +65,7 @@ class ExperimentFactory:
         if is_frozen_lake:
             wrapped_env = AddMessageFrozenLake(wrapped_env)
         if is_nethack:
-            wrapped_env = Resetting(wrapped_env)
+            wrapped_env = AutoReset(wrapped_env)
         if env.render_mode == "rgb_array":
             wrapped_env = RecordRGB(wrapped_env, output_path=rec_path)
         else:

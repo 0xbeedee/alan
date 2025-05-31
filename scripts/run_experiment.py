@@ -14,6 +14,7 @@ def main(
     envmodel_config,
     selfmodel_config,
     device,
+    use_sentiment,
     use_kb,
     save_kb,
     enable_dream,
@@ -28,6 +29,7 @@ def main(
         envmodel_config,
         selfmodel_config,
         device,
+        use_sentiment=use_sentiment,
         use_kb=use_kb,
         save_kb=save_kb,
         enable_dream=enable_dream,
@@ -113,6 +115,11 @@ if __name__ == "__main__":
         metavar="DEVICE",
     )
     parser.add_argument(
+        "--use_sentiment",
+        action="store_true",
+        help="Use sentiment analysis",
+    )
+    parser.add_argument(
         "--use_kb",
         action="store_true",
         help="Use knowledge base",
@@ -139,6 +146,7 @@ if __name__ == "__main__":
         args.envmodel,
         args.selfmodel,
         torch.device(args.device),
+        args.use_sentiment,
         args.use_kb,
         args.save_kb,
         args.enable_dream,

@@ -222,6 +222,7 @@ class ExperimentFactory:
         self,
         fast_intrinsic_module: FastIntrinsicModuleProtocol,
         slow_intrinsic_module: SlowIntrinsicModuleProtocol,
+        use_sentiment: bool = False,
     ) -> SelfModelProtocol:
         goal_strategy = self.config.get("selfmodel.goal_strategy", "random")
         goal_config = self.config.get_except("selfmodel", exclude="goal_strategy")
@@ -229,6 +230,7 @@ class ExperimentFactory:
         self_model = SelfModel(
             fast_intrinsic_module,
             slow_intrinsic_module,
+            use_sentiment=use_sentiment,
             goal_strategy=goal_strategy,
             **goal_config,
         )

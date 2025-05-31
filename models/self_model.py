@@ -12,6 +12,8 @@ import torch
 import logging
 from dataclasses import dataclass
 
+from language import SentimentAnalyser
+
 
 @dataclass
 class GoalStats:
@@ -34,6 +36,7 @@ class SelfModel:
         self,
         fast_intrinsic_module: FastIntrinsicModuleProtocol,
         slow_intrinsic_module: SlowIntrinsicModuleProtocol,
+        use_sentiment: bool = False,
         goal_strategy: str = "random",
         noise_scale: float = 0.5,
         noise_seed: int = 42,
@@ -41,6 +44,11 @@ class SelfModel:
     ) -> None:
         self.fast_intrinsic_module = fast_intrinsic_module
         self.slow_intrinsic_module = slow_intrinsic_module
+        # sentiment analysis provides extra reward at collect time (added to the fast intrinsic reward)
+        if use_sentiment:
+            self.sentiment_analyser = SentimentAnalyser()
+        else:
+            self.sentiment_analyser = None
 
         # Store goal selection parameters
         self.goal_strategy = goal_strategy
@@ -106,6 +114,12 @@ class SelfModel:
         This intrinsic computation happens at collect time, and is somewhat conceptually analogous to Kahneman's System 1.
         """
         return self.fast_intrinsic_module.get_reward(batch)
+
+    @torch.no_grad()
+    def sentiment_reward(self, message: str) -> torch.Tensor:
+        """A reward based on the sentiment of the messages provided by the environment."""
+        # TODO this should return a numpy array (fix it here or in sentiment.py)
+        return self.sentiment_analyser.get_reward(message)
 
     @torch.no_grad()
     def slow_intrinsic_reward_(self, indices: np.ndarray) -> np.ndarray:

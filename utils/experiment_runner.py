@@ -47,6 +47,7 @@ class ExperimentRunner:
         envmodel_config: str,
         selfmodel_config: str,
         device: torch.device,
+        use_sentiment: bool = False,
         use_kb: bool = False,
         save_kb: bool = False,
         enable_dream: bool = False,
@@ -60,6 +61,7 @@ class ExperimentRunner:
         self.envmodel_config = envmodel_config
         self.selfmodel_config = selfmodel_config
         self.device = device
+        self.use_sentiment = use_sentiment
         self.use_kb = use_kb
         self.persist_kb = save_kb
         self.enable_dream = enable_dream
@@ -294,6 +296,7 @@ class ExperimentRunner:
         self.self_model = self.factory.create_self_model(
             fast_intrinsic_module,
             slow_intrinsic_module,
+            self.use_sentiment,
         )
 
     def _setup_policy(self) -> None:

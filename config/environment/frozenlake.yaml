@@ -2,12 +2,7 @@ base:
   name: "FrozenLake-v1"
   render_mode: "rgb_array"
   # default layout
-  desc: [
-    "SFFF", 
-    "FHFH", 
-    "FFFH", 
-    "HFFG"
-  ]
+  desc: ["SFFF", "FHFH", "FFFH", "HFFG"]
   # no slipping by default
   is_slippery: false
 

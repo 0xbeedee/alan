@@ -153,7 +153,11 @@ class GoalCollector(Collector):
                     done=done_R,
                 )
             )
-            nstep_intrinsic_returns.extend(int_rew_R)
+            # sent rew is calculated here because we need the message
+            # (use obs_next to get the terminal message)
+            sent_rew_R = self.policy.self_model.sentiment_reward(obs_next_RO)
+
+            nstep_intrinsic_returns.extend(int_rew_R + sent_rew_R)
 
             latent_goal_next_R = self.policy.self_model.select_goal(latent_obs_next_RO)
 

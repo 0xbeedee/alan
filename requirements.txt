@@ -1,5 +1,4 @@
 absl-py==2.1.0
--e git+ssh://git@github.com/de-lachende-cavalier/alan.git@86101c98b797368614ff5b82c91e4902812fbb43#egg=alan
 appnope==0.1.4
 asttokens==2.4.1
 certifi==2025.4.26
@@ -18,7 +17,7 @@ filelock==3.16.1
 fonttools==4.54.1
 fsspec==2024.10.0
 grpcio==1.67.0
-gymnasium==0.28.1
+gymnasium==1.0.0
 h5py==3.12.1
 hf-xet==1.1.2
 huggingface-hub==0.32.3
@@ -39,7 +38,7 @@ matplotlib-inline==0.1.7
 mpmath==1.3.0
 nest-asyncio==1.6.0
 networkx==3.4.1
-nle==1.0.0
+nle==1.2.0
 numba==0.60.0
 numpy==1.26.4
 opencv-python==4.10.0.84
@@ -69,7 +68,7 @@ regex==2024.11.6
 requests==2.32.3
 safetensors==0.5.3
 seaborn==0.13.2
-sensai-utils==1.2.1
+sensai-utils==1.5.0
 six==1.16.0
 stack-data==0.6.3
 sympy==1.13.1

@@ -1,3 +1,4 @@
+from torch.nn.modules.module import T
 from .types import CorePolicyProtocol, GoalCollectorProtocol, GoalReplayBufferProtocol
 from typing import Callable
 import logging
@@ -197,6 +198,7 @@ class GoalTrainer(BaseTrainer):
         collect_stats = self.train_collector.collect(
             n_step=self.step_per_collect,
             n_episode=self.episode_per_collect,
+            reset_before_collect=True,
         )
 
         self.env_step += collect_stats.n_collected_steps

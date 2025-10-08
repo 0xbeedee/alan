@@ -116,10 +116,12 @@ class SelfModel:
         return self.fast_intrinsic_module.get_reward(batch)
 
     @torch.no_grad()
-    def sentiment_reward(self, message: str) -> torch.Tensor:
+    def sentiment_reward(self, message: str) -> np.ndarray:
         """A reward based on the sentiment of the messages provided by the environment."""
-        # TODO this should return a numpy array (fix it here or in sentiment.py)
-        return self.sentiment_analyser.get_reward(message)
+        if self.sentiment_analyser is not None:
+            return self.sentiment_analyser.get_reward(message)
+        else:
+            return np.zeros(1)
 
     @torch.no_grad()
     def slow_intrinsic_reward_(self, indices: np.ndarray) -> np.ndarray:

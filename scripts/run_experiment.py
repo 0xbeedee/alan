@@ -3,6 +3,16 @@ import torch
 
 from utils.experiment_runner import ExperimentRunner
 
+# silence the UserWarning coming from pygame
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message="pkg_resources is deprecated",
+    category=UserWarning,
+    module="pygame",
+)
+
 
 def main(
     base_config_path,

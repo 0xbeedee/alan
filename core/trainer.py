@@ -85,11 +85,11 @@ class GoalTrainer(BaseTrainer):
             save_best_fn,
             save_checkpoint_fn,
             resume_from_log,
-            reward_metric,
-            logger,
-            verbose,
-            show_progress,
-            test_in_train,
+            reward_metric=reward_metric,
+            logger=logger,
+            verbose=verbose,
+            show_progress=show_progress,
+            test_in_train=test_in_train,
         )
         self.policy = policy
 
@@ -168,6 +168,7 @@ class GoalTrainer(BaseTrainer):
             start_time=self.start_time,
             policy_update_time=self.policy_update_time,
             gradient_step=self._gradient_step,
+            best_score=self.best_score,
             best_reward=self.best_reward,
             best_reward_std=self.best_reward_std,
             train_collector=self.train_collector,

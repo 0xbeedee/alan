@@ -49,7 +49,7 @@ class GoalReplayBuffer(ReplayBuffer):
         ignore_obs_next: bool = False,
         save_only_last_obs: bool = False,
         sample_avail: bool = False,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             size,
@@ -57,8 +57,10 @@ class GoalReplayBuffer(ReplayBuffer):
             ignore_obs_next=ignore_obs_next,
             save_only_last_obs=save_only_last_obs,
             sample_avail=sample_avail,
-            **kwargs
+            **kwargs,
         )
+        self._index = 0
+        self._ep_rew = 0.0
         self._ep_int_rew = 0.0
 
     def __getitem__(
@@ -114,23 +116,21 @@ class GoalReplayBuffer(ReplayBuffer):
         """Maintains the buffer's state after adding one data batch."""
         self.last_index[0] = ptr = self._index
         self._size = min(self._size + 1, self.maxsize)
-        self._index = (self._index + 1) % self.maxsize
+        self._index = (self._index + 1) % self.maxsize  # keep index within bounds
 
         self._ep_rew += rew
         self._ep_int_rew += int_rew
         self._ep_len += 1
 
         if done:
+            # save old episode statistics...
+            self._ep_idx = self._index
             result = ptr, self._ep_rew, self._ep_int_rew, self._ep_len, self._ep_idx
-            self._ep_rew, self._ep_int_rew, self._ep_len, self._ep_idx = (
-                0.0,
-                0.0,
-                0,
-                self._index,
-            )
+            # ... and reset them
+            self._ep_rew, self._ep_int_rew, self._ep_len = 0.0, 0.0, 0
             return result
         # return 0 for episode reward/length if the episode is not finished
-        return ptr, self._ep_rew * 0.0, self._ep_int_rew * 0.0, 0, self._ep_idx
+        return ptr, self._ep_rew * 0.0, self._ep_int_rew * 0.0, 0, 0
 
 
 class GoalReplayBufferManager(GoalReplayBuffer, ReplayBufferManager):
